@@ -1,0 +1,50 @@
+/// Rutas centralizadas de la app (usadas por `go_router`).
+///
+/// Mantener esto en un solo archivo evita el problema de rutas "sueltas"
+/// como el alias accidental `/RecuperarPassword` detectado en el proyecto
+/// legado (documentacion_zips_registro_pro.md, Sección 17.9).
+class RoutePaths {
+  RoutePaths._();
+
+  static const login = '/login';
+  static const registro = '/registro';
+  static const recuperarPassword = '/recuperar-password';
+  static const recrearPass = '/recrear-pass';
+
+  static const home = '/';
+
+  static const eventos = '/eventos';
+  static const crearEvento = '/eventos/crear';
+  static String editarEvento(String id) => '/eventos/$id/editar';
+  static String usarEvento(String id) => '/eventos/$id/usar';
+  static String registrar(String id) => '/eventos/$id/registrar';
+  static String registroPorCliente(String id) => '/eventos/$id/registro-cliente';
+  static String acreditarConfirmado(String id) => '/eventos/$id/acreditar';
+  static String acreditarQr(String id) => '/eventos/$id/acreditar-qr';
+  static String verRegistrados(String id) => '/eventos/$id/registrados';
+  static String editarRegistrado(String eventoId, String registradoId) =>
+      '/eventos/$eventoId/registrados/$registradoId/editar';
+  static String kpi(String id) => '/eventos/$id/kpi';
+  static String exportar(String id) => '/eventos/$id/exportar';
+
+  static const usuarios = '/usuarios';
+  static String editarUsuario(String id) => '/usuarios/$id/editar';
+
+  /// Módulo Capturador de leads (`eventos_leads` / `leads`).
+  static const capturador = '/capturador';
+  static const crearEventoLead = '/capturador/crear';
+  static String editarEventoLead(String id) => '/capturador/$id/editar';
+  static String usarEventoLead(String id) => '/capturador/$id/usar';
+  static String capturarLead(String id) => '/capturador/$id/capturar';
+  static String verLeads(String id) => '/capturador/$id/leads';
+  static String detalleLead(String eventoId, String leadId) =>
+      '/capturador/$eventoId/leads/$leadId';
+  static String exportarLeads(String id) => '/capturador/$id/exportar';
+
+  /// Formulario público de autoregistro (sin sesión). Reemplaza al
+  /// formulario externo "Transworld", fuera del alcance de los ZIP
+  /// originales (ver Sección 17.5 de la auditoría): ahora vive dentro de
+  /// la misma app, accesible también desde Flutter Web sin loguearse.
+  static const registroForms = '/registro-forms';
+  static String registroPublico(String eventoId) => '$registroForms?id=$eventoId';
+}

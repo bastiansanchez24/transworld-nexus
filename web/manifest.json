@@ -1,0 +1,35 @@
+{
+    "name": "Transworld Nexus",
+    "short_name": "Transworld Nexus",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#206591",
+    "theme_color": "#206591",
+    "description": "Transworld Nexus — registro y acreditación de eventos.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

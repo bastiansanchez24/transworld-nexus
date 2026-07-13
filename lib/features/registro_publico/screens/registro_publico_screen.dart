@@ -1,0 +1,190 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/network/connectivity_service.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/offline_banner.dart';
+import '../../../data/models/registrado.dart';
+import '../../../data/offline/sync_queue_service.dart';
+import '../../../data/repositories/registrados_repository.dart';
+import '../../eventos/providers/eventos_providers.dart';
+
+/// Formulario público de autoregistro, sin sesión (rol `anon` en Supabase).
+///
+/// Reemplaza al formulario externo `intranet-transworld-dc.onrender.com`
+/// del proyecto legado (fuera de ambos ZIP entregados, ver Sección 17.5 de
+/// la auditoría). Al vivir en la misma app Flutter Web, comparte esquema,
+/// validaciones y estilo con el resto del sistema, y su alcance queda
+/// acotado por la política `rpe_registrados_insert_publico` de
+/// `supabase/schema.sql` (solo INSERT, solo si el evento está activo).
+class RegistroPublicoScreen extends ConsumerStatefulWidget {
+  const RegistroPublicoScreen({super.key, required this.eventoId});
+
+  final String eventoId;
+
+  @override
+  ConsumerState<RegistroPublicoScreen> createState() => _RegistroPublicoScreenState();
+}
+
+class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nombreController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _empresaController = TextEditingController();
+  final _cargoController = TextEditingController();
+  final _telefonoController = TextEditingController();
+  bool _guardando = false;
+  bool _enviado = false;
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _emailController.dispose();
+    _empresaController.dispose();
+    _cargoController.dispose();
+    _telefonoController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _enviar() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _guardando = true);
+
+    final registrado = Registrado(
+      id: '',
+      eventoId: widget.eventoId,
+      nombreCompleto: _nombreController.text.trim(),
+      email: _emailController.text.trim().toLowerCase(),
+      empresa: _empresaController.text.trim(),
+      cargo: _cargoController.text.trim(),
+      telefono: _telefonoController.text.trim(),
+      origen: OrigenRegistro.publico,
+    );
+
+    try {
+      if (ref.read(isOnlineProvider)) {
+        await ref.read(registradosRepositoryProvider).crear(registrado);
+      } else {
+        await ref.read(syncQueueServiceProvider.notifier).enqueueInsert(
+              table: 'registrados',
+              payload: registrado.toInsertMap(),
+            );
+      }
+      if (mounted) setState(() => _enviado = true);
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, 'No se pudo completar el registro. Intenta de nuevo.', isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final eventoAsync = ref.watch(eventoByIdProvider(widget.eventoId));
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const OfflineBanner(),
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: eventoAsync.when(
+                      loading: () => const LoadingView(),
+                      error: (e, _) => const ErrorView(
+                        message: 'Este evento no existe o ya no acepta registros.',
+                      ),
+                      data: (evento) {
+                        if (_enviado) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.check_circle, color: AppColors.accent, size: 64),
+                              const SizedBox(height: 16),
+                              Text('¡Listo, ${_nombreController.text.trim()}!',
+                                  style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Tu registro fue recibido. Te esperamos en el evento.',
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          );
+                        }
+                        return Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Form(
+                              key: _formKey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(evento.nombre,
+                                      style: Theme.of(context).textTheme.headlineSmall,
+                                      textAlign: TextAlign.center),
+                                  const SizedBox(height: 4),
+                                  const Text('Completa tus datos para registrarte',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: AppColors.textSecondary)),
+                                  const SizedBox(height: 24),
+                                  TextFormField(
+                                    controller: _nombreController,
+                                    decoration: const InputDecoration(labelText: 'Nombre completo'),
+                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _emailController,
+                                    keyboardType: TextInputType.emailAddress,
+                                    decoration: const InputDecoration(labelText: 'Email'),
+                                    validator: (v) =>
+                                        (v == null || !v.contains('@')) ? 'Email inválido' : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _empresaController,
+                                    decoration: const InputDecoration(labelText: 'Empresa'),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _cargoController,
+                                    decoration: const InputDecoration(labelText: 'Cargo'),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _telefonoController,
+                                    keyboardType: TextInputType.phone,
+                                    decoration: const InputDecoration(labelText: 'Teléfono (opcional)'),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  FilledButton(
+                                    onPressed: _guardando ? null : _enviar,
+                                    child: _guardando
+                                        ? const ButtonProgress()
+                                        : const Text('Registrarme'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
