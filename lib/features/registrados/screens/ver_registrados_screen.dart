@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/collapsing_nav.dart';
+import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/offline_banner.dart';
+import '../../../core/widgets/pressable.dart';
 import '../../../data/models/registrado.dart';
+import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
@@ -22,155 +27,353 @@ class VerRegistradosScreen extends ConsumerStatefulWidget {
   final String eventoId;
 
   @override
-  ConsumerState<VerRegistradosScreen> createState() => _VerRegistradosScreenState();
+  ConsumerState<VerRegistradosScreen> createState() =>
+      _VerRegistradosScreenState();
 }
 
 class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen> {
   _Filtro _filtro = _Filtro.todos;
+  final _busquedaController = TextEditingController();
   String _busqueda = '';
 
-  @override
-  Widget build(BuildContext context) {
-    final registradosAsync = ref.watch(registradosPorEventoProvider(widget.eventoId));
+  static const _filtroLabels = {
+    _Filtro.todos: 'Todos',
+    _Filtro.acreditados: 'Acreditados',
+    _Filtro.pendientes: 'Pendientes',
+  };
 
-    return AppScaffold(
-      title: 'Registrados',
-      headerBottom: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        child: TextField(
-          decoration: InputDecoration(
-            hintText: 'Buscar...',
-            hintStyle: const TextStyle(color: AppColors.textSecondary),
-            prefixIcon:
-                const Icon(Icons.search, color: AppColors.textSecondary),
-            filled: true,
-            fillColor: AppColors.surfaceMuted,
-            isDense: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+  @override
+  void dispose() {
+    _busquedaController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildSearchField() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.input),
+        boxShadow: AppColors.shadowRest,
+      ),
+      child: TextField(
+        controller: _busquedaController,
+        onChanged: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+        style: const TextStyle(
+          fontSize: 14,
+          color: AppColors.ink,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Buscar registrado…',
+          hintStyle: const TextStyle(color: AppColors.placeholder),
+          prefixIcon: const Icon(
+            Symbols.search_rounded,
+            color: AppColors.placeholder,
+            size: 20,
+          ),
+          filled: true,
+          fillColor: AppColors.surface,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            borderSide: const BorderSide(
+              color: AppColors.primaryLight,
+              width: 1.5,
             ),
           ),
-          onChanged: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: SegmentedButton<_Filtro>(
-              segments: const [
-                ButtonSegment(value: _Filtro.todos, label: Text('Todos')),
-                ButtonSegment(value: _Filtro.acreditados, label: Text('Acreditados')),
-                ButtonSegment(value: _Filtro.pendientes, label: Text('Pendientes')),
-              ],
-              selected: {_filtro},
-              onSelectionChanged: (s) => setState(() => _filtro = s.first),
-            ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async => ref.invalidate(registradosPorEventoProvider(widget.eventoId)),
-              child: registradosAsync.when(
-                loading: () => const LoadingView(),
-                error: (e, _) => ErrorView(
-                  message: 'No se pudo cargar la lista.',
-                  onRetry: () => ref.invalidate(registradosPorEventoProvider(widget.eventoId)),
-                ),
-                data: (registrados) {
-                  final filtrados = registrados.where((r) {
-                    if (_filtro == _Filtro.acreditados && !r.acreditado) return false;
-                    if (_filtro == _Filtro.pendientes && r.acreditado) return false;
-                    if (_busqueda.isEmpty) return true;
-                    return r.nombreCompleto.toLowerCase().contains(_busqueda) ||
-                        r.email.toLowerCase().contains(_busqueda);
-                  }).toList();
+    );
+  }
 
-                  if (filtrados.isEmpty) {
-                    return const EmptyStateView(
-                      icon: Icons.people_outline_rounded,
-                      message: 'No hay registrados con estos filtros.',
-                    );
-                  }
-
-                  return ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filtrados.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) => _RegistradoTile(
-                      registrado: filtrados[index],
-                      eventoId: widget.eventoId,
-                    ),
+  Widget _buildPinnedControls() {
+    return Column(
+      children: [
+        SizedBox(height: 48, child: _buildSearchField()),
+        const SizedBox(height: 4),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: FilterChipBar(
+                options: _filtroLabels.values.toList(),
+                selected: _filtroLabels[_filtro]!,
+                onSelected: (label) {
+                  final entry = _filtroLabels.entries.firstWhere(
+                    (e) => e.value == label,
                   );
+                  setState(() => _filtro = entry.key);
                 },
               ),
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final registradosAsync = ref.watch(
+      registradosPorEventoProvider(widget.eventoId),
+    );
+
+    return CollapsingScrollScaffold(
+      title: 'Registrados',
+      topBanner: const OfflineBanner(),
+      alwaysShowActions: true,
+      overlayLeading: CollapsingNavButton(
+        icon: Symbols.arrow_back_ios_new_rounded,
+        onTap: () => context.pop(),
       ),
+      pinnedContent: _buildPinnedControls(),
+      pinnedContentHeight: 112,
+      onRefresh: () async =>
+          ref.invalidate(registradosPorEventoProvider(widget.eventoId)),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+            child: registradosAsync.when(
+              loading: () => _buildHeader(),
+              error: (_, _) => _buildHeader(),
+              data: (registrados) => _buildHeader(
+                total: registrados.length,
+                acreditados: registrados.where((r) => r.acreditado).length,
+              ),
+            ),
+          ),
+        ),
+        ...registradosAsync.when(
+          loading: () => [const SliverFillRemaining(child: LoadingView())],
+          error: (e, _) => [
+            SliverFillRemaining(
+              child: ErrorView(
+                message: 'No se pudo cargar la lista.',
+                onRetry: () => ref.invalidate(
+                  registradosPorEventoProvider(widget.eventoId),
+                ),
+              ),
+            ),
+          ],
+          data: (registrados) {
+            final filtrados = registrados.where((r) {
+              if (_filtro == _Filtro.acreditados && !r.acreditado) {
+                return false;
+              }
+              if (_filtro == _Filtro.pendientes && r.acreditado) return false;
+              if (_busqueda.isEmpty) return true;
+              return r.nombreCompleto.toLowerCase().contains(_busqueda) ||
+                  r.email.toLowerCase().contains(_busqueda);
+            }).toList();
+
+            if (registrados.isEmpty) {
+              return [
+                const SliverFillRemaining(
+                  child: EmptyStateView(
+                    icon: Symbols.group_off_rounded,
+                    message: 'Aún no hay asistentes registrados.',
+                  ),
+                ),
+              ];
+            }
+            if (filtrados.isEmpty) {
+              return [
+                const SliverFillRemaining(
+                  child: EmptyStateView(
+                    icon: Symbols.search_off_rounded,
+                    message: 'No hay registrados con estos filtros.',
+                  ),
+                ),
+              ];
+            }
+
+            return [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                sliver: SliverList.separated(
+                  itemCount: filtrados.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: AppSpacing.cardGap),
+                  itemBuilder: (context, index) => StaggeredListItem(
+                    index: index,
+                    child: _RegistradoTile(
+                      registrado: filtrados[index],
+                      eventoId: widget.eventoId,
+                      index: index,
+                    ),
+                  ),
+                ),
+              ),
+            ];
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader({int? total, int? acreditados}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Registrados', style: Theme.of(context).textTheme.displaySmall),
+        const SizedBox(height: 2),
+        Text(
+          total == null
+              ? 'Asistentes del evento'
+              : '$total registrados · $acreditados acreditados',
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+      ],
     );
   }
 }
 
 class _RegistradoTile extends ConsumerWidget {
-  const _RegistradoTile({required this.registrado, required this.eventoId});
+  const _RegistradoTile({
+    required this.registrado,
+    required this.eventoId,
+    required this.index,
+  });
 
   final Registrado registrado;
   final String eventoId;
+  final int index;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final esAdmin = ref.watch(isAdminProvider);
+    final puedeEditar = esAdmin || !registrado.pendienteDeSincronizar;
 
-    return Card(
-      child: ListTile(
-        onTap: (esAdmin || !registrado.pendienteDeSincronizar)
-            ? () => context.push(RoutePaths.editarRegistrado(eventoId, registrado.id))
-            : null,
-        title: Text(registrado.nombreCompleto, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          [registrado.email, registrado.empresa].where((s) => s != null && s.isNotEmpty).join(' · '),
-          style: const TextStyle(color: AppColors.textSecondary),
+    return Pressable(
+      onTap: puedeEditar
+          ? () => context.push(
+              RoutePaths.editarRegistrado(eventoId, registrado.id),
+            )
+          : null,
+      enabled: puedeEditar,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppColors.shadowRest,
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
+            AvatarInitials(
+              name: registrado.nombreCompleto,
+              size: 42,
+              index: index,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    registrado.nombreCompleto,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      registrado.email,
+                      registrado.empresa,
+                    ].where((s) => s != null && s.isNotEmpty).join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      StatusChip(
+                        label: registrado.acreditado
+                            ? 'Acreditado'
+                            : 'Pendiente',
+                        variant: registrado.acreditado
+                            ? StatusChipVariant.success
+                            : StatusChipVariant.warning,
+                      ),
+                      if (registrado.pendienteDeSincronizar)
+                        const StatusChip(
+                          label: 'Sin sync',
+                          variant: StatusChipVariant.danger,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
             if (registrado.emailConfirmacionEnviado)
               const Padding(
-                padding: EdgeInsets.only(right: 4),
+                padding: EdgeInsets.only(right: 2),
                 child: Tooltip(
                   message: 'QR enviado por email',
-                  child: Icon(Icons.mark_email_read_outlined,
-                      size: 18, color: AppColors.textSecondary),
+                  child: Icon(
+                    Symbols.mark_email_read_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             IconButton(
               tooltip: 'Código QR de acreditación',
-              icon: const Icon(Icons.qr_code_2_rounded, color: AppColors.primary),
+              icon: const Icon(
+                Symbols.qr_code_2_rounded,
+                color: AppColors.primary,
+              ),
               onPressed: () => _mostrarQr(context, ref),
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  registrado.acreditado ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: registrado.acreditado ? AppColors.accent : AppColors.textSecondary,
-                ),
-                if (registrado.pendienteDeSincronizar)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Text('Pendiente',
-                        style: TextStyle(fontSize: 10, color: AppColors.warning)),
+            Tooltip(
+              message: registrado.acreditado ? 'Acreditado' : 'Acreditar',
+              child: Pressable(
+                scale: 0.9,
+                onTap: () => _onTapAcreditar(context, ref),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: registrado.acreditado
+                        ? AppColors.successTint
+                        : AppColors.tintNavy,
+                    borderRadius: BorderRadius.circular(AppRadius.tile),
                   ),
-              ],
+                  child: Icon(
+                    Symbols.confirmation_number_rounded,
+                    size: 20,
+                    color: registrado.acreditado
+                        ? AppColors.success
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -178,11 +381,63 @@ class _RegistradoTile extends ConsumerWidget {
     );
   }
 
+  Future<void> _onTapAcreditar(BuildContext context, WidgetRef ref) async {
+    if (registrado.acreditado) {
+      showAppSnackBar(
+        context,
+        '${registrado.nombreCompleto} ya está acreditado.',
+      );
+      return;
+    }
+
+    final confirmar = await confirmDialog(
+      context,
+      title: 'Acreditar asistente',
+      message: '¿Deseas acreditar a ${registrado.nombreCompleto}?',
+      confirmLabel: 'Acreditar',
+    );
+    if (!confirmar || !context.mounted) return;
+
+    final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
+    final isOnline = ref.read(isOnlineProvider);
+
+    try {
+      if (isOnline && !registrado.pendienteDeSincronizar) {
+        await ref
+            .read(registradosRepositoryProvider)
+            .acreditar(registrado.id, acreditadoPorId: userId ?? '');
+      } else {
+        await ref
+            .read(syncQueueServiceProvider.notifier)
+            .enqueueUpdate(
+              table: 'registrados',
+              entityId: registrado.id,
+              changes: {'acreditado': true},
+            );
+      }
+      ref.invalidate(registradosPorEventoProvider(eventoId));
+      if (context.mounted) {
+        showAppSnackBar(context, '${registrado.nombreCompleto} acreditado.');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showAppSnackBar(context, 'No se pudo acreditar.', isError: true);
+      }
+    }
+  }
+
   void _mostrarQr(BuildContext context, WidgetRef ref) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) => _QrSheet(registrado: registrado, eventoId: eventoId),
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.header),
+        ),
+      ),
+      builder: (context) =>
+          _QrSheet(registrado: registrado, eventoId: eventoId),
     );
   }
 }
@@ -218,7 +473,12 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
       }
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(context, 'No se pudo enviar el QR por email.', isError: true);
+        debugPrint('enviar-qr falló: $e');
+        showAppSnackBar(
+          context,
+          'No se pudo enviar el QR por email. Verifica que la Edge Function enviar-qr esté desplegada.',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _enviando = false);
@@ -235,21 +495,41 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.screenH,
+          0,
+          AppSpacing.screenH,
+          AppSpacing.xxl,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(r.nombreCompleto, style: Theme.of(context).textTheme.titleLarge),
-            Text(r.email, style: const TextStyle(color: AppColors.textSecondary)),
+            Text(
+              r.nombreCompleto,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            Text(
+              r.email,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
             const SizedBox(height: 16),
             if (r.pendienteDeSincronizar)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text(
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.warningTint,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Text(
                   'Este registro aún no se sincroniza con el servidor; '
                   'su QR estará disponible cuando vuelva la conexión.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.warning),
+                  style: TextStyle(
+                    color: AppColors.warning,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               )
             else
@@ -267,20 +547,23 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
                 ),
               ),
             const SizedBox(height: 20),
-            FilledButton.icon(
+            PrimaryGradientButton(
+              label: r.emailConfirmacionEnviado
+                  ? 'Reenviar por email'
+                  : 'Enviar por email',
+              loading: _enviando,
               onPressed: (_enviando || !puedeEnviar) ? null : _enviarPorEmail,
-              icon: _enviando
-                  ? const ButtonProgress()
-                  : const Icon(Icons.outgoing_mail),
-              label: Text(
-                r.emailConfirmacionEnviado ? 'Reenviar por email' : 'Enviar por email',
-              ),
             ),
             if (!isOnline)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
-                child: Text('El envío por email requiere conexión.',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                child: Text(
+                  'El envío por email requiere conexión.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ),
           ],
         ),

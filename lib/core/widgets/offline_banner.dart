@@ -26,7 +26,9 @@ class OfflineBanner extends ConsumerWidget {
 
     return Container(
       width: double.infinity,
-      color: !isOnline ? AppColors.error.withValues(alpha: 0.12) : AppColors.accent.withValues(alpha: 0.15),
+      color: !isOnline
+          ? AppColors.dangerTint
+          : AppColors.successTint,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -34,7 +36,7 @@ class OfflineBanner extends ConsumerWidget {
           Icon(
             !isOnline ? Icons.cloud_off_rounded : Icons.sync_rounded,
             size: 16,
-            color: !isOnline ? AppColors.error : AppColors.primaryDark,
+            color: !isOnline ? AppColors.danger : AppColors.success,
           ),
           const SizedBox(width: 6),
           Text(
@@ -42,7 +44,7 @@ class OfflineBanner extends ConsumerWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: !isOnline ? AppColors.error : AppColors.primaryDark,
+              color: !isOnline ? AppColors.danger : AppColors.primaryDeep,
             ),
           ),
         ],

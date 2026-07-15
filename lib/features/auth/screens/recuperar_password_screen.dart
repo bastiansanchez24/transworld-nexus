@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../../../data/repositories/auth_repository.dart';
 
 class RecuperarPasswordScreen extends ConsumerStatefulWidget {
@@ -68,6 +69,7 @@ class _RecuperarPasswordScreenState
                         'Si el correo existe, te enviamos instrucciones '
                         'para recuperar tu contraseña.',
                         textAlign: TextAlign.center,
+                        style: TextStyle(color: AppColors.textSecondary),
                       ),
                     ],
                   )
@@ -79,6 +81,7 @@ class _RecuperarPasswordScreenState
                         const Text(
                           'Ingresa tu correo y te enviaremos instrucciones '
                           'para restablecer tu contraseña.',
+                          style: TextStyle(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -94,11 +97,10 @@ class _RecuperarPasswordScreenState
                                   : null,
                         ),
                         const SizedBox(height: 24),
-                        FilledButton(
+                        PrimaryGradientButton(
+                          label: 'Enviar instrucciones',
+                          loading: _loading,
                           onPressed: _loading ? null : _enviar,
-                          child: _loading
-                              ? const ButtonProgress()
-                              : const Text('Enviar instrucciones'),
                         ),
                       ],
                     ),

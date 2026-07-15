@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
 
@@ -38,93 +40,133 @@ class KpiScreen extends ConsumerWidget {
                   ..sort((a, b) => b.value.compareTo(a.value));
 
                 return ListView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenH,
+                    AppSpacing.xl,
+                    AppSpacing.screenH,
+                    AppSpacing.xxxl,
+                  ),
                   children: [
                     eventoAsync.maybeWhen(
-                      data: (e) => Text(e.nombre, style: Theme.of(context).textTheme.titleLarge),
+                      data: (e) => Text(
+                        e.nombre,
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
                       orElse: () => const SizedBox.shrink(),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: AppSpacing.xl),
                     Row(
                       children: [
-                        Expanded(child: _KpiCard(label: 'Registrados', valor: '$total', icon: Icons.people_outline)),
+                        Expanded(
+                          child: StatCard(
+                            value: '$total',
+                            label: 'Registrados',
+                            icon: Symbols.group_rounded,
+                          ),
+                        ),
                         const SizedBox(width: 12),
-                        Expanded(child: _KpiCard(label: 'Acreditados', valor: '$acreditados', icon: Icons.check_circle_outline)),
+                        Expanded(
+                          child: StatCard(
+                            value: '$acreditados',
+                            label: 'Acreditados',
+                            icon: Symbols.check_circle_rounded,
+                            tint: AppColors.successTint,
+                            iconColor: AppColors.success,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
-                          child: _KpiCard(
+                          child: StatCard(
+                            value: '${(porcentaje * 100).toStringAsFixed(0)}%',
                             label: '% Acreditación',
-                            valor: '${(porcentaje * 100).toStringAsFixed(0)}%',
-                            icon: Icons.percent_rounded,
+                            icon: Symbols.percent_rounded,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: _KpiCard(
+                          child: StatCard(
+                            value: '$pendientesDeSync',
                             label: 'Sin sincronizar',
-                            valor: '$pendientesDeSync',
-                            icon: Icons.sync_problem_outlined,
-                            destacar: pendientesDeSync > 0,
+                            icon: Symbols.sync_problem_rounded,
+                            tint: pendientesDeSync > 0
+                                ? AppColors.dangerTint
+                                : AppColors.tintNavy,
+                            iconColor: pendientesDeSync > 0
+                                ? AppColors.danger
+                                : AppColors.primary,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.xxl),
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                       child: LinearProgressIndicator(
                         value: porcentaje,
                         minHeight: 10,
                         backgroundColor: AppColors.surfaceMuted,
-                        color: AppColors.accent,
+                        color: AppColors.success,
                       ),
                     ),
                     if (topEmpresas.isNotEmpty) ...[
-                      const SizedBox(height: 28),
-                      Text('Empresas con más asistentes', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
-                      ...topEmpresas.take(10).map(
-                            (e) => ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(e.key),
-                              trailing: Text('${e.value}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            ),
+                      const SizedBox(height: AppSpacing.sectionGap + 6),
+                      const SectionLabel('Empresas'),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Empresas con más asistentes',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 10),
+                      ...topEmpresas.take(10).toList().asMap().entries.map(
+                            (entry) {
+                              final e = entry.value;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: AppSpacing.cardGap),
+                                child: StaggeredListItem(
+                                  index: entry.key,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 13,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface,
+                                      borderRadius:
+                                          BorderRadius.circular(AppRadius.lg),
+                                      border: Border.all(color: AppColors.border),
+                                      boxShadow: AppColors.shadowRest,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            e.key,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.ink,
+                                            ),
+                                          ),
+                                        ),
+                                        StatusChip(
+                                          label: '${e.value}',
+                                          variant: StatusChipVariant.neutral,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                     ],
                   ],
                 );
               },
-      ),
-    );
-  }
-}
-
-class _KpiCard extends StatelessWidget {
-  const _KpiCard({required this.label, required this.valor, required this.icon, this.destacar = false});
-
-  final String label;
-  final String valor;
-  final IconData icon;
-  final bool destacar;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: destacar ? AppColors.error : AppColors.primary),
-            const SizedBox(height: 8),
-            Text(valor, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-            Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-          ],
-        ),
       ),
     );
   }

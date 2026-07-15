@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_paths.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../providers/auth_providers.dart';
 
@@ -68,7 +70,10 @@ class _RecrearPassScreenState extends ConsumerState<RecrearPassScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Por seguridad, define una nueva contraseña.'),
+                  const Text(
+                    'Por seguridad, define una nueva contraseña.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _passwordController,
@@ -90,11 +95,10 @@ class _RecrearPassScreenState extends ConsumerState<RecrearPassScreen> {
                         : null,
                   ),
                   const SizedBox(height: 24),
-                  FilledButton(
+                  PrimaryGradientButton(
+                    label: 'Guardar',
+                    loading: _loading,
                     onPressed: _loading ? null : _guardar,
-                    child: _loading
-                        ? const ButtonProgress()
-                        : const Text('Guardar'),
                   ),
                 ],
               ),

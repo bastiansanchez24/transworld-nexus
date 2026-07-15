@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/app_role.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -135,76 +137,117 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor:
-                          AppColors.primary.withValues(alpha: 0.1),
-                      child: Text(
-                        usuario.nombreCompleto.isNotEmpty
-                            ? usuario.nombreCompleto[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    AvatarInitials(
+                      name: usuario.nombreCompleto,
+                      size: 56,
                     ),
                     const SizedBox(width: AppSpacing.lg),
                     Expanded(
-                      child: Text(
-                        usuario.nombreCompleto,
-                        style: Theme.of(context).textTheme.titleLarge,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            usuario.nombreCompleto,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          StatusChip(
+                            label: usuario.rol.label,
+                            variant: usuario.isAdmin
+                                ? StatusChipVariant.navy
+                                : StatusChipVariant.neutral,
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xxl),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-                    child: Column(
-                      children: [
-                        DropdownButtonFormField<AppRole>(
-                          initialValue: _rolSeleccionado,
-                          decoration: const InputDecoration(labelText: 'Rol'),
-                          items: AppRole.values
-                              .map((r) => DropdownMenuItem(
-                                  value: r, child: Text(r.label)))
-                              .toList(),
-                          onChanged: ocupado
-                              ? null
-                              : (v) => setState(() => _rolSeleccionado = v),
-                        ),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Cuenta activa'),
-                          value: _activo,
-                          onChanged: ocupado
-                              ? null
-                              : (v) => setState(() => _activo = v),
-                        ),
-                      ],
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: AppColors.shadowRest,
+                  ),
+                  child: Column(
+                    children: [
+                      DropdownButtonFormField<AppRole>(
+                        initialValue: _rolSeleccionado,
+                        decoration: const InputDecoration(labelText: 'Rol'),
+                        items: AppRole.values
+                            .map((r) => DropdownMenuItem(
+                                value: r, child: Text(r.label)))
+                            .toList(),
+                        onChanged: ocupado
+                            ? null
+                            : (v) => setState(() => _rolSeleccionado = v),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Cuenta activa',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.ink,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Desactivar bloquea el acceso a la app',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IgnorePointer(
+                            ignoring: ocupado,
+                            child: Opacity(
+                              opacity: ocupado ? 0.5 : 1,
+                              child: NexusToggle(
+                                value: _activo,
+                                onChanged: (v) =>
+                                    setState(() => _activo = v),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
-                FilledButton(
+                PrimaryGradientButton(
+                  label: 'Guardar cambios',
+                  loading: _guardando,
                   onPressed: ocupado ? null : _guardar,
-                  child: _guardando
-                      ? const ButtonProgress()
-                      : const Text('Guardar cambios'),
                 ),
                 if (!esCuentaPropia) ...[
                   const SizedBox(height: AppSpacing.md),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.error,
+                      foregroundColor: AppColors.danger,
                       side: BorderSide(
-                          color: AppColors.error.withValues(alpha: 0.5)),
+                          color: AppColors.danger.withValues(alpha: 0.5)),
                     ),
                     onPressed: ocupado
                         ? null
@@ -214,9 +257,9 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: AppColors.error),
+                                strokeWidth: 2, color: AppColors.danger),
                           )
-                        : const Icon(Icons.delete_outline_rounded),
+                        : const Icon(Symbols.delete_outline_rounded),
                     label: const Text('Eliminar usuario'),
                   ),
                 ],

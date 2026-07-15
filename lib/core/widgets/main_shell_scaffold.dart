@@ -1,11 +1,18 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../features/auth/providers/auth_providers.dart';
+import '../theme/app_theme.dart';
+import 'pressable.dart';
 
-/// Contenedor con barra de navegación inferior para las secciones
-/// principales de la app autenticada.
+/// Tab bar frosted con pill activo (HANDOFF §4.3).
+///
+/// No envuelve [navigationShell] en PageTransitionSwitcher: go_router usa
+/// un GlobalKey interno y eso provoca Duplicate GlobalKey.
 class MainShellScaffold extends ConsumerWidget {
   const MainShellScaffold({super.key, required this.navigationShell});
 
@@ -21,63 +28,156 @@ class MainShellScaffold extends ConsumerWidget {
     final esAdmin = ref.watch(isAdminProvider);
     final branchActual = navigationShell.currentIndex;
 
-    final destinos = <NavigationDestination>[
-      const NavigationDestination(
-        icon: Icon(Icons.home_outlined),
-        selectedIcon: Icon(Icons.home_rounded),
+    final tabs = <_TabItem>[
+      const _TabItem(
+        icon: Symbols.home_rounded,
         label: 'Inicio',
+        branch: _branchInicio,
       ),
-      const NavigationDestination(
-        icon: Icon(Icons.event_outlined),
-        selectedIcon: Icon(Icons.event_rounded),
+      const _TabItem(
+        icon: Symbols.calendar_month_rounded,
         label: 'Eventos',
+        branch: _branchEventos,
       ),
-      const NavigationDestination(
-        icon: Icon(Icons.person_search_outlined),
-        selectedIcon: Icon(Icons.person_search_rounded),
+      const _TabItem(
+        icon: Symbols.person_search_rounded,
         label: 'Leads',
+        branch: _branchCapturador,
       ),
       if (esAdmin)
-        const NavigationDestination(
-          icon: Icon(Icons.people_alt_outlined),
-          selectedIcon: Icon(Icons.people_alt_rounded),
+        const _TabItem(
+          icon: Symbols.group_rounded,
           label: 'Usuarios',
+          branch: _branchUsuarios,
         ),
     ];
 
-    final indiceVisible = branchActual > _branchCapturador && !esAdmin
-        ? _branchInicio
-        : branchActual.clamp(0, destinos.length - 1);
+    final selectedVisual = tabs.indexWhere((t) => t.branch == branchActual);
+    final selectedIndex = selectedVisual < 0 ? 0 : selectedVisual;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: indiceVisible,
-        onDestinationSelected: (indice) {
-          final branch = _branchDesdeIndice(indice, esAdmin);
-          navigationShell.goBranch(
-            branch,
-            initialLocation: branch == navigationShell.currentIndex,
-          );
-        },
-        destinations: destinos,
+      extendBody: true,
+      bottomNavigationBar: Material(
+        color: Colors.transparent,
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface.withValues(alpha: 0.94),
+                border: const Border(
+                  top: BorderSide(color: AppColors.border, width: 1),
+                ),
+              ),
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: SafeArea(
+                top: false,
+                bottom: false,
+                child: SizedBox(
+                  height: AppSpacing.shellTabBarHeight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      for (var i = 0; i < tabs.length; i++)
+                        Expanded(
+                          child: _TabButton(
+                            item: tabs[i],
+                            selected: i == selectedIndex,
+                            onTap: () {
+                              navigationShell.goBranch(
+                                tabs[i].branch,
+                                initialLocation: tabs[i].branch ==
+                                    navigationShell.currentIndex,
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
+}
 
-  int _branchDesdeIndice(int indice, bool esAdmin) {
-    if (!esAdmin) {
-      return switch (indice) {
-        1 => _branchEventos,
-        2 => _branchCapturador,
-        _ => _branchInicio,
-      };
-    }
-    return switch (indice) {
-      1 => _branchEventos,
-      2 => _branchCapturador,
-      3 => _branchUsuarios,
-      _ => _branchInicio,
-    };
+class _TabItem {
+  const _TabItem({
+    required this.icon,
+    required this.label,
+    required this.branch,
+  });
+
+  final IconData icon;
+  final String label;
+  final int branch;
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _TabItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      scale: 0.92,
+      onTap: onTap,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: item.label,
+        child: SizedBox(
+          height: AppSpacing.shellTabBarHeight,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: AppMotion.toggle,
+                curve: AppMotion.ease,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.tintNavy : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Icon(
+                  item.icon,
+                  size: 24,
+                  fill: selected ? 1.0 : 0.0,
+                  color:
+                      selected ? AppColors.primary : AppColors.textTertiary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  height: 1.1,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  color: selected
+                      ? AppColors.primaryDeep
+                      : AppColors.textTertiary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

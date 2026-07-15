@@ -77,15 +77,10 @@ class _EventHeroPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
 
-    // Fondo: degradado suave (no saturado) entre los azules de marca.
+    // Fondo: headerGradient navy (#0C3357 → #175E93).
     canvas.drawRect(
       rect,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primaryDark, AppColors.primary],
-        ).createShader(rect),
+      Paint()..shader = AppColors.headerGradient.createShader(rect),
     );
 
     final soft = Paint()..color = Colors.white.withValues(alpha: 0.06);

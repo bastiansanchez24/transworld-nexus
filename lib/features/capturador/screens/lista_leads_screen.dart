@@ -2,11 +2,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/pressable.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/repositories/leads_repository.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -28,10 +31,10 @@ class ListaLeadsScreen extends ConsumerWidget {
         loading: () => const Text('Leads'),
         error: (_, _) => const Text('Leads'),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: NexusExtendedFab(
+        label: 'Capturar',
+        icon: Symbols.person_add_rounded,
         onPressed: () => context.push(RoutePaths.capturarLead(eventoId)),
-        icon: const Icon(Icons.person_add_alt_1_rounded),
-        label: const Text('Capturar'),
       ),
       body: RefreshIndicator(
         onRefresh: () async =>
@@ -52,10 +55,17 @@ class ListaLeadsScreen extends ConsumerWidget {
             return ListView.separated(
               padding: AppSpacing.screen,
               itemCount: leads.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.cardGap),
               itemBuilder: (context, index) {
                 final lead = leads[index];
-                return _LeadTile(eventoId: eventoId, lead: lead);
+                return StaggeredListItem(
+                  index: index,
+                  child: _LeadTile(
+                    eventoId: eventoId,
+                    lead: lead,
+                    index: index,
+                  ),
+                );
               },
             );
           },
@@ -66,85 +76,96 @@ class ListaLeadsScreen extends ConsumerWidget {
 }
 
 class _LeadTile extends StatelessWidget {
-  const _LeadTile({required this.eventoId, required this.lead});
+  const _LeadTile({
+    required this.eventoId,
+    required this.lead,
+    required this.index,
+  });
 
   final String eventoId;
   final Lead lead;
+  final int index;
 
   @override
   Widget build(BuildContext context) {
     final vendedor = lead.vendedorNombre;
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: lead.pendienteDeSincronizar
-            ? null
-            : () => context.push(
-                  RoutePaths.detalleLead(eventoId, lead.id),
-                ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: const Icon(
-                  Icons.person_outline_rounded,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      lead.nombreCompleto,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+    final pendiente = lead.pendienteDeSincronizar;
+
+    return Pressable(
+      onTap: pendiente
+          ? null
+          : () => context.push(RoutePaths.detalleLead(eventoId, lead.id)),
+      enabled: !pendiente,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppColors.shadowRest,
+        ),
+        child: Row(
+          children: [
+            AvatarInitials(
+              name: lead.nombreCompleto,
+              size: 44,
+              index: index,
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    lead.nombreCompleto,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
                     ),
-                    if (lead.empresa != null && lead.empresa!.isNotEmpty)
-                      Text(
-                        lead.empresa!,
-                        style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+                  if (lead.empresa != null && lead.empresa!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      lead.empresa!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
                       ),
-                    if (vendedor != null && vendedor.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '[$vendedor]',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    if (lead.pendienteDeSincronizar)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Pendiente de sincronizar',
-                          style: TextStyle(
-                            color: AppColors.warning,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+                    ),
                   ],
-                ),
+                  if (vendedor != null && vendedor.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      vendedor,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                  if (pendiente) ...[
+                    const SizedBox(height: 6),
+                    const StatusChip(
+                      label: 'Pendiente de sincronizar',
+                      variant: StatusChipVariant.warning,
+                    ),
+                  ],
+                ],
               ),
-              if (!lead.pendienteDeSincronizar)
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.textSecondary,
-                ),
-            ],
-          ),
+            ),
+            if (!pendiente)
+              const Icon(
+                Symbols.chevron_right_rounded,
+                color: AppColors.chevronMuted,
+              ),
+          ],
         ),
       ),
     );
@@ -171,7 +192,7 @@ class DetalleLeadScreen extends ConsumerWidget {
       actions: [
         if (esAdmin)
           IconButton(
-            icon: const Icon(Icons.delete_outline),
+            icon: const Icon(Symbols.delete_outline_rounded),
             onPressed: () async {
               final ok = await confirmDialog(
                 context,
@@ -205,7 +226,24 @@ class DetalleLeadScreen extends ConsumerWidget {
         data: (lead) => ListView(
           padding: AppSpacing.screen,
           children: [
-            _InfoRow(label: 'Nombre', value: lead.nombreCompleto),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                AvatarInitials(name: lead.nombreCompleto, size: 56),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    lead.nombreCompleto,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
             _InfoRow(label: 'Empresa', value: lead.empresa),
             _InfoRow(label: 'Cargo', value: lead.cargo),
             _InfoRow(label: 'Teléfono', value: lead.telefono),
@@ -213,11 +251,8 @@ class DetalleLeadScreen extends ConsumerWidget {
             _InfoRow(label: 'Descripción', value: lead.descripcion),
             _InfoRow(label: 'Capturado por', value: lead.vendedorNombre),
             if (lead.fotosUrls.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'Fotos',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
+              const SizedBox(height: 8),
+              const SectionLabel('Fotos'),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 10,
@@ -234,7 +269,7 @@ class DetalleLeadScreen extends ConsumerWidget {
                         placeholder: (_, _) => Container(
                           width: 120,
                           height: 120,
-                          color: AppColors.surfaceMuted,
+                          color: AppColors.tintNavy,
                           child: const Center(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
@@ -242,8 +277,11 @@ class DetalleLeadScreen extends ConsumerWidget {
                         errorWidget: (_, _, _) => Container(
                           width: 120,
                           height: 120,
-                          color: AppColors.surfaceMuted,
-                          child: const Icon(Icons.broken_image_outlined),
+                          color: AppColors.tintNavy,
+                          child: const Icon(
+                            Icons.broken_image_outlined,
+                            color: AppColors.textTertiary,
+                          ),
                         ),
                       ),
                     ),
@@ -276,11 +314,18 @@ class _InfoRow extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
-          Text(texto, style: Theme.of(context).textTheme.bodyLarge),
+          Text(
+            texto,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: AppColors.ink,
+            ),
+          ),
         ],
       ),
     );

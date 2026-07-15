@@ -76,7 +76,7 @@ class _QrScanCornerPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.accent
+      ..color = AppColors.success
       ..strokeWidth = _stroke
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;

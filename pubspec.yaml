@@ -57,6 +57,10 @@ dependencies:
   url_launcher: ^6.3.2
   qr_flutter: ^4.1.0
   speech_to_text: ^7.4.0
+  google_fonts: ^6.2.1
+  material_symbols_icons: ^4.2874.0
+  animations: ^2.0.11
+  flutter_staggered_animations: ^1.1.1
 
 dev_dependencies:
   flutter_test:

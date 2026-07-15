@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/pressable.dart';
 import '../../../data/models/evento.dart';
 import '../providers/home_dashboard_providers.dart';
 
@@ -28,36 +31,14 @@ class HomeDashboardSection extends ConsumerWidget {
       data: (data) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionLabel('RESUMEN'),
-          const SizedBox(height: AppSpacing.sm),
+          const SectionLabel('Resumen'),
+          const SizedBox(height: 12),
           _KpiGrid(data: data),
-          const SizedBox(height: AppSpacing.lg),
-          const _SectionLabel('CALENDARIO DE EVENTOS'),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.sectionGap),
+          const SectionLabel('Calendario de eventos'),
+          const SizedBox(height: 12),
           _EventosCalendario(data: data),
         ],
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.texto);
-
-  final String texto;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: AppSpacing.xs),
-      child: Text(
-        texto,
-        style: const TextStyle(
-          fontSize: 12,
-          letterSpacing: 0.6,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textSecondary,
-        ),
       ),
     );
   }
@@ -70,125 +51,76 @@ class _KpiGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cards = [
+      (
+        '${data.totalEventos}',
+        'Eventos',
+        Symbols.calendar_month_rounded,
+        AppColors.tintNavy,
+        AppColors.primary,
+      ),
+      (
+        '${data.eventosProximos}',
+        'Próximos',
+        Symbols.upcoming_rounded,
+        AppColors.successTint,
+        AppColors.success,
+      ),
+      (
+        '${data.totalRegistrados}',
+        'Registrados',
+        Symbols.group_rounded,
+        AppColors.tintNavy,
+        AppColors.primary,
+      ),
+      (
+        '${(data.porcentajeAcreditacion * 100).toStringAsFixed(0)}%',
+        'Acreditación',
+        Symbols.verified_rounded,
+        AppColors.successTint,
+        AppColors.success,
+      ),
+      (
+        '${data.eventosActivos}',
+        'Activos',
+        Symbols.check_circle_rounded,
+        AppColors.successTint,
+        AppColors.success,
+      ),
+      (
+        '${data.eventosEsteMes}',
+        'Este mes',
+        Symbols.event_rounded,
+        AppColors.warningTint,
+        AppColors.warning,
+      ),
+    ];
+
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _KpiCard(
-                label: 'Eventos',
-                valor: '${data.totalEventos}',
-                icon: Icons.event_rounded,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _KpiCard(
-                label: 'Próximos',
-                valor: '${data.eventosProximos}',
-                icon: Icons.upcoming_rounded,
-                color: AppColors.accent,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Expanded(
-              child: _KpiCard(
-                label: 'Registrados',
-                valor: '${data.totalRegistrados}',
-                icon: Icons.people_outline_rounded,
-                color: AppColors.primaryDark,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _KpiCard(
-                label: '% Acreditación',
-                valor:
-                    '${(data.porcentajeAcreditacion * 100).toStringAsFixed(0)}%',
-                icon: Icons.verified_outlined,
-                color: AppColors.success,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Expanded(
-              child: _KpiCard(
-                label: 'Activos',
-                valor: '${data.eventosActivos}',
-                icon: Icons.check_circle_outline_rounded,
-                color: AppColors.success,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _KpiCard(
-                label: 'Este mes',
-                valor: '${data.eventosEsteMes}',
-                icon: Icons.calendar_month_rounded,
-                color: AppColors.warning,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _KpiCard extends StatelessWidget {
-  const _KpiCard({
-    required this.label,
-    required this.valor,
-    required this.icon,
-    required this.color,
-  });
-
-  final String label;
-  final String valor;
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              valor,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+        for (var row = 0; row < 3; row++) ...[
+          if (row > 0) const SizedBox(height: 12),
+          Row(
+            children: [
+              for (var col = 0; col < 2; col++) ...[
+                if (col > 0) const SizedBox(width: 12),
+                Expanded(
+                  child: StaggeredListItem(
+                    index: row * 2 + col,
+                    child: StatCard(
+                      value: cards[row * 2 + col].$1,
+                      label: cards[row * 2 + col].$2,
+                      icon: cards[row * 2 + col].$3,
+                      tint: cards[row * 2 + col].$4,
+                      iconColor: cards[row * 2 + col].$5,
+                    ),
                   ),
-            ),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ],
     );
   }
 }
@@ -232,81 +164,110 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
         ? widget.data.eventosEnDia(_diaSeleccionado!)
         : widget.data.proximosEventos.take(5).toList();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _cambiarMes(-1),
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-                Expanded(
-                  child: Text(
-                    _capitalize(
-                      DateFormat('MMMM yyyy', 'es').format(_mesVisible),
-                    ),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.shadowRest,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Pressable(
+                scale: 0.9,
+                onTap: () => _cambiarMes(-1),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  child: const Icon(
+                    Symbols.chevron_left_rounded,
+                    size: 18,
+                    color: AppColors.primary,
                   ),
                 ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _cambiarMes(1),
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: const [
-                _DiaSemanaLabel('L'),
-                _DiaSemanaLabel('M'),
-                _DiaSemanaLabel('M'),
-                _DiaSemanaLabel('J'),
-                _DiaSemanaLabel('V'),
-                _DiaSemanaLabel('S'),
-                _DiaSemanaLabel('D'),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _CalendarioGrid(
-              mes: _mesVisible,
-              eventosPorDia: eventosPorDia,
-              diaSeleccionado: _diaSeleccionado,
-              onDiaTap: (dia) => setState(() => _diaSeleccionado = dia),
-            ),
-            const Divider(height: AppSpacing.xxl),
-            Text(
-              _diaSeleccionado != null
-                  ? 'Eventos del ${_formatDia(_diaSeleccionado!)}'
-                  : 'Próximos eventos',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-                fontSize: 13,
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            if (eventosLista.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+              Expanded(
                 child: Text(
-                  'No hay eventos en esta fecha.',
-                  style: TextStyle(color: AppColors.textSecondary),
+                  _capitalize(
+                    DateFormat('MMMM yyyy', 'es').format(_mesVisible),
+                  ),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: AppColors.ink,
+                  ),
                 ),
-              )
-            else
-              ...eventosLista.map((e) => _EventoCalendarioTile(evento: e)),
-          ],
-        ),
+              ),
+              Pressable(
+                scale: 0.9,
+                onTap: () => _cambiarMes(1),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  child: const Icon(
+                    Symbols.chevron_right_rounded,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              _DiaSemanaLabel('L'),
+              _DiaSemanaLabel('M'),
+              _DiaSemanaLabel('M'),
+              _DiaSemanaLabel('J'),
+              _DiaSemanaLabel('V'),
+              _DiaSemanaLabel('S'),
+              _DiaSemanaLabel('D'),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _CalendarioGrid(
+            mes: _mesVisible,
+            eventosPorDia: eventosPorDia,
+            diaSeleccionado: _diaSeleccionado,
+            onDiaTap: (dia) => setState(() => _diaSeleccionado = dia),
+          ),
+          const Divider(height: AppSpacing.xxl, color: AppColors.divider),
+          Text(
+            _diaSeleccionado != null
+                ? 'Eventos del ${_formatDia(_diaSeleccionado!)}'
+                : 'Próximos eventos',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (eventosLista.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Text(
+                'No hay eventos en esta fecha.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            )
+          else
+            ...eventosLista.map((e) => _EventoCalendarioTile(evento: e)),
+        ],
       ),
     );
   }
@@ -314,8 +275,7 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
   String _capitalize(String s) =>
       s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 
-  String _formatDia(DateTime dia) =>
-      DateFormat('d MMM', 'es').format(dia);
+  String _formatDia(DateTime dia) => DateFormat('d MMM', 'es').format(dia);
 }
 
 class _DiaSemanaLabel extends StatelessWidget {
@@ -330,9 +290,9 @@ class _DiaSemanaLabel extends StatelessWidget {
         child: Text(
           label,
           style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textTertiary,
           ),
         ),
       ),
@@ -379,48 +339,44 @@ class _CalendarioGrid extends StatelessWidget {
         GestureDetector(
           onTap: () => onDiaTap(fecha),
           child: Container(
-            margin: const EdgeInsets.all(2),
+            height: 34,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: seleccionado
-                  ? AppColors.primary
-                  : esHoy
-                      ? AppColors.primary.withValues(alpha: 0.1)
-                      : null,
+              gradient: esHoy ? AppColors.headerGradient : null,
+              color: !esHoy && seleccionado ? AppColors.tintNavy : null,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Stack(
+              alignment: Alignment.center,
               children: [
                 Text(
                   '$dia',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12.5,
                     fontWeight: esHoy || seleccionado
-                        ? FontWeight.w700
+                        ? FontWeight.w800
                         : FontWeight.w500,
-                    color: seleccionado
+                    color: esHoy
                         ? Colors.white
                         : esPasado
-                            ? AppColors.textSecondary
-                            : AppColors.primaryDark,
+                            ? AppColors.textTertiary
+                            : AppColors.ink,
                   ),
                 ),
-                if (tieneEventos)
-                  Container(
-                    width: 5,
-                    height: 5,
-                    margin: const EdgeInsets.only(top: 2),
-                    decoration: BoxDecoration(
-                      color: seleccionado
-                          ? Colors.white
-                          : esPasado
-                              ? AppColors.textSecondary
-                              : AppColors.accent,
-                      shape: BoxShape.circle,
+                if (tieneEventos && !esHoy)
+                  Positioned(
+                    bottom: 4,
+                    child: Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: seleccionado
+                            ? AppColors.primary
+                            : AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  )
-                else
-                  const SizedBox(height: 7),
+                  ),
               ],
             ),
           ),
@@ -432,7 +388,9 @@ class _CalendarioGrid extends StatelessWidget {
       crossAxisCount: 7,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.1,
+      mainAxisSpacing: 2,
+      crossAxisSpacing: 2,
+      childAspectRatio: 1.15,
       children: celdas,
     );
   }
@@ -450,8 +408,7 @@ class _EventoCalendarioTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Pressable(
         onTap: () => context.push(RoutePaths.usarEvento(evento.id)),
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -464,7 +421,7 @@ class _EventoCalendarioTile extends StatelessWidget {
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: pasado ? AppColors.textSecondary : AppColors.accent,
+                  color: pasado ? AppColors.textTertiary : AppColors.primary,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -475,7 +432,10 @@ class _EventoCalendarioTile extends StatelessWidget {
                   children: [
                     Text(
                       evento.nombre,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                      ),
                     ),
                     Text(
                       '$fecha · ${evento.lugar ?? evento.pais ?? ''}',
@@ -488,23 +448,13 @@ class _EventoCalendarioTile extends StatelessWidget {
                 ),
               ),
               if (!evento.activo)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceMuted,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                  child: const Text(
-                    'Inactivo',
-                    style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                  ),
+                const StatusChip(
+                  label: 'Inactivo',
+                  variant: StatusChipVariant.neutral,
                 ),
               const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textSecondary,
+                Symbols.chevron_right_rounded,
+                color: AppColors.chevronMuted,
                 size: 20,
               ),
             ],

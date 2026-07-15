@@ -29,6 +29,7 @@ import '../../features/usar_app/screens/usar_evento_screen.dart';
 import '../../features/usuarios/screens/editar_usuario_screen.dart';
 import '../../features/usuarios/screens/gestionar_usuarios_screen.dart';
 import 'go_router_refresh_stream.dart';
+import 'page_transitions.dart';
 import 'route_paths.dart';
 import '../widgets/main_shell_scaffold.dart';
 
@@ -144,114 +145,171 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RoutePaths.crearEvento,
-        builder: (context, state) => const CrearEditarEventoScreen(),
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: const CrearEditarEventoScreen(),
+        ),
       ),
       GoRoute(
         path: '/eventos/:id/editar',
-        builder: (context, state) => CrearEditarEventoScreen(
-          eventoId: state.pathParameters['id'],
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: CrearEditarEventoScreen(
+            eventoId: state.pathParameters['id'],
+          ),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/usar',
-        builder: (context, state) => UsarEventoScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: UsarEventoScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/registrar',
-        builder: (context, state) => RegistrarConfirmadoScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: RegistrarConfirmadoScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/registro-cliente',
-        builder: (context, state) => RegistroPorClienteScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: RegistroPorClienteScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/acreditar',
-        builder: (context, state) => AcreditarConfirmadoScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: AcreditarConfirmadoScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/acreditar-qr',
-        builder: (context, state) => AcreditarQrScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: AcreditarQrScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/registrados',
-        builder: (context, state) => VerRegistradosScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: VerRegistradosScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/eventos/:eventoId/registrados/:registradoId/editar',
-        builder: (context, state) => EditarRegistradoScreen(
-          eventoId: state.pathParameters['eventoId']!,
-          registradoId: state.pathParameters['registradoId']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: EditarRegistradoScreen(
+            eventoId: state.pathParameters['eventoId']!,
+            registradoId: state.pathParameters['registradoId']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/kpi',
-        builder: (context, state) => KpiScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: KpiScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/exportar',
-        builder: (context, state) => ExportarScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: ExportarScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: RoutePaths.crearEventoLead,
-        builder: (context, state) => const CrearEditarEventoLeadScreen(),
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: const CrearEditarEventoLeadScreen(),
+        ),
       ),
       GoRoute(
         path: '/capturador/:id/editar',
-        builder: (context, state) => CrearEditarEventoLeadScreen(
-          eventoId: state.pathParameters['id'],
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: CrearEditarEventoLeadScreen(
+            eventoId: state.pathParameters['id'],
+          ),
         ),
       ),
       GoRoute(
         path: '/capturador/:id/usar',
-        builder: (context, state) => UsarEventoLeadScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: UsarEventoLeadScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/capturador/:id/capturar',
-        builder: (context, state) => CrearLeadScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: CrearLeadScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/capturador/:id/leads',
-        builder: (context, state) => ListaLeadsScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: ListaLeadsScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/capturador/:eventoId/leads/:leadId',
-        builder: (context, state) => DetalleLeadScreen(
-          eventoId: state.pathParameters['eventoId']!,
-          leadId: state.pathParameters['leadId']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: DetalleLeadScreen(
+            eventoId: state.pathParameters['eventoId']!,
+            leadId: state.pathParameters['leadId']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/capturador/:id/exportar',
-        builder: (context, state) => ExportarLeadsScreen(
-          eventoId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: ExportarLeadsScreen(
+            eventoId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/usuarios/:id/editar',
-        builder: (context, state) => EditarUsuarioScreen(
-          usuarioId: state.pathParameters['id']!,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: EditarUsuarioScreen(
+            usuarioId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(

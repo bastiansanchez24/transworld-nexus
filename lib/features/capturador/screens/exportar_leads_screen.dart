@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../providers/capturador_providers.dart';
 import '../services/excel_export_leads_service.dart';
 
@@ -83,20 +84,13 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
             const Text(
               'Genera un archivo .xlsx con los leads capturados en este evento. '
               'Se abrirá el selector nativo para guardarlo o compartirlo.',
+              style: TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: AppSpacing.xxl),
-            FilledButton.icon(
+            PrimaryGradientButton(
+              label: _generando ? 'Generando…' : 'Exportar todos los leads',
+              loading: _generando,
               onPressed: _generando ? null : _exportar,
-              icon: _generando
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.download_outlined),
-              label: Text(
-                _generando ? 'Generando…' : 'Exportar todos los leads',
-              ),
             ),
           ],
         ),

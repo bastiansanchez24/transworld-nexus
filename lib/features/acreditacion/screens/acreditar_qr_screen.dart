@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../core/network/connectivity_service.dart';
@@ -18,11 +19,15 @@ import '../qr_codigo_parser.dart';
 import '../widgets/qr_scan_overlay.dart';
 
 /// Escaneo de QR para acreditación rápida. El QR de cada asistente codifica
-/// simplemente su `registrados.id`. Funciona igual online u offline: el
+/// simplemente su `registrados.id`. Al detectar un código válido se pide
+/// confirmación antes de acreditar. Funciona igual online u offline: el
 /// cambio se aplica localmente contra la lista ya cacheada por
 /// [registradosPorEventoProvider] y se encola con la misma cola unificada
 /// que usa el resto de la app (ver Sección 17.3 de la auditoría — acá no
 /// hay una segunda cola paralela como en el proyecto legado).
+///
+/// Nota: usa [Scaffold] (no AppScaffold) porque el visor de cámara necesita
+/// pantalla completa negra sin header Nexus.
 class AcreditarQrScreen extends ConsumerStatefulWidget {
   const AcreditarQrScreen({super.key, required this.eventoId});
 
@@ -41,6 +46,7 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
   );
   bool _procesando = false;
   String? _ultimoMensaje;
+  bool _ultimoEsError = false;
   Rect? _scanWindow;
 
   @override
@@ -118,6 +124,20 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
         return;
       }
 
+      if (!mounted) return;
+      final confirmar = await confirmDialog(
+        context,
+        title: 'Acreditar asistente',
+        message:
+            'Se detectó a ${registrado.nombreCompleto}.\n\n¿Deseas acreditar a esta persona?',
+        confirmLabel: 'Acreditar',
+      );
+      if (!confirmar || !mounted) {
+        // Evita que el mismo QR vuelva a abrir el diálogo de inmediato.
+        await Future.delayed(const Duration(seconds: 2));
+        return;
+      }
+
       final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
       final isOnline = ref.read(isOnlineProvider);
       if (isOnline && !registrado.pendienteDeSincronizar) {
@@ -143,7 +163,10 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
   }
 
   void _mostrarResultado(String mensaje, {required bool esError}) {
-    setState(() => _ultimoMensaje = mensaje);
+    setState(() {
+      _ultimoMensaje = mensaje;
+      _ultimoEsError = esError;
+    });
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
@@ -185,7 +208,7 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
                     ScanWindowOverlay(
                       controller: _controller,
                       scanWindow: scanWindow,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                       borderWidth: 0,
                     ),
                   QrScanCornerFrame(scanWindow: scanWindow),
@@ -198,7 +221,11 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.videocam_off, color: Colors.white, size: 48),
+                    const Icon(
+                      Symbols.videocam_off_rounded,
+                      color: Colors.white,
+                      size: 48,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       error.errorCode.message,
@@ -227,7 +254,11 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white, size: 32),
+                        icon: const Icon(
+                          Symbols.close_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
                         onPressed: () => context.pop(),
                       ),
                       const Expanded(
@@ -237,13 +268,16 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
                       if (!kIsWeb)
                         IconButton(
-                          icon: const Icon(Icons.flash_on, color: Colors.white),
+                          icon: const Icon(
+                            Symbols.flash_on_rounded,
+                            color: Colors.white,
+                          ),
                           onPressed: () => _controller.toggleTorch(),
                         )
                       else
@@ -256,23 +290,28 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 24),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.warning.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(8),
+                      color: AppColors.warning,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     child: const Text(
                       'Modo navegador: el QR debe mostrarse en otro dispositivo o impreso. '
                       'No puedes escanear un QR en la misma pantalla.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white, fontSize: 12),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 if (registradosAsync.isLoading)
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.black54,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: Colors.white24),
                     ),
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -317,20 +356,55 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
                     margin: const EdgeInsets.all(24),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      border: Border.all(
+                        color: _ultimoEsError
+                            ? AppColors.danger
+                            : AppColors.success,
+                        width: 1.5,
+                      ),
+                      boxShadow: AppColors.shadowLifted,
                     ),
-                    child: Text(
-                      _ultimoMensaje!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _ultimoEsError
+                              ? Symbols.error_rounded
+                              : Symbols.check_circle_rounded,
+                          color: _ultimoEsError
+                              ? AppColors.danger
+                              : AppColors.success,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _ultimoMensaje!,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 16),
                 TextButton.icon(
-                  onPressed: () => context.pushReplacement(RoutePaths.acreditarConfirmado(widget.eventoId)),
-                  icon: const Icon(Icons.list_alt, color: Colors.white),
-                  label: const Text('Ir a acreditación manual', style: TextStyle(color: Colors.white)),
+                  onPressed: () => context.pushReplacement(
+                    RoutePaths.acreditarConfirmado(widget.eventoId),
+                  ),
+                  icon: const Icon(
+                    Symbols.list_alt_rounded,
+                    color: Colors.white,
+                  ),
+                  label: const Text(
+                    'Ir a acreditación manual',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
               ],

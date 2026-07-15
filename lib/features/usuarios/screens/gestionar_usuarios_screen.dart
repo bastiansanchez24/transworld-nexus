@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/collapsing_nav.dart';
+import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/nexus_toast.dart';
+import '../../../core/widgets/pressable.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/models/perfil.dart';
 import '../providers/usuarios_providers.dart';
@@ -30,171 +34,297 @@ class _GestionarUsuariosBody extends ConsumerStatefulWidget {
 
 class _GestionarUsuariosBodyState
     extends ConsumerState<_GestionarUsuariosBody> {
-  String _busqueda = '';
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Perfil> _visibles(List<Perfil> usuarios) => usuarios
+      .where((u) => u.id != SupabaseTables.perfilUsuarioEliminadoId)
+      .toList();
+
+  List<Perfil> _filtrar(List<Perfil> usuarios) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return usuarios;
+    return usuarios
+        .where((u) =>
+            u.nombreCompleto.toLowerCase().contains(q) ||
+            u.rol.label.toLowerCase().contains(q))
+        .toList();
+  }
+
+  Widget _buildSearchField() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.input),
+        boxShadow: AppColors.shadowRest,
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (v) => setState(() => _query = v),
+        style: const TextStyle(
+          fontSize: 14,
+          color: AppColors.ink,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Buscar usuario…',
+          hintStyle: const TextStyle(color: AppColors.placeholder),
+          prefixIcon: const Icon(
+            Symbols.search_rounded,
+            color: AppColors.placeholder,
+            size: 20,
+          ),
+          filled: true,
+          fillColor: AppColors.surface,
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            borderSide:
+                const BorderSide(color: AppColors.primaryLight, width: 1.5),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final usuariosAsync = ref.watch(usuariosListProvider);
 
-    return AppScaffold(
-      title: 'Gestionar usuarios',
-      headerBottom: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        child: TextField(
-          decoration: InputDecoration(
-            hintText: 'Buscar por nombre o rol...',
-            hintStyle: const TextStyle(color: AppColors.textSecondary),
-            prefixIcon:
-                const Icon(Icons.search, color: AppColors.textSecondary),
-            filled: true,
-            fillColor: AppColors.surfaceMuted,
-            isDense: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide:
-                  const BorderSide(color: AppColors.primary, width: 1.5),
-            ),
-          ),
-          onChanged: (v) =>
-              setState(() => _busqueda = v.trim().toLowerCase()),
-        ),
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(usuariosListProvider),
-        child: usuariosAsync.when(
-          loading: () => const LoadingView(),
-          error: (e, _) => ErrorView(
-            message: 'No se pudieron cargar los usuarios.',
-            onRetry: () => ref.invalidate(usuariosListProvider),
-          ),
-          data: (usuarios) {
-            final filtrados = usuarios.where((u) {
-              if (u.id == SupabaseTables.perfilUsuarioEliminadoId) {
-                return false;
-              }
-              if (_busqueda.isEmpty) return true;
-              return u.nombreCompleto.toLowerCase().contains(_busqueda) ||
-                  u.rol.label.toLowerCase().contains(_busqueda);
-            }).toList();
-
-            if (filtrados.isEmpty) {
-              return EmptyStateView(
-                icon: _busqueda.isEmpty
-                    ? Icons.people_outline_rounded
-                    : Icons.search_off_rounded,
-                message: _busqueda.isEmpty
-                    ? 'No hay usuarios todavía.'
-                    : 'No hay usuarios que coincidan con "$_busqueda".',
-              );
-            }
-
-            // Lista agrupada estilo iOS: una sola tarjeta contenedora con
-            // separadores alineados al texto.
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: AppSpacing.screen,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(
-                      left: AppSpacing.xs, bottom: AppSpacing.sm),
-                  child: Text(
-                    '${filtrados.length} ${filtrados.length == 1 ? 'USUARIO' : 'USUARIOS'}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      letterSpacing: 0.6,
-                      fontWeight: FontWeight.w600,
+    return CollapsingScrollScaffold(
+      title: 'Usuarios',
+      onRefresh: () async => ref.invalidate(usuariosListProvider),
+      pinnedSearch: _buildSearchField(),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+            child: usuariosAsync.when(
+              loading: () => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Usuarios',
+                    style: Theme.of(context).textTheme.displaySmall,
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Miembros del equipo',
+                    style: TextStyle(
+                      fontSize: 13,
                       color: AppColors.textSecondary,
                     ),
                   ),
-                ),
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < filtrados.length; i++) ...[
-                        if (i > 0) const Divider(height: 1, indent: 72),
-                        _UsuarioTile(usuario: filtrados[i]),
-                      ],
-                    ],
+                ],
+              ),
+              error: (_, _) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Usuarios',
+                    style: Theme.of(context).textTheme.displaySmall,
+                  ),
+                ],
+              ),
+              data: (usuarios) {
+                final visibles = _visibles(usuarios);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Usuarios',
+                      style: Theme.of(context).textTheme.displaySmall,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${visibles.length} ${visibles.length == 1 ? 'miembro del equipo' : 'miembros del equipo'}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+        ...usuariosAsync.when(
+          loading: () => [
+            const SliverFillRemaining(child: LoadingView()),
+          ],
+          error: (e, _) => [
+            SliverFillRemaining(
+              child: ErrorView(
+                message: 'No se pudieron cargar los usuarios.',
+                onRetry: () => ref.invalidate(usuariosListProvider),
+              ),
+            ),
+          ],
+          data: (usuarios) {
+            final visibles = _visibles(usuarios);
+            final filtrados = _filtrar(visibles);
+
+            if (visibles.isEmpty) {
+              return [
+                const SliverFillRemaining(
+                  child: EmptyStateView(
+                    icon: Icons.people_outline_rounded,
+                    message: 'No hay usuarios todavía.',
                   ),
                 ),
-              ],
-            );
+              ];
+            }
+            if (filtrados.isEmpty) {
+              return [
+                const SliverFillRemaining(
+                  child: EmptyStateView(
+                    icon: Icons.search_off_rounded,
+                    message:
+                        'No hay usuarios que coincidan con la búsqueda.',
+                  ),
+                ),
+              ];
+            }
+
+            return [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      if (index == filtrados.length) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: DashedBorderBox(
+                            height: 52,
+                            onTap: () {
+                              NexusToast.show(
+                                context,
+                                'Invitación disponible próximamente.',
+                              );
+                            },
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Symbols.person_add_rounded,
+                                  color: AppColors.primary,
+                                  size: 20,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Invitar usuario',
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      final usuario = filtrados[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: StaggeredListItem(
+                          index: index,
+                          child: _UsuarioRow(
+                            usuario: usuario,
+                            index: index,
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: filtrados.length + 1,
+                  ),
+                ),
+              ),
+            ];
           },
         ),
-      ),
+      ],
     );
   }
 }
 
-class _UsuarioTile extends StatelessWidget {
-  const _UsuarioTile({required this.usuario});
+class _UsuarioRow extends StatelessWidget {
+  const _UsuarioRow({required this.usuario, required this.index});
 
   final Perfil usuario;
+  final int index;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 4),
-      leading: CircleAvatar(
-        radius: 22,
-        backgroundColor: usuario.activo
-            ? AppColors.primary.withValues(alpha: 0.1)
-            : AppColors.surfaceMuted,
-        child: Text(
-          usuario.nombreCompleto.isNotEmpty
-              ? usuario.nombreCompleto[0].toUpperCase()
-              : '?',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color:
-                usuario.activo ? AppColors.primary : AppColors.textSecondary,
-          ),
+    return Pressable(
+      onTap: () => context.push(RoutePaths.editarUsuario(usuario.id)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppColors.shadowRest,
         ),
-      ),
-      title: Text(
-        usuario.nombreCompleto,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
-      subtitle: Text(
-        usuario.rol.label,
-        style: const TextStyle(color: AppColors.textSecondary),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!usuario.activo)
-            Container(
-              margin: const EdgeInsets.only(right: AppSpacing.sm),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-              ),
-              child: const Text(
-                'Inactivo',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.error,
-                ),
+        child: Row(
+          children: [
+            AvatarInitials(
+              name: usuario.nombreCompleto,
+              size: 44,
+              index: index,
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    usuario.nombreCompleto,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    usuario.activo ? usuario.rol.label : 'Inactivo',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                ],
               ),
             ),
-          const Icon(Icons.chevron_right_rounded,
-              color: AppColors.textSecondary),
-        ],
+            StatusChip(
+              label: usuario.rol.label,
+              variant: usuario.isAdmin
+                  ? StatusChipVariant.navy
+                  : StatusChipVariant.neutral,
+            ),
+          ],
+        ),
       ),
-      onTap: () => context.push(RoutePaths.editarUsuario(usuario.id)),
     );
   }
 }

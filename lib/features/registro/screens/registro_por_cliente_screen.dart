@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -13,6 +14,8 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/pressable.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../eventos/providers/eventos_providers.dart';
@@ -75,7 +78,20 @@ class _RegistroPorClienteScreenState
 
   Future<void> _abrir() async {
     final uri = Uri.parse(_link);
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final ok = await launchUrl(
+        uri,
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_blank',
+      );
+      if (!ok && mounted) {
+        showAppSnackBar(context, 'No se pudo abrir el enlace.', isError: true);
+      }
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(context, 'No se pudo abrir el enlace.', isError: true);
+      }
+    }
   }
 
   Future<void> _cargarExcel() async {
@@ -170,76 +186,163 @@ class _RegistroPorClienteScreenState
               loading: () => const LoadingView(),
               error: (e, _) => const ErrorView(message: 'No se pudo cargar el evento.'),
               data: (evento) => ListView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.screenH,
+                  AppSpacing.xl,
+                  AppSpacing.screenH,
+                  AppSpacing.xxxl,
+                ),
                 children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Enlace de autoregistro', style: Theme.of(context).textTheme.titleMedium),
-                          const SizedBox(height: 8),
-                          SelectableText(_link, style: const TextStyle(color: AppColors.primary)),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              FilledButton.icon(
-                                onPressed: () => _compartir(evento.nombre),
-                                icon: const Icon(Icons.share_outlined),
-                                label: const Text('Compartir'),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: _copiar,
-                                icon: const Icon(Icons.copy_outlined),
-                                label: const Text('Copiar'),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: _abrir,
-                                icon: const Icon(Icons.open_in_new),
-                                label: const Text('Abrir'),
-                              ),
-                            ],
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: AppColors.shadowRest,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SectionLabel('Enlace público'),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Enlace de autoregistro',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          _link,
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _ActionChipButton(
+                              icon: Symbols.share_rounded,
+                              label: 'Compartir',
+                              filled: true,
+                              onTap: () => _compartir(evento.nombre),
+                            ),
+                            _ActionChipButton(
+                              icon: Symbols.content_copy_rounded,
+                              label: 'Copiar',
+                              onTap: _copiar,
+                            ),
+                            _ActionChipButton(
+                              icon: Symbols.open_in_new_rounded,
+                              label: 'Abrir',
+                              onTap: _abrir,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Carga masiva por Excel', style: Theme.of(context).textTheme.titleMedium),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Columnas esperadas: Nombre y Apellido, Email, Empresa, Cargo, '
-                            'Teléfono, RUT / RUC (opcional), Patente (opcional).',
+                  const SizedBox(height: AppSpacing.cardGap + 6),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: AppColors.shadowRest,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SectionLabel('Carga masiva'),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Carga masiva por Excel',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Columnas esperadas: Nombre y Apellido, Email, Empresa, Cargo, '
+                          'Teléfono, RUT / RUC (opcional), Patente (opcional).',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                            height: 1.4,
                           ),
-                          const SizedBox(height: 12),
-                          FilledButton.icon(
-                            onPressed: _importando ? null : _cargarExcel,
-                            icon: _importando
-                                ? const ButtonProgress()
-                                : const Icon(Icons.upload_file_outlined),
-                            label: Text(_importando ? 'Procesando...' : 'Elegir archivo .xlsx'),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 16),
+                        PrimaryGradientButton(
+                          label: _importando
+                              ? 'Procesando...'
+                              : 'Elegir archivo .xlsx',
+                          loading: _importando,
+                          onPressed: _importando ? null : _cargarExcel,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: () => context.push(RoutePaths.registrar(widget.eventoId)),
-                    icon: const Icon(Icons.person_add_alt_1_outlined),
-                    label: const Text('Registrar manualmente'),
+                  const SizedBox(height: AppSpacing.cardGap + 6),
+                  NexusActionRow(
+                    icon: Symbols.person_add_rounded,
+                    title: 'Registrar manualmente',
+                    subtitle: 'Formulario individual de asistente',
+                    onTap: () => context.push(RoutePaths.registrar(widget.eventoId)),
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _ActionChipButton extends StatelessWidget {
+  const _ActionChipButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.filled = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      scale: 0.96,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: filled ? AppColors.primaryDeep : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+            color: filled ? AppColors.primaryDeep : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: filled ? Colors.white : AppColors.primary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: filled ? Colors.white : AppColors.ink,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

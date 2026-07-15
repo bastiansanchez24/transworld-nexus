@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/sync_queue_service.dart';
@@ -107,72 +109,118 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
                           return Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.check_circle, color: AppColors.accent, size: 64),
+                              Container(
+                                width: 72,
+                                height: 72,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.successTint,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Symbols.check_circle_rounded,
+                                  color: AppColors.success,
+                                  size: 40,
+                                ),
+                              ),
                               const SizedBox(height: 16),
-                              Text('¡Listo, ${_nombreController.text.trim()}!',
-                                  style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
+                              Text(
+                                '¡Listo, ${_nombreController.text.trim()}!',
+                                style: const TextStyle(
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.ink,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                               const SizedBox(height: 8),
                               const Text(
                                 'Tu registro fue recibido. Te esperamos en el evento.',
                                 textAlign: TextAlign.center,
+                                style: TextStyle(color: AppColors.textSecondary),
                               ),
                             ],
                           );
                         }
-                        return Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(evento.nombre,
-                                      style: Theme.of(context).textTheme.headlineSmall,
-                                      textAlign: TextAlign.center),
-                                  const SizedBox(height: 4),
-                                  const Text('Completa tus datos para registrarte',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: AppColors.textSecondary)),
-                                  const SizedBox(height: 24),
-                                  TextFormField(
-                                    controller: _nombreController,
-                                    decoration: const InputDecoration(labelText: 'Nombre completo'),
-                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                        return Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
+                            border: Border.all(color: AppColors.border),
+                            boxShadow: AppColors.shadowLifted,
+                          ),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  evento.nombre,
+                                  style: const TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.ink,
                                   ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _emailController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    decoration: const InputDecoration(labelText: 'Email'),
-                                    validator: (v) =>
-                                        (v == null || !v.contains('@')) ? 'Email inválido' : null,
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Completa tus datos para registrarte',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: AppColors.textSecondary),
+                                ),
+                                const SizedBox(height: 24),
+                                TextFormField(
+                                  controller: _nombreController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Nombre completo',
                                   ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _empresaController,
-                                    decoration: const InputDecoration(labelText: 'Empresa'),
+                                  validator: (v) =>
+                                      (v == null || v.trim().isEmpty)
+                                          ? 'Requerido'
+                                          : null,
+                                ),
+                                const SizedBox(height: 14),
+                                TextFormField(
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Email',
                                   ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _cargoController,
-                                    decoration: const InputDecoration(labelText: 'Cargo'),
+                                  validator: (v) =>
+                                      (v == null || !v.contains('@'))
+                                          ? 'Email inválido'
+                                          : null,
+                                ),
+                                const SizedBox(height: 14),
+                                TextFormField(
+                                  controller: _empresaController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Empresa',
                                   ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _telefonoController,
-                                    keyboardType: TextInputType.phone,
-                                    decoration: const InputDecoration(labelText: 'Teléfono (opcional)'),
+                                ),
+                                const SizedBox(height: 14),
+                                TextFormField(
+                                  controller: _cargoController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Cargo',
                                   ),
-                                  const SizedBox(height: 24),
-                                  FilledButton(
-                                    onPressed: _guardando ? null : _enviar,
-                                    child: _guardando
-                                        ? const ButtonProgress()
-                                        : const Text('Registrarme'),
+                                ),
+                                const SizedBox(height: 14),
+                                TextFormField(
+                                  controller: _telefonoController,
+                                  keyboardType: TextInputType.phone,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Teléfono (opcional)',
                                   ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(height: 24),
+                                PrimaryGradientButton(
+                                  label: 'Registrarme',
+                                  loading: _guardando,
+                                  onPressed: _guardando ? null : _enviar,
+                                ),
+                              ],
                             ),
                           ),
                         );

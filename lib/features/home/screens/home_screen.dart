@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/offline_banner.dart';
+import '../../../core/widgets/pressable.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/models/perfil.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -13,10 +17,6 @@ import '../providers/home_dashboard_providers.dart';
 import '../widgets/home_dashboard_section.dart';
 import '../widgets/proximo_evento_card.dart';
 
-/// Home rediseñado al estilo iOS: el perfil del usuario vive integrado en
-/// un encabezado a sangre completa (llega hasta el borde superior de la
-/// pantalla, sin AppBar), y las acciones de cuenta (Mi perfil,
-/// Configuraciones, Cerrar sesión) se despliegan en un panel colapsable.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -30,35 +30,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final perfilAsync = ref.watch(currentPerfilProvider);
+    final perfil = perfilAsync.valueOrNull;
+    final proximo =
+        ref.watch(homeDashboardProvider).valueOrNull?.proximoEvento;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      // El encabezado degradado llega hasta arriba → iconos claros.
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
+        backgroundColor: AppColors.background,
         body: Column(
           children: [
+            const OfflineBanner(),
             _HeaderPerfil(
-              perfil: perfilAsync.valueOrNull,
+              perfil: perfil,
               menuAbierto: _menuCuentaAbierto,
-              proximoEvento: ref.watch(homeDashboardProvider).valueOrNull?.proximoEvento,
+              proximoEvento: proximo,
               onToggleMenu: () => setState(
-                  () => _menuCuentaAbierto = !_menuCuentaAbierto),
+                () => _menuCuentaAbierto = !_menuCuentaAbierto,
+              ),
               onCerrarSesion: () =>
                   ref.read(authRepositoryProvider).cerrarSesion(),
             ),
-            const OfflineBanner(),
             Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: perfilAsync.when(
-                    loading: () => const LoadingView(),
-                    error: (e, _) => ErrorView(
-                      message: 'No se pudo cargar tu perfil.',
-                      onRetry: () => ref.invalidate(currentPerfilProvider),
-                    ),
-                    data: (perfil) => _buildContenido(perfil),
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: () async {
+                  ref.invalidate(homeDashboardProvider);
+                  ref.invalidate(currentPerfilProvider);
+                },
+                child: ListView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
                   ),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+                  children: [
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: perfilAsync.when(
+                          loading: () => const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 48),
+                            child: LoadingView(),
+                          ),
+                          error: (e, _) => ErrorView(
+                            message: 'No se pudo cargar tu perfil.',
+                            onRetry: () =>
+                                ref.invalidate(currentPerfilProvider),
+                          ),
+                          data: (_) => const HomeDashboardSection(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -67,24 +90,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
   }
-
-  Widget _buildContenido(Perfil? perfil) {
-    return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(homeDashboardProvider),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: AppSpacing.screen,
-        children: [
-          const HomeDashboardSection(),
-        ],
-      ),
-    );
-  }
 }
 
-/// Encabezado a sangre completa: degradado de marca que se funde con el
-/// borde superior de la pantalla (el avatar y el saludo forman parte del
-/// fondo, no de una tarjeta flotante).
 class _HeaderPerfil extends StatelessWidget {
   const _HeaderPerfil({
     required this.perfil,
@@ -100,149 +107,138 @@ class _HeaderPerfil extends StatelessWidget {
   final VoidCallback onToggleMenu;
   final VoidCallback onCerrarSesion;
 
+  String get _firstName {
+    final nombre = perfil?.nombreCompleto.trim() ?? '';
+    if (nombre.isEmpty) return '';
+    return nombre.split(RegExp(r'\s+')).first;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final nombre = perfil?.nombreCompleto ?? '';
+    final first = _firstName;
+    final saludo = first.isEmpty ? 'Hola 👋' : 'Hola, $first 👋';
     final rol = perfil?.rol.label ?? '';
+    final topPad = MediaQuery.paddingOf(context).top;
 
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(AppRadius.header),
+        ),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 12, 24),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: Colors.white.withValues(alpha: 0.15),
-                        child: Text(
-                          nombre.isNotEmpty ? nombre[0].toUpperCase() : '?',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.lg),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              nombre.isEmpty ? 'Hola' : 'Hola, $nombre',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(color: Colors.white),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (rol.isNotEmpty) ...[
-                              const SizedBox(height: AppSpacing.xs),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.sm, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
-                                  borderRadius:
-                                      BorderRadius.circular(AppRadius.sm),
-                                ),
-                                child: Text(
-                                  rol,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Semantics(
-                        label: 'Opciones de cuenta',
-                        expanded: menuAbierto,
-                        button: true,
-                        child: Material(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          shape: const CircleBorder(),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: onToggleMenu,
-                            child: SizedBox(
-                              width: 44,
-                              height: 44,
-                              child: AnimatedRotation(
-                                turns: menuAbierto ? 0.5 : 0,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeOutCubic,
-                                child: const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            if (proximoEvento != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: ProximoEventoCard(evento: proximoEvento!),
-                  ),
-                ),
-              ),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 280),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: menuAbierto
-                  ? Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        20,
-                        proximoEvento != null ? AppSpacing.md : 0,
-                        20,
-                        20,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 760),
-                          child: _MenuCuenta(onCerrarSesion: onCerrarSesion),
-                        ),
-                      ),
-                    )
-                  : SizedBox(
-                      width: double.infinity,
-                      height: proximoEvento != null ? AppSpacing.lg : 0,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, topPad + 8, 20, 22),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    AvatarInitials(
+                      name: perfil?.nombreCompleto ?? '?',
+                      size: 44,
+                      index: 0,
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            saludo,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (rol.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            _HeaderRoleChip(label: rol),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Pressable(
+                      scale: 0.92,
+                      onTap: onToggleMenu,
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          menuAbierto
+                              ? Symbols.close_rounded
+                              : Symbols.notifications_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (proximoEvento != null) ...[
+                  const SizedBox(height: 16),
+                  ProximoEventoCard(evento: proximoEvento!),
+                ],
+                AnimatedSize(
+                  duration: AppMotion.toggle,
+                  curve: AppMotion.ease,
+                  alignment: Alignment.topCenter,
+                  child: menuAbierto
+                      ? Padding(
+                          padding: EdgeInsets.only(
+                            top: proximoEvento != null ? 12 : 16,
+                          ),
+                          child: _MenuCuenta(onCerrarSesion: onCerrarSesion),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Lista agrupada estilo iOS con las opciones de cuenta.
+class _HeaderRoleChip extends StatelessWidget {
+  const _HeaderRoleChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+        ),
+      ),
+    );
+  }
+}
+
 class _MenuCuenta extends StatelessWidget {
   const _MenuCuenta({required this.onCerrarSesion});
 
@@ -251,26 +247,31 @@ class _MenuCuenta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     void proximamente() =>
-        showAppSnackBar(context, 'Disponible próximamente.');
+        NexusToast.show(context, 'Disponible próximamente.');
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppColors.shadowLifted,
+      ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           _CuentaTile(
-            icon: Icons.person_outline_rounded,
+            icon: Symbols.person_rounded,
             label: 'Mi perfil',
             onTap: proximamente,
           ),
-          const Divider(height: 1, indent: 56),
+          const Divider(height: 1, indent: 56, color: AppColors.divider),
           _CuentaTile(
-            icon: Icons.settings_outlined,
+            icon: Symbols.settings_rounded,
             label: 'Configuraciones',
             onTap: proximamente,
           ),
-          const Divider(height: 1, indent: 56),
+          const Divider(height: 1, indent: 56, color: AppColors.divider),
           _CuentaTile(
-            icon: Icons.logout_rounded,
+            icon: Symbols.logout_rounded,
             label: 'Cerrar sesión',
             destructivo: true,
             onTap: onCerrarSesion,
@@ -296,18 +297,33 @@ class _CuentaTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = destructivo ? AppColors.error : AppColors.primaryDark;
-    return ListTile(
+    final color = destructivo ? AppColors.danger : AppColors.ink;
+    return Pressable(
       onTap: onTap,
-      leading: Icon(icon, color: color),
-      title: Text(
-        label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w500),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            if (!destructivo)
+              const Icon(
+                Symbols.chevron_right_rounded,
+                color: AppColors.chevronMuted,
+              ),
+          ],
+        ),
       ),
-      trailing: destructivo
-          ? null
-          : const Icon(Icons.chevron_right_rounded,
-              color: AppColors.textSecondary),
     );
   }
 }

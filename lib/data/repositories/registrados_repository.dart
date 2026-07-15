@@ -134,18 +134,33 @@ class RegistradosRepository implements SyncExecutor {
   /// Secciones 3.11/4.11 de la auditoría) y deja constancia en
   /// `email_confirmacion_enviado`. El QR codifica `registrados.id`, que es
   /// lo que lee la pantalla de acreditación por cámara.
+  ///
+  /// El body debe ir envuelto en `{ record: {...} }` con las columnas de
+  /// `public.registrados`, exactamente como lo invocaban `EditarRegistrado`
+  /// (web/móvil legado). Un body plano (`registrado_id`/`email`/…) no es
+  /// compatible con la función desplegada.
   Future<void> enviarQrPorEmail(
     Registrado registrado, {
     String? nombreEvento,
   }) async {
+    final record = <String, dynamic>{
+      'id': registrado.id,
+      'evento_id': registrado.eventoId,
+      'nombre_completo': registrado.nombreCompleto,
+      'email': registrado.email,
+      'acreditado': registrado.acreditado,
+      'rut': registrado.rut,
+      'patente': registrado.patente,
+      'empresa': registrado.empresa,
+      'cargo': registrado.cargo,
+      'telefono': registrado.telefono,
+      'ingresado_por': registrado.ingresadoPor,
+      'email_confirmacion_enviado': registrado.emailConfirmacionEnviado,
+      'evento': ?nombreEvento,
+    };
     await _client.functions.invoke(
       SupabaseFunctions.enviarQr,
-      body: {
-        'registrado_id': registrado.id,
-        'email': registrado.email,
-        'nombre': registrado.nombreCompleto,
-        'evento': ?nombreEvento,
-      },
+      body: {'record': record},
     );
     await actualizar(registrado.id, {'email_confirmacion_enviado': true});
   }

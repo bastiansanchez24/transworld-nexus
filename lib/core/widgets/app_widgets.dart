@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'nexus_toast.dart';
 
 /// Colección pequeña de widgets reutilizables para no repetir boilerplate
-/// de estados de carga / error / vacío en cada pantalla (algo que en el
-/// proyecto legado se repetía pantalla por pantalla con JSX inline).
+/// de estados de carga / error / vacío en cada pantalla.
 class LoadingView extends StatelessWidget {
   const LoadingView({super.key, this.message});
 
@@ -41,12 +41,14 @@ class ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, size: 40, color: AppColors.error),
+            const Icon(Icons.error_outline_rounded,
+                size: 40, color: AppColors.danger),
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center),
             if (onRetry != null) ...[
               const SizedBox(height: 16),
-              OutlinedButton(onPressed: onRetry, child: const Text('Reintentar')),
+              OutlinedButton(
+                  onPressed: onRetry, child: const Text('Reintentar')),
             ],
           ],
         ),
@@ -75,7 +77,9 @@ class EmptyStateView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5)),
+            Icon(icon,
+                size: 48,
+                color: AppColors.textSecondary.withValues(alpha: 0.5)),
             const SizedBox(height: 12),
             Text(
               message,
@@ -90,8 +94,6 @@ class EmptyStateView extends StatelessWidget {
   }
 }
 
-/// Ítem de menú con ícono, título y flecha, usado por el home y el menú
-/// operativo de evento (antes duplicado como `_MenuCard` y `_OpcionTile`).
 class AppMenuTile extends StatelessWidget {
   const AppMenuTile({
     super.key,
@@ -120,25 +122,23 @@ class AppMenuTile extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(AppRadius.md),
+            color: AppColors.tintNavy,
+            borderRadius: BorderRadius.circular(AppRadius.tile),
           ),
           child: Icon(icon, color: AppColors.primary),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: subtitle != null
             ? Text(subtitle!,
                 style: const TextStyle(color: AppColors.textSecondary))
             : null,
         trailing: const Icon(Icons.chevron_right_rounded,
-            color: AppColors.textSecondary),
+            color: AppColors.chevronMuted),
       ),
     );
   }
 }
 
-/// Spinner compacto para mostrar dentro de un botón mientras se procesa
-/// una acción (antes copiado inline en cada pantalla).
 class ButtonProgress extends StatelessWidget {
   const ButtonProgress({super.key});
 
@@ -157,12 +157,16 @@ void showAppSnackBar(
   String message, {
   bool isError = false,
 }) {
+  if (!isError) {
+    NexusToast.show(context, message);
+    return;
+  }
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? AppColors.error : AppColors.success,
+        backgroundColor: AppColors.danger,
       ),
     );
 }

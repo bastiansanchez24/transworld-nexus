@@ -12,6 +12,7 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/leads_repository.dart';
@@ -276,7 +277,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                 onPressed: _guardando ? null : () => _toggleVoz(campo),
                 icon: Icon(
                   escuchando ? Icons.mic : Icons.mic_none_outlined,
-                  color: escuchando ? AppColors.error : AppColors.primary,
+                  color: escuchando ? AppColors.danger : AppColors.primary,
                 ),
               )
             : null,
@@ -373,7 +374,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                           right: -8,
                           child: IconButton.filled(
                             style: IconButton.styleFrom(
-                              backgroundColor: AppColors.error,
+                              backgroundColor: AppColors.danger,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.all(4),
                               minimumSize: const Size(28, 28),
@@ -396,7 +397,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                         width: 88,
                         height: 88,
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceMuted,
+                          color: AppColors.tintNavy,
                           borderRadius: BorderRadius.circular(AppRadius.md),
                           border: Border.all(color: AppColors.border),
                         ),
@@ -409,11 +410,10 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                 ],
               ),
               const SizedBox(height: 28),
-              FilledButton(
+              PrimaryGradientButton(
+                label: 'Guardar lead',
+                loading: _guardando,
                 onPressed: _guardando ? null : _guardar,
-                child: _guardando
-                    ? const ButtonProgress()
-                    : const Text('Guardar lead'),
               ),
             ],
           ),

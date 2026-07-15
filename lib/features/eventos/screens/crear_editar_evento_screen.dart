@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/repositories/eventos_repository.dart';
@@ -147,7 +150,11 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
       }
 
       if (mounted) {
-        showAppSnackBar(context, _esEdicion ? 'Evento actualizado.' : 'Evento creado.');
+        if (_esEdicion) {
+          NexusToast.show(context, 'Evento actualizado.');
+        } else {
+          NexusToast.show(context, 'Evento creado correctamente');
+        }
         context.pop();
       }
     } catch (e) {
@@ -201,74 +208,96 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
       body: eventoAsync != null && eventoAsync.isLoading && !_cargado
           ? const LoadingView()
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    GestureDetector(
+                    _ImagenDropZone(
+                      imagenBytes: _imagenBytes,
+                      imagenUrl: _imagenUrlExistente,
                       onTap: _elegirImagen,
-                      child: Container(
-                        height: 160,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceMuted,
-                          borderRadius: BorderRadius.circular(AppRadius.lg),
-                          image: _imagenBytes != null
-                              ? DecorationImage(
-                                  image: MemoryImage(_imagenBytes!),
-                                  fit: BoxFit.cover)
-                              : (_imagenUrlExistente != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(_imagenUrlExistente!),
-                                      fit: BoxFit.cover)
-                                  : null),
-                        ),
-                        child: (_imagenBytes == null && _imagenUrlExistente == null)
-                            ? const Center(
-                                child: Icon(Icons.add_photo_alternate_outlined,
-                                    size: 40, color: AppColors.textSecondary))
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      controller: _nombreController,
-                      decoration: const InputDecoration(labelText: 'Nombre del evento'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                     ),
                     const SizedBox(height: 14),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Fecha'),
-                      subtitle: Text(DateFormat('dd/MM/yyyy').format(_fecha)),
-                      trailing: const Icon(Icons.calendar_today_outlined),
-                      onTap: _elegirFecha,
-                    ),
+                    _FieldLabel('Nombre'),
                     const SizedBox(height: 6),
                     TextFormField(
-                      controller: _paisController,
-                      decoration: const InputDecoration(labelText: 'País'),
+                      controller: _nombreController,
+                      decoration: const InputDecoration(
+                        hintText: 'Ej. Taller ALTAI 2026',
+                      ),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                     ),
                     const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _lugarController,
-                      decoration: const InputDecoration(labelText: 'Lugar'),
+                    _FieldLabel('Fecha'),
+                    const SizedBox(height: 6),
+                    _FechaPickerRow(
+                      fecha: _fecha,
+                      onTap: _elegirFecha,
                     ),
                     const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _FieldLabel('País'),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _paisController,
+                                decoration: const InputDecoration(
+                                  hintText: 'Chile',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _FieldLabel('Lugar'),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _lugarController,
+                                decoration: const InputDecoration(
+                                  hintText: 'Hotel…',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _FieldLabel('Dirección'),
+                    const SizedBox(height: 6),
                     TextFormField(
                       controller: _direccionController,
-                      decoration: const InputDecoration(labelText: 'Dirección'),
+                      decoration: const InputDecoration(
+                        hintText: 'Av. Vitacura 2885',
+                      ),
                     ),
                     const SizedBox(height: 14),
+                    _FieldLabel('Temática'),
+                    const SizedBox(height: 6),
                     TextFormField(
                       controller: _tematicaController,
-                      decoration: const InputDecoration(labelText: 'Temática'),
+                      decoration: const InputDecoration(
+                        hintText: 'Ej. Telecomunicaciones',
+                      ),
                     ),
                     const SizedBox(height: 14),
+                    _FieldLabel('Tipo de registro'),
+                    const SizedBox(height: 6),
                     DropdownButtonFormField<TipoRegistroEvento>(
                       initialValue: _tipoRegistro,
-                      decoration: const InputDecoration(labelText: 'Tipo de registro'),
+                      decoration: const InputDecoration(),
                       items: const [
                         DropdownMenuItem(
                           value: TipoRegistroEvento.comercial,
@@ -282,32 +311,216 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
                       onChanged: (value) =>
                           setState(() => _tipoRegistro = value ?? _tipoRegistro),
                     ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Requiere certificación / capacitación'),
-                      subtitle: const Text('Habilita los campos RUT y patente'),
+                    const SizedBox(height: 14),
+                    _ToggleCard(
+                      title: 'Requiere certificación',
+                      subtitle: 'Habilita los campos RUT y patente',
                       value: _certificacion,
                       onChanged: (v) => setState(() => _certificacion = v),
                     ),
-                    if (_esEdicion)
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Evento activo'),
-                        subtitle: const Text('Los eventos inactivos no reciben autoregistro público'),
+                    if (_esEdicion) ...[
+                      const SizedBox(height: 14),
+                      _ToggleCard(
+                        title: 'Evento activo',
+                        subtitle:
+                            'Los eventos inactivos no reciben autoregistro público',
                         value: _activo,
                         onChanged: (v) => setState(() => _activo = v),
                       ),
-                    const SizedBox(height: 24),
-                    FilledButton(
+                    ],
+                    const SizedBox(height: 20),
+                    PrimaryGradientButton(
+                      label: _esEdicion ? 'Guardar' : 'Crear evento',
+                      loading: _guardando,
                       onPressed: _guardando ? null : _guardar,
-                      child: _guardando
-                          ? const ButtonProgress()
-                          : Text(_esEdicion ? 'Guardar cambios' : 'Crear evento'),
                     ),
                   ],
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
+}
+
+class _ImagenDropZone extends StatelessWidget {
+  const _ImagenDropZone({
+    required this.imagenBytes,
+    required this.imagenUrl,
+    required this.onTap,
+  });
+
+  final Uint8List? imagenBytes;
+  final String? imagenUrl;
+  final VoidCallback onTap;
+
+  bool get _tieneImagen => imagenBytes != null || imagenUrl != null;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_tieneImagen) {
+      return GestureDetector(
+        onTap: onTap,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: SizedBox(
+            height: 150,
+            width: double.infinity,
+            child: imagenBytes != null
+                ? Image.memory(imagenBytes!, fit: BoxFit.cover)
+                : Image.network(imagenUrl!, fit: BoxFit.cover),
+          ),
+        ),
+      );
+    }
+
+    return DashedBorderBox(
+      height: 150,
+      onTap: onTap,
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Symbols.add_photo_alternate_rounded,
+            size: 30,
+            color: AppColors.primary,
+            fill: 1,
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Agregar imagen del evento',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FechaPickerRow extends StatelessWidget {
+  const _FechaPickerRow({required this.fecha, required this.onTap});
+
+  final DateTime fecha;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.input),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.input),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  DateFormat('dd/MM/yyyy').format(fecha),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+              const Icon(
+                Symbols.calendar_today_rounded,
+                size: 19,
+                color: AppColors.primary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ToggleCard extends StatelessWidget {
+  const _ToggleCard({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              NexusToggle(value: value, onChanged: onChanged),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

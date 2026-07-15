@@ -2,11 +2,13 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
@@ -116,7 +118,10 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
       title: 'Editar registrado',
       actions: [
         if (esAdmin)
-          IconButton(icon: const Icon(Icons.delete_outline), onPressed: _eliminar),
+          IconButton(
+            icon: const Icon(Symbols.delete_outline_rounded),
+            onPressed: _eliminar,
+          ),
       ],
       body: registradosAsync.when(
               loading: () => const LoadingView(),
@@ -125,69 +130,132 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
                 final registrado = registrados.where((r) => r.id == widget.registradoId).firstOrNull;
                 if (registrado == null) {
                   return const EmptyStateView(
-                    icon: Icons.person_off_outlined,
+                    icon: Symbols.person_off_rounded,
                     message: 'No se encontró este registro.',
                   );
                 }
                 _precargar(registrado);
 
                 return SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenH,
+                    AppSpacing.xl,
+                    AppSpacing.screenH,
+                    AppSpacing.xxxl,
+                  ),
                   child: Form(
                     key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(registrado.email, style: const TextStyle(color: AppColors.textSecondary)),
-                        const SizedBox(height: 16),
+                        Text(
+                          registrado.email,
+                          style: const TextStyle(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
                         TextFormField(
                           controller: _nombreController,
                           decoration: const InputDecoration(labelText: 'Nombre completo'),
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                         ),
-                        const SizedBox(height: 14),
+                        AppSpacing.field,
                         TextFormField(
                           controller: _empresaController,
                           decoration: const InputDecoration(labelText: 'Empresa'),
                         ),
-                        const SizedBox(height: 14),
+                        AppSpacing.field,
                         TextFormField(
                           controller: _cargoController,
                           decoration: const InputDecoration(labelText: 'Cargo'),
                         ),
-                        const SizedBox(height: 14),
+                        AppSpacing.field,
                         TextFormField(
                           controller: _telefonoController,
                           decoration: const InputDecoration(labelText: 'Teléfono'),
                         ),
-                        const SizedBox(height: 14),
+                        AppSpacing.field,
                         TextFormField(
                           controller: _rutController,
                           decoration: const InputDecoration(labelText: 'RUT / RUC'),
                         ),
-                        const SizedBox(height: 14),
+                        AppSpacing.field,
                         TextFormField(
                           controller: _patenteController,
                           decoration: const InputDecoration(labelText: 'Patente'),
                         ),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Acreditado'),
+                        const SizedBox(height: AppSpacing.lg),
+                        _ToggleRow(
+                          title: 'Acreditado',
+                          subtitle: 'Estado de ingreso al evento',
                           value: _acreditado,
                           onChanged: (v) => setState(() => _acreditado = v),
                         ),
-                        const SizedBox(height: 20),
-                        FilledButton(
+                        const SizedBox(height: AppSpacing.xl),
+                        PrimaryGradientButton(
+                          label: 'Guardar cambios',
+                          loading: _guardando,
                           onPressed: _guardando ? null : _guardar,
-                          child: _guardando
-                              ? const ButtonProgress()
-                              : const Text('Guardar cambios'),
                         ),
                       ],
                     ),
                   ),
                 );
               },
+      ),
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          NexusToggle(value: value, onChanged: onChanged),
+        ],
       ),
     );
   }

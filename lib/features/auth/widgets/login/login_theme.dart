@@ -17,7 +17,7 @@ class LoginTheme {
   static const controlHeight = 56.0;
 
   /// Fondo gris muy claro de los campos (plan: "fondo gris muy claro").
-  static const fieldFill = Color(0xFFF2F4F7);
+  static const fieldFill = AppColors.background;
 
   /// Duración/curva únicas de las microinteracciones del flujo (plan:
   /// 250–350 ms, easeOutCubic).
@@ -46,9 +46,9 @@ class LoginTheme {
             const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         border: _border(Colors.transparent, 0),
         enabledBorder: _border(Colors.transparent, 0),
-        focusedBorder: _border(AppColors.primary, 2),
-        errorBorder: _border(AppColors.error, 1.5),
-        focusedErrorBorder: _border(AppColors.error, 2),
+        focusedBorder: _border(AppColors.primaryDeep, 2),
+        errorBorder: _border(AppColors.danger, 1.5),
+        focusedErrorBorder: _border(AppColors.danger, 2),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/models/evento_lead.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
@@ -171,55 +173,109 @@ class _CrearEditarEventoLeadFormState
       body: eventoAsync != null && eventoAsync.isLoading && !_cargado
           ? const LoadingView()
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const _FieldLabel('Nombre del evento'),
+                    const SizedBox(height: 6),
                     TextFormField(
                       controller: _nombreController,
                       decoration: const InputDecoration(
-                        labelText: 'Nombre del evento',
+                        hintText: 'Ej. Campaña retail 2026',
                       ),
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                     ),
                     const SizedBox(height: 14),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Fecha'),
-                      subtitle: Text(DateFormat('dd/MM/yyyy').format(_fecha)),
-                      trailing: const Icon(Icons.calendar_today_outlined),
-                      onTap: _elegirFecha,
+                    const _FieldLabel('Fecha'),
+                    const SizedBox(height: 6),
+                    Material(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.input),
+                      child: InkWell(
+                        onTap: _elegirFecha,
+                        borderRadius: BorderRadius.circular(AppRadius.input),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 15, vertical: 13),
+                          decoration: BoxDecoration(
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.input),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  DateFormat('dd/MM/yyyy').format(_fecha),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.ink,
+                                  ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.calendar_today_outlined,
+                                color: AppColors.primary,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
+                    const SizedBox(height: 14),
+                    const _FieldLabel('País'),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _paisController,
-                      decoration: const InputDecoration(labelText: 'País'),
+                      decoration: const InputDecoration(hintText: 'Chile'),
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                     ),
                     const SizedBox(height: 14),
+                    const _FieldLabel('Temática'),
+                    const SizedBox(height: 6),
                     TextFormField(
                       controller: _tematicaController,
-                      decoration: const InputDecoration(labelText: 'Temática'),
+                      decoration: const InputDecoration(
+                        hintText: 'Ej. Telecomunicaciones',
+                      ),
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                     ),
                     const SizedBox(height: 24),
-                    FilledButton(
+                    PrimaryGradientButton(
+                      label: _esEdicion ? 'Guardar cambios' : 'Crear evento',
+                      loading: _guardando,
                       onPressed: _guardando ? null : _guardar,
-                      child: _guardando
-                          ? const ButtonProgress()
-                          : Text(
-                              _esEdicion ? 'Guardar cambios' : 'Crear evento',
-                            ),
                     ),
                   ],
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textSecondary,
+      ),
     );
   }
 }

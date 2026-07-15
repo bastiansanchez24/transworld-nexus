@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
@@ -51,7 +53,10 @@ class _RegistrarConfirmadoScreenState
     super.dispose();
   }
 
-  Future<void> _guardar({required bool requiereCertificacion}) async {
+  Future<void> _guardar({
+    required bool requiereCertificacion,
+    required String nombreEvento,
+  }) async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _guardando = true);
 
@@ -88,8 +93,16 @@ class _RegistrarConfirmadoScreenState
         ingresadoPor: userId,
       );
 
+      var correoEnviado = false;
       if (isOnline) {
-        await ref.read(registradosRepositoryProvider).crear(registrado);
+        final repo = ref.read(registradosRepositoryProvider);
+        final creado = await repo.crear(registrado);
+        try {
+          await repo.enviarQrPorEmail(creado, nombreEvento: nombreEvento);
+          correoEnviado = true;
+        } catch (e) {
+          debugPrint('enviar-qr tras registro manual falló: $e');
+        }
       } else {
         await ref.read(syncQueueServiceProvider.notifier).enqueueInsert(
               table: 'registrados',
@@ -100,10 +113,12 @@ class _RegistrarConfirmadoScreenState
       ref.invalidate(registradosPorEventoProvider(widget.eventoId));
 
       if (mounted) {
-        showAppSnackBar(
-          context,
-          isOnline ? 'Registrado con éxito.' : 'Guardado en modo local. Se subirá solo.',
-        );
+        final mensaje = !isOnline
+            ? 'Guardado en modo local. Se subirá solo. El QR se podrá enviar al sincronizar.'
+            : correoEnviado
+                ? 'Registrado con éxito. QR enviado a $email.'
+                : 'Registrado con éxito, pero no se pudo enviar el QR por email.';
+        showAppSnackBar(context, mensaje, isError: isOnline && !correoEnviado);
         _formKey.currentState!.reset();
         _nombreController.clear();
         _emailController.clear();
@@ -135,7 +150,12 @@ class _RegistrarConfirmadoScreenState
               data: (evento) {
                 final requiereCertificacion = evento.certificacionCapacitacion;
                 return SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenH,
+                    AppSpacing.xl,
+                    AppSpacing.screenH,
+                    AppSpacing.xxxl,
+                  ),
                   child: Form(
                     key: _formKey,
                     child: Column(
@@ -146,7 +166,7 @@ class _RegistrarConfirmadoScreenState
                           decoration: const InputDecoration(labelText: 'Nombre completo'),
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                         ),
-                        const SizedBox(height: 14),
+                        AppSpacing.field,
                         TextFormField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
@@ -154,56 +174,114 @@ class _RegistrarConfirmadoScreenState
                           validator: (v) =>
                               (v == null || !v.contains('@')) ? 'Email inválido' : null,
                         ),
-                        const SizedBox(height: 14),
+                        AppSpacing.field,
                         TextFormField(
                           controller: _empresaController,
                           decoration: const InputDecoration(labelText: 'Empresa'),
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                         ),
-                        const SizedBox(height: 14),
+                        AppSpacing.field,
                         TextFormField(
                           controller: _cargoController,
                           decoration: const InputDecoration(labelText: 'Cargo'),
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                         ),
-                        const SizedBox(height: 14),
+                        AppSpacing.field,
                         TextFormField(
                           controller: _telefonoController,
                           keyboardType: TextInputType.phone,
                           decoration: const InputDecoration(labelText: 'Teléfono (opcional)'),
                         ),
                         if (requiereCertificacion) ...[
-                          const SizedBox(height: 14),
+                          AppSpacing.field,
                           TextFormField(
                             controller: _rutController,
                             decoration: const InputDecoration(labelText: 'RUT / RUC'),
                           ),
-                          const SizedBox(height: 14),
+                          AppSpacing.field,
                           TextFormField(
                             controller: _patenteController,
                             decoration: const InputDecoration(labelText: 'Patente'),
                           ),
                         ],
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Acreditar de inmediato'),
+                        const SizedBox(height: AppSpacing.lg),
+                        _ToggleRow(
+                          title: 'Acreditar de inmediato',
+                          subtitle: 'Marca al asistente como acreditado al guardar',
                           value: _acreditarAhora,
                           onChanged: (v) => setState(() => _acreditarAhora = v),
                         ),
-                        const SizedBox(height: 20),
-                        FilledButton(
+                        const SizedBox(height: AppSpacing.xl),
+                        PrimaryGradientButton(
+                          label: 'Guardar registro',
+                          loading: _guardando,
                           onPressed: _guardando
                               ? null
-                              : () => _guardar(requiereCertificacion: requiereCertificacion),
-                          child: _guardando
-                              ? const ButtonProgress()
-                              : const Text('Guardar registro'),
+                              : () => _guardar(
+                                    requiereCertificacion: requiereCertificacion,
+                                    nombreEvento: evento.nombre,
+                                  ),
                         ),
                       ],
                     ),
                   ),
                 );
               },
+      ),
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          NexusToggle(value: value, onChanged: onChanged),
+        ],
       ),
     );
   }
