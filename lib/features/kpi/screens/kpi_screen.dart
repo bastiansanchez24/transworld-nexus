@@ -7,7 +7,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../eventos/providers/eventos_providers.dart';
-import '../../registrados/providers/registrados_providers.dart';
+import '../providers/kpi_providers.dart';
 
 class KpiScreen extends ConsumerWidget {
   const KpiScreen({super.key, required this.eventoId});
@@ -16,28 +16,20 @@ class KpiScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final registradosAsync = ref.watch(registradosPorEventoProvider(eventoId));
+    final kpiDataAsync = ref.watch(kpiDataPorEventoProvider(eventoId));
     final eventoAsync = ref.watch(eventoByIdProvider(eventoId));
 
     return AppScaffold(
       title: 'KPI del evento',
-      body: registradosAsync.when(
+      body: kpiDataAsync.when(
               loading: () => const LoadingView(),
               error: (e, _) => const ErrorView(message: 'No se pudieron cargar los datos.'),
-              data: (registrados) {
-                final total = registrados.length;
-                final acreditados = registrados.where((r) => r.acreditado).length;
-                final pendientesDeSync = registrados.where((r) => r.pendienteDeSincronizar).length;
-                final porcentaje = total == 0 ? 0.0 : acreditados / total;
-
-                final porEmpresa = <String, int>{};
-                for (final r in registrados) {
-                  final empresa = (r.empresa ?? '').trim();
-                  if (empresa.isEmpty) continue;
-                  porEmpresa[empresa] = (porEmpresa[empresa] ?? 0) + 1;
-                }
-                final topEmpresas = porEmpresa.entries.toList()
-                  ..sort((a, b) => b.value.compareTo(a.value));
+              data: (kpi) {
+                final total = kpi.total;
+                final acreditados = kpi.acreditados;
+                final pendientesDeSync = kpi.pendientesDeSync;
+                final porcentaje = kpi.porcentaje;
+                final topEmpresas = kpi.topEmpresas;
 
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(

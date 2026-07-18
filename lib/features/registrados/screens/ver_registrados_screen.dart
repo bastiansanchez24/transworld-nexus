@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +37,7 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen> {
   _Filtro _filtro = _Filtro.todos;
   final _busquedaController = TextEditingController();
   String _busqueda = '';
+  Timer? _debounce;
 
   static const _filtroLabels = {
     _Filtro.todos: 'Todos',
@@ -44,6 +47,7 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _busquedaController.dispose();
     super.dispose();
   }
@@ -56,7 +60,14 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen> {
       ),
       child: TextField(
         controller: _busquedaController,
-        onChanged: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+        onChanged: (v) {
+          if (_debounce?.isActive ?? false) _debounce!.cancel();
+          _debounce = Timer(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              setState(() => _busqueda = v.trim().toLowerCase());
+            }
+          });
+        },
         style: const TextStyle(
           fontSize: 14,
           color: AppColors.ink,

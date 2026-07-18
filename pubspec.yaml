@@ -77,6 +77,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
+  windows:
+    generate: true
+    image_path: "assets/images/logo_nexus_transparente.png"
   remove_alpha_ios: true
   image_path: "assets/images/logo_project_nexus.png"
   adaptive_icon_background: "#FFFFFF"

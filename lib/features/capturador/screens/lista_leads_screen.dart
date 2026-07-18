@@ -265,6 +265,7 @@ class DetalleLeadScreen extends ConsumerWidget {
                         imageUrl: url,
                         width: 120,
                         height: 120,
+                        memCacheWidth: 360,
                         fit: BoxFit.cover,
                         placeholder: (_, _) => Container(
                           width: 120,
