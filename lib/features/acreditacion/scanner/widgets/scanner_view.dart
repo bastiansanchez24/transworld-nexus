@@ -96,11 +96,17 @@ class _ScannerCameraLayerState extends State<_ScannerCameraLayer> {
             controller: widget.controller.mobileController,
             onDetect: widget.controller.handleDetection,
             tapToFocus: !kIsWeb,
+            // Lifecycle lo maneja AcreditarQrScreen vía el controller.
+            useAppLifecycleState: false,
             errorBuilder: (context, error) {
               final isPermission =
                   error.errorCode == MobileScannerErrorCode.permissionDenied;
+              final detail = error.errorDetails?.message?.trim();
+              final message = (detail != null && detail.isNotEmpty)
+                  ? detail
+                  : error.errorCode.message;
               return ScannerPermissionDeniedView(
-                message: error.errorCode.message,
+                message: message,
                 onOpenSettings: widget.controller.openSettings,
                 onRetry: isPermission
                     ? widget.controller.retryPermission

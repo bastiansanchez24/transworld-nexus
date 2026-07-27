@@ -55,14 +55,17 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Solo paused/resumed: `inactive` dispara con diálogos de permiso del OS
+    // y provoca stop/start concurrentes → CAMERA_ERROR en release.
     switch (state) {
       case AppLifecycleState.resumed:
         _scanner.resumeCamera();
-      case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
         _scanner.pauseCamera();
+      case AppLifecycleState.inactive:
+        break;
     }
   }
 

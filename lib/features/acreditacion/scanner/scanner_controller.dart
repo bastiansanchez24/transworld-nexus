@@ -86,6 +86,9 @@ class ScannerController extends ChangeNotifier {
     _permission = ScannerPermissionStatus.checking;
     notifyListeners();
     await initialize();
+    if (_permission == ScannerPermissionStatus.granted) {
+      await startAfterAttach();
+    }
   }
 
   Future<void> openSettings() => _camera.openSystemSettings();
@@ -176,7 +179,8 @@ class ScannerController extends ChangeNotifier {
     });
   }
 
-  Future<void> pauseCamera() => _camera.stop();
+  /// Pausa el preview sin liberar la sesión (mejor que stop en lifecycle).
+  Future<void> pauseCamera() => _camera.pause();
 
   Future<void> resumeCamera() async {
     if (_permission == ScannerPermissionStatus.granted) {

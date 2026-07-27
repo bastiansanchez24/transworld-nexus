@@ -1,7 +1,7 @@
 [Setup]
 AppId={{E68BC201-9F31-48C7-9943-41A6673413E0}
 AppName=NEXUS
-AppVersion=1.0.0
+AppVersion=1.2.0
 AppPublisher=Transworld
 DefaultDirName={autopf}\Transworld NEXUS
 DefaultGroupName=Transworld NEXUS

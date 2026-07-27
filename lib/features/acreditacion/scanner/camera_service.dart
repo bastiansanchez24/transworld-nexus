@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+// ignore: implementation_imports — force-stop nativo no está en la API pública.
+import 'package:mobile_scanner/src/method_channel/mobile_scanner_method_channel.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'scanner_models.dart';
@@ -20,6 +24,28 @@ class CameraService {
   MobileScannerController get controller => _controller;
 
   bool _disposed = false;
+  bool _platformForceStopped = false;
+  Future<void>? _operation;
+
+  /// Serializa start/stop/pause para evitar carreras en release (CameraX).
+  Future<T> _runExclusive<T>(Future<T> Function() action) async {
+    final previous = _operation;
+    final gate = Completer<void>();
+    _operation = gate.future;
+    if (previous != null) {
+      try {
+        await previous;
+      } catch (_) {}
+    }
+    try {
+      return await action();
+    } finally {
+      gate.complete();
+      if (identical(_operation, gate.future)) {
+        _operation = null;
+      }
+    }
+  }
 
   Future<ScannerPermissionStatus> ensurePermission() async {
     if (kIsWeb) {
@@ -46,21 +72,81 @@ class CameraService {
     return ScannerPermissionStatus.unavailable;
   }
 
+  /// En release, mobile_scanner solo hace force-stop en debug. Si quedó una
+  /// sesión nativa viva (p. ej. tras un dispose incompleto), CameraX falla
+  /// con CAMERA_ERROR → "An unexpected error occurred".
+  Future<void> _ensurePlatformIdle() async {
+    if (_platformForceStopped || kIsWeb) return;
+    _platformForceStopped = true;
+    if (MobileScannerPlatform.instance
+        case final MethodChannelMobileScanner implementation) {
+      try {
+        await implementation.stop(force: true);
+      } catch (_) {}
+    }
+  }
+
   Future<void> start() async {
     if (_disposed) return;
+    await _runExclusive(() async {
+      if (_disposed) return;
+      if (_controller.value.isRunning || _controller.value.isStarting) {
+        return;
+      }
+
+      await _ensurePlatformIdle();
+      await _startOnce();
+
+      // Platform errors (CAMERA_ERROR, etc.) no se relanzan: quedan en
+      // controller.value.error y el widget muestra "unexpected error".
+      final error = _controller.value.error;
+      if (_disposed || error == null) return;
+      if (error.errorCode == MobileScannerErrorCode.permissionDenied) {
+        return;
+      }
+      if (error.errorCode == MobileScannerErrorCode.controllerAlreadyInitialized ||
+          error.errorCode == MobileScannerErrorCode.controllerInitializing) {
+        return;
+      }
+
+      _platformForceStopped = false;
+      await _ensurePlatformIdle();
+      if (_disposed) return;
+      if (_controller.value.isRunning || _controller.value.isStarting) return;
+      await _startOnce();
+    });
+  }
+
+  Future<void> _startOnce() async {
     try {
       await _controller.start();
-    } on Exception {
-      // El widget MobileScanner reporta el error vía errorBuilder.
+    } on MobileScannerException catch (e) {
+      if (e.errorCode == MobileScannerErrorCode.controllerAlreadyInitialized ||
+          e.errorCode == MobileScannerErrorCode.controllerInitializing) {
+        return;
+      }
       rethrow;
     }
   }
 
+  Future<void> pause() async {
+    if (_disposed) return;
+    await _runExclusive(() async {
+      if (_disposed) return;
+      try {
+        await _controller.pause();
+      } catch (_) {}
+    });
+  }
+
   Future<void> stop() async {
     if (_disposed) return;
-    try {
-      await _controller.stop();
-    } catch (_) {}
+    await _runExclusive(() async {
+      if (_disposed) return;
+      try {
+        await _controller.stop();
+      } catch (_) {}
+    });
   }
 
   Future<void> toggleTorch() async {
@@ -75,9 +161,11 @@ class CameraService {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    try {
-      await _controller.stop();
-    } catch (_) {}
-    await _controller.dispose();
+    await _runExclusive(() async {
+      try {
+        await _controller.stop();
+      } catch (_) {}
+      await _controller.dispose();
+    });
   }
 }
