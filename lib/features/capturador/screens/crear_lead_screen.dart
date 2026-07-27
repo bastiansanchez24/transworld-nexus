@@ -1,9 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../../core/constants/supabase_tables.dart';
@@ -14,18 +11,28 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/lead.dart';
+import '../../../data/models/lead_prefill.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/leads_repository.dart';
-import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capturador_providers.dart';
 
 enum _CampoVoz { nombre, empresa, cargo, email }
 
 class CrearLeadScreen extends ConsumerStatefulWidget {
-  const CrearLeadScreen({super.key, required this.eventoId});
+  const CrearLeadScreen({
+    super.key,
+    required this.eventoId,
+    this.prefill,
+    this.eventoRegistroId,
+  });
 
   final String eventoId;
+  final LeadPrefill? prefill;
+
+  /// Evento de registro de origen (flujo QR). Tras guardar se hace pop
+  /// al escáner en lugar de reemplazar el stack.
+  final String? eventoRegistroId;
 
   @override
   ConsumerState<CrearLeadScreen> createState() => _CrearLeadScreenState();
@@ -43,15 +50,73 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
   bool _speechDisponible = false;
   _CampoVoz? _escuchandoCampo;
 
-  final List<Uint8List> _fotosBytes = [];
   bool _guardando = false;
+  bool _accesoValidado = false;
 
-  static const _maxFotos = 3;
+  /// `null` = junction aún cargando; set vacío = sin autorización usable.
+  Set<String>? _idsPermitidosExterno() {
+    final autorizados = ref.read(externoEventosAutorizadosIdsProvider);
+    if (autorizados == null) return null;
+    if (autorizados.isNotEmpty) return autorizados;
+    final activo = ref.read(externoEventoIdProvider);
+    if (activo == null || activo.isEmpty) return {};
+    return {activo};
+  }
 
   @override
   void initState() {
     super.initState();
+    _aplicarPrefill();
     _initSpeech();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _validarAccesoExterno());
+  }
+
+  void _validarAccesoExterno() {
+    if (!mounted || _accesoValidado) return;
+    final perfil = ref.read(currentPerfilProvider).valueOrNull;
+    if (perfil == null || !perfil.isExterno) {
+      _accesoValidado = true;
+      return;
+    }
+
+    final eventoReg = widget.eventoRegistroId;
+    final permitidos = _idsPermitidosExterno();
+    if (permitidos == null) {
+      return; // reintentará vía ref.listen en build
+    }
+
+    final ok = eventoReg != null &&
+        eventoReg.isNotEmpty &&
+        permitidos.contains(eventoReg);
+
+    _accesoValidado = true;
+    if (ok) return;
+
+    final activo = ref.read(externoEventoIdProvider);
+    final destino = activo != null && activo.isNotEmpty
+        ? RoutePaths.externoEvento(activo)
+        : RoutePaths.eventoFinalizado;
+    context.go(destino);
+  }
+
+  void _aplicarPrefill() {
+    final prefill = widget.prefill;
+    if (prefill == null) return;
+    if (prefill.nombreCompleto != null) {
+      _nombreController.text = prefill.nombreCompleto!;
+    }
+    if (prefill.empresa != null) {
+      _empresaController.text = prefill.empresa!;
+    }
+    if (prefill.cargo != null) {
+      _cargoController.text = prefill.cargo!;
+    }
+    if (prefill.telefono != null) {
+      _telefonoController.text = prefill.telefono!;
+    }
+    if (prefill.email != null) {
+      _emailController.text = prefill.email!;
+    }
   }
 
   Future<void> _initSpeech() async {
@@ -122,53 +187,6 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     );
   }
 
-  Future<void> _agregarFoto(ImageSource source) async {
-    if (_fotosBytes.length >= _maxFotos) return;
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: source,
-      maxWidth: 1600,
-      imageQuality: 70,
-    );
-    if (file == null) return;
-    final bytes = await file.readAsBytes();
-    if (!mounted) return;
-    setState(() => _fotosBytes.add(bytes));
-  }
-
-  Future<void> _elegirFuenteFoto() async {
-    if (_fotosBytes.length >= _maxFotos) {
-      showAppSnackBar(context, 'Máximo $_maxFotos fotos.', isError: true);
-      return;
-    }
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Tomar foto'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _agregarFoto(ImageSource.camera);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Elegir de la galería'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _agregarFoto(ImageSource.gallery);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _limpiarFormulario() {
     _formKey.currentState?.reset();
     _nombreController.clear();
@@ -176,7 +194,6 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     _cargoController.clear();
     _telefonoController.clear();
     _emailController.clear();
-    setState(() => _fotosBytes.clear());
   }
 
   Future<void> _guardar() async {
@@ -188,20 +205,22 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
 
     setState(() => _guardando = true);
     final isOnline = ref.read(isOnlineProvider);
-    final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
+    final perfil = ref.read(currentPerfilProvider).valueOrNull;
+    final userId = perfil?.id;
 
     try {
-      final fotosUrls = <String>[];
-      if (_fotosBytes.isNotEmpty) {
-        if (!isOnline) {
+      if (perfil?.isExterno == true) {
+        final eventoReg = widget.eventoRegistroId;
+        final permitidos = _idsPermitidosExterno();
+        if (permitidos == null) {
           throw Exception(
-            'Las fotos requieren conexión. Guarda el lead sin fotos o reconéctate.',
+            'Aún se están cargando tus eventos autorizados. Intenta de nuevo.',
           );
         }
-        final storage = ref.read(storageRepositoryProvider);
-        for (final bytes in _fotosBytes) {
-          final url = await storage.subirFotoLead(bytes, 'jpg');
-          fotosUrls.add(url);
+        if (eventoReg == null || !permitidos.contains(eventoReg)) {
+          throw Exception(
+            'No estás autorizado para capturar leads en este evento.',
+          );
         }
       }
 
@@ -219,7 +238,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
         email: _emailController.text.trim().isEmpty
             ? null
             : _emailController.text.trim().toLowerCase(),
-        fotosUrls: fotosUrls,
+        fotosUrls: const [],
         perfilId: userId,
       );
 
@@ -241,7 +260,18 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
               ? 'Lead guardado.'
               : 'Guardado en modo local. Se subirá solo.',
         );
-        _limpiarFormulario();
+        // Volver al escáner con pop (no go): go reemplaza el stack y deja
+        // el QR sin historial → la X no cierra y el atrás sale de la app.
+        final eventoRegistroId = widget.eventoRegistroId;
+        if (eventoRegistroId != null) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go(RoutePaths.acreditarQr(eventoRegistroId));
+          }
+        } else {
+          _limpiarFormulario();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -256,43 +286,57 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     }
   }
 
-  Widget _campoConMic({
-    required TextEditingController controller,
+  Widget _campoTexto({
     required String label,
-    required _CampoVoz campo,
+    required TextEditingController controller,
+    required String hintText,
+    _CampoVoz? campoVoz,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
-    bool enabled = true,
   }) {
-    final escuchando = _escuchandoCampo == campo;
-    return TextFormField(
-      controller: controller,
-      enabled: enabled && !escuchando && !_guardando,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        suffixIcon: _speechDisponible
-            ? IconButton(
-                tooltip: escuchando ? 'Detener dictado' : 'Dictar',
-                onPressed: _guardando ? null : () => _toggleVoz(campo),
-                icon: Icon(
-                  escuchando ? Icons.mic : Icons.mic_none_outlined,
-                  color: escuchando ? AppColors.danger : AppColors.primary,
-                ),
-              )
-            : null,
-      ),
-      validator: validator,
+    final escuchando = campoVoz != null && _escuchandoCampo == campoVoz;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _FieldLabel(label),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          enabled: !escuchando && !_guardando,
+          keyboardType: keyboardType,
+          decoration: InputDecoration(
+            hintText: hintText,
+            suffixIcon: campoVoz != null && _speechDisponible
+                ? IconButton(
+                    tooltip: escuchando ? 'Detener dictado' : 'Dictar',
+                    onPressed: _guardando ? null : () => _toggleVoz(campoVoz),
+                    icon: Icon(
+                      escuchando ? Icons.mic : Icons.mic_none_outlined,
+                      color: escuchando ? AppColors.danger : AppColors.primary,
+                    ),
+                  )
+                : null,
+          ),
+          validator: validator,
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(externoEventosAutorizadosIdsProvider, (_, _) {
+      if (!_accesoValidado) _validarAccesoExterno();
+    });
+
     final eventoAsync = ref.watch(eventoLeadByIdProvider(widget.eventoId));
 
     return AppScaffold(
       titleWidget: eventoAsync.when(
-        data: (e) => Text('Capturar · ${e.nombre}', overflow: TextOverflow.ellipsis),
+        data: (e) => Text(
+          'Capturar · ${e.nombre}',
+          overflow: TextOverflow.ellipsis,
+        ),
         loading: () => const Text('Capturar lead'),
         error: (_, _) => const Text('Capturar lead'),
       ),
@@ -300,116 +344,56 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
         IconButton(
           tooltip: 'Ver leads',
           icon: const Icon(Icons.list_alt_rounded),
-          onPressed: () =>
-              context.push(RoutePaths.verLeads(widget.eventoId)),
+          onPressed: () => context.push(RoutePaths.verLeads(widget.eventoId)),
         ),
       ],
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _campoConMic(
-                controller: _nombreController,
+              _campoTexto(
                 label: 'Nombre completo',
-                campo: _CampoVoz.nombre,
+                controller: _nombreController,
+                hintText: 'Ej. María González',
+                campoVoz: _CampoVoz.nombre,
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
               const SizedBox(height: 14),
-              _campoConMic(
-                controller: _empresaController,
+              _campoTexto(
                 label: 'Empresa',
-                campo: _CampoVoz.empresa,
+                controller: _empresaController,
+                hintText: 'Ej. Transworld',
+                campoVoz: _CampoVoz.empresa,
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
               const SizedBox(height: 14),
-              _campoConMic(
-                controller: _cargoController,
+              _campoTexto(
                 label: 'Cargo',
-                campo: _CampoVoz.cargo,
+                controller: _cargoController,
+                hintText: 'Ej. Gerente comercial',
+                campoVoz: _CampoVoz.cargo,
               ),
               const SizedBox(height: 14),
-              TextFormField(
+              _campoTexto(
+                label: 'Teléfono',
                 controller: _telefonoController,
-                enabled: !_guardando,
+                hintText: '+56 9 1234 5678',
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Teléfono'),
               ),
               const SizedBox(height: 14),
-              _campoConMic(
-                controller: _emailController,
+              _campoTexto(
                 label: 'Email',
-                campo: _CampoVoz.email,
+                controller: _emailController,
+                hintText: 'correo@empresa.com',
+                campoVoz: _CampoVoz.email,
                 keyboardType: TextInputType.emailAddress,
               ),
-              const SizedBox(height: 20),
-              Text(
-                'Fotos (${_fotosBytes.length}/$_maxFotos)',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  for (var i = 0; i < _fotosBytes.length; i++)
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          child: Image.memory(
-                            _fotosBytes[i],
-                            width: 88,
-                            height: 88,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned(
-                          top: -8,
-                          right: -8,
-                          child: IconButton.filled(
-                            style: IconButton.styleFrom(
-                              backgroundColor: AppColors.danger,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.all(4),
-                              minimumSize: const Size(28, 28),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            iconSize: 16,
-                            onPressed: _guardando
-                                ? null
-                                : () => setState(() => _fotosBytes.removeAt(i)),
-                            icon: const Icon(Icons.close),
-                          ),
-                        ),
-                      ],
-                    ),
-                  if (_fotosBytes.length < _maxFotos)
-                    InkWell(
-                      onTap: _guardando ? null : _elegirFuenteFoto,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      child: Container(
-                        width: 88,
-                        height: 88,
-                        decoration: BoxDecoration(
-                          color: AppColors.tintNavy,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: const Icon(
-                          Icons.add_a_photo_outlined,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
               PrimaryGradientButton(
                 label: 'Guardar lead',
                 loading: _guardando,
@@ -418,6 +402,24 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textSecondary,
       ),
     );
   }

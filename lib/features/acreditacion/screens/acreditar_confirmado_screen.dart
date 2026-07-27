@@ -130,6 +130,8 @@ class _AcreditarConfirmadoScreenState
         onTap: () => context.pop(),
       ),
       pinnedContent: _buildSearchField(),
+      pinnedContentHeight: 60,
+      scrollResetToken: _busqueda,
       onRefresh: () async =>
           ref.invalidate(registradosPorEventoProvider(widget.eventoId)),
       slivers: [

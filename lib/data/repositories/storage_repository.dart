@@ -25,11 +25,21 @@ class StorageRepository {
 
   /// Foto adjunta a un lead capturado (`leads.fotos_urls`).
   Future<String> subirFotoLead(Uint8List bytes, String extension) async {
-    final fileName = 'leads/${_uuid.v4()}.$extension';
+    final ext = extension.toLowerCase().replaceAll('.', '');
+    final contentType = switch (ext) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'heic' || 'heif' => 'image/heic',
+      _ => 'image/jpeg',
+    };
+    final fileName = 'leads/${_uuid.v4()}.$ext';
     await _client.storage.from(Env.bucketImagenes).uploadBinary(
           fileName,
           bytes,
-          fileOptions: const FileOptions(upsert: true),
+          fileOptions: FileOptions(
+            upsert: true,
+            contentType: contentType,
+          ),
         );
     return _client.storage.from(Env.bucketImagenes).getPublicUrl(fileName);
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/app_role.dart';
@@ -9,15 +10,15 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../eventos/providers/eventos_providers.dart';
 import '../providers/usuarios_providers.dart';
+import '../widgets/selector_eventos_multiples.dart';
 
-/// Cambia rol / estado de un usuario a través del RPC
-/// `rpe_actualizar_rol_usuario`, nunca con un `UPDATE` directo sobre
-/// `perfiles.rol` (ver AuthRepository.actualizarRolUsuario y la Sección
-/// 8.2/17.6 de la auditoría sobre escalación de privilegios).
+/// Edición de usuario: nombre, rol, activo, regenerar contraseña y eliminar.
 class EditarUsuarioScreen extends StatelessWidget {
   const EditarUsuarioScreen({super.key, required this.usuarioId});
 
@@ -41,20 +42,177 @@ class _EditarUsuarioBody extends ConsumerStatefulWidget {
 }
 
 class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
-  AppRole? _rolSeleccionado;
+  final _formKey = GlobalKey<FormState>();
+  final _nombreController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
   bool _activo = true;
+  AppRole _rol = AppRole.user;
+  AppRole? _rolOriginal;
   bool _cargado = false;
+  bool _eventosCargados = false;
   bool _guardando = false;
   bool _eliminando = false;
+  bool _regenerando = false;
+  bool _intentoGuardar = false;
+  String? _passwordGenerada;
+  final Set<String> _eventoIds = {};
+
+  /// Roles editables vía RPC (no incluye externo: solo al crear).
+  List<AppRole> get _rolesDisponibles {
+    if (_rolOriginal == AppRole.externo) {
+      return [AppRole.externo, ...AppRole.assignableRoles];
+    }
+    return AppRole.assignableRoles;
+  }
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarEmail() async {
+    try {
+      final email = await ref
+          .read(authRepositoryProvider)
+          .obtenerEmailUsuario(widget.usuarioId);
+      if (mounted && email != null) {
+        _emailController.text = email;
+      }
+    } catch (_) {
+      // El form sigue usable; el email puede quedar vacío si falla el RPC.
+    }
+  }
+
+  Future<void> _cargarEventosAutorizados() async {
+    if (_eventosCargados) return;
+    try {
+      final ids = await ref
+          .read(authRepositoryProvider)
+          .listarEventosAutorizadosUsuario(widget.usuarioId);
+      if (!mounted) return;
+      setState(() {
+        _eventoIds
+          ..clear()
+          ..addAll(ids);
+        _eventosCargados = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _eventosCargados = true);
+    }
+  }
+
+  String _textoCompartir({required String nombre}) {
+    final buffer = StringBuffer()
+      ..writeln('Acceso Transworld Nexus')
+      ..writeln('Nombre: $nombre')
+      ..writeln('Email: ${_emailController.text.trim()}');
+    final pass = _passwordGenerada ?? _passwordController.text;
+    if (pass.isNotEmpty && pass != '••••••••••••') {
+      buffer.writeln('Contraseña: $pass');
+    }
+    return buffer.toString().trimRight();
+  }
+
+  Future<void> _compartir(String nombre) async {
+    if (_emailController.text.trim().isEmpty) {
+      NexusToast.show(context, 'No hay correo para compartir.');
+      return;
+    }
+    if (_passwordGenerada == null) {
+      NexusToast.show(
+        context,
+        'Genera una nueva contraseña para poder compartirla.',
+      );
+      return;
+    }
+    await SharePlus.instance.share(
+      ShareParams(text: _textoCompartir(nombre: nombre)),
+    );
+  }
+
+  Future<void> _regenerarPassword() async {
+    setState(() => _regenerando = true);
+    try {
+      final resultado = await ref
+          .read(authRepositoryProvider)
+          .regenerarPasswordUsuario(widget.usuarioId);
+      if (!mounted) return;
+      setState(() {
+        _passwordGenerada = resultado.password;
+        _passwordController.text = resultado.password;
+        if (_emailController.text.isEmpty) {
+          _emailController.text = resultado.email;
+        }
+      });
+      NexusToast.show(context, 'Nueva contraseña enviada por correo.');
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _regenerando = false);
+    }
+  }
 
   Future<void> _guardar() async {
+    setState(() => _intentoGuardar = true);
+    if (!_formKey.currentState!.validate()) return;
+    if (_rol == AppRole.externo && _rolOriginal != AppRole.externo) {
+      NexusToast.show(
+        context,
+        'El rol externo solo se asigna al crear el usuario.',
+      );
+      return;
+    }
+    if (_rolOriginal == AppRole.externo && _eventoIds.isEmpty) {
+      NexusToast.show(context, 'Selecciona al menos un evento.');
+      return;
+    }
+
+    final esCuentaPropia =
+        ref.read(currentPerfilProvider).valueOrNull?.id == widget.usuarioId;
+
+    if (esCuentaPropia && !_activo) {
+      NexusToast.show(
+        context,
+        'No puedes desactivar tu propia cuenta.',
+      );
+      setState(() => _activo = true);
+      return;
+    }
+
     setState(() => _guardando = true);
     try {
       final repo = ref.read(authRepositoryProvider);
-      if (_rolSeleccionado != null) {
-        await repo.actualizarRolUsuario(widget.usuarioId, _rolSeleccionado!.value);
+      await repo.actualizarNombre(
+        widget.usuarioId,
+        _nombreController.text.trim(),
+      );
+      if (!esCuentaPropia &&
+          _rolOriginal != null &&
+          _rol != _rolOriginal &&
+          _rol != AppRole.externo) {
+        await repo.actualizarRolUsuario(widget.usuarioId, _rol.value);
       }
-      await repo.establecerActivo(widget.usuarioId, _activo);
+      if (!esCuentaPropia) {
+        await repo.establecerActivo(widget.usuarioId, _activo);
+      }
+      if (_rolOriginal == AppRole.externo && _rol == AppRole.externo) {
+        await repo.sincronizarEventosExterno(
+          widget.usuarioId,
+          _eventoIds.toList(),
+        );
+      }
 
       ref.invalidate(usuariosListProvider);
       ref.invalidate(usuarioPorIdProvider(widget.usuarioId));
@@ -67,7 +225,11 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
       if (mounted) showAppSnackBar(context, e.message, isError: true);
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(context, 'No se pudo actualizar.', isError: true);
+        showAppSnackBar(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -75,11 +237,18 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   }
 
   Future<void> _eliminar(String nombre) async {
+    final esCuentaPropia =
+        ref.read(currentPerfilProvider).valueOrNull?.id == widget.usuarioId;
+    if (esCuentaPropia) {
+      NexusToast.show(context, 'No puedes eliminar tu propia cuenta.');
+      return;
+    }
+
     final confirmado = await confirmDialog(
       context,
       title: 'Eliminar usuario',
       message: 'Se eliminará la cuenta de "$nombre" y su acceso a la app. '
-          'Sus acreditaciones quedarán como "Usuario eliminado". '
+          'Todos sus registros quedarán como "Usuario eliminado". '
           'Esta acción no se puede deshacer.',
       confirmLabel: 'Eliminar',
     );
@@ -103,9 +272,13 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
       }
     } on PostgrestException catch (e) {
       if (mounted) showAppSnackBar(context, e.message, isError: true);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        showAppSnackBar(context, 'No se pudo eliminar el usuario.', isError: true);
+        showAppSnackBar(
+          context,
+          'No se pudo eliminar el usuario.',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _eliminando = false);
@@ -115,158 +288,255 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   @override
   Widget build(BuildContext context) {
     final usuarioAsync = ref.watch(usuarioPorIdProvider(widget.usuarioId));
+    final esCuentaPropia =
+        ref.watch(currentPerfilProvider).valueOrNull?.id == widget.usuarioId;
+    final ocupado = _guardando || _eliminando || _regenerando;
+    final bloquearActivoPropio = esCuentaPropia;
 
     return AppScaffold(
       title: 'Editar usuario',
+      actions: [
+        if (!esCuentaPropia)
+          IconButton(
+            icon: _eliminando
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Symbols.delete_outline_rounded),
+            onPressed: ocupado
+                ? null
+                : () {
+                    final nombre = _nombreController.text.trim().isEmpty
+                        ? 'este usuario'
+                        : _nombreController.text.trim();
+                    _eliminar(nombre);
+                  },
+          ),
+      ],
       body: usuarioAsync.when(
         loading: () => const LoadingView(),
-        error: (e, _) => const ErrorView(message: 'No se pudo cargar el usuario.'),
+        error: (e, _) =>
+            const ErrorView(message: 'No se pudo cargar el usuario.'),
         data: (usuario) {
           if (!_cargado) {
-            _rolSeleccionado = usuario.rol;
+            _nombreController.text = usuario.nombreCompleto;
+            _passwordController.text = '••••••••••••';
             _activo = usuario.activo;
+            _rol = usuario.rol;
+            _rolOriginal = usuario.rol;
             _cargado = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _cargarEmail();
+              if (usuario.isExterno) _cargarEventosAutorizados();
+            });
           }
-          final esCuentaPropia =
-              ref.watch(currentPerfilProvider).valueOrNull?.id ==
-                  widget.usuarioId;
-          final ocupado = _guardando || _eliminando;
+
+          final esExterno = _rol == AppRole.externo;
+          final eventosAsync = esExterno ? ref.watch(eventosListProvider) : null;
 
           return SingleChildScrollView(
-            padding: AppSpacing.screen,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    AvatarInitials(
-                      name: usuario.nombreCompleto,
-                      size: 56,
+            padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _FieldLabel('Nombre completo'),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: _nombreController,
+                    enabled: !ocupado,
+                    decoration: const InputDecoration(
+                      hintText: 'Ej. Juan Pérez',
                     ),
-                    const SizedBox(width: AppSpacing.lg),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            usuario.nombreCompleto,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.ink,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          StatusChip(
-                            label: usuario.rol.label,
-                            variant: usuario.isAdmin
-                                ? StatusChipVariant.navy
-                                : StatusChipVariant.neutral,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: AppColors.shadowRest,
+                    textInputAction: TextInputAction.next,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                   ),
-                  child: Column(
-                    children: [
-                      DropdownButtonFormField<AppRole>(
-                        initialValue: _rolSeleccionado,
-                        decoration: const InputDecoration(labelText: 'Rol'),
-                        items: AppRole.values
-                            .map((r) => DropdownMenuItem(
-                                value: r, child: Text(r.label)))
-                            .toList(),
-                        onChanged: ocupado
-                            ? null
-                            : (v) => setState(() => _rolSeleccionado = v),
+                  const SizedBox(height: 14),
+                  const _FieldLabel('Correo'),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: _emailController,
+                    readOnly: true,
+                    enableInteractiveSelection: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Cargando…',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const _FieldLabel('Contraseña'),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: _passwordController,
+                    readOnly: true,
+                    obscureText: _passwordGenerada == null,
+                    decoration: InputDecoration(
+                      hintText: 'No visible',
+                      suffixIcon: IconButton(
+                        tooltip: 'Generar nueva y enviar por correo',
+                        onPressed: ocupado ? null : _regenerarPassword,
+                        icon: _regenerando
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Symbols.refresh_rounded),
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Cuenta activa',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.ink,
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  'Desactivar bloquea el acceso a la app',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const _FieldLabel('Tipo de usuario'),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<AppRole>(
+                    initialValue: _rol,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Selecciona un tipo',
+                    ),
+                    items: _rolesDisponibles
+                        .map(
+                          (r) => DropdownMenuItem(
+                            value: r,
+                            child: Text(r.label),
                           ),
-                          IgnorePointer(
-                            ignoring: ocupado,
-                            child: Opacity(
-                              opacity: ocupado ? 0.5 : 1,
-                              child: NexusToggle(
-                                value: _activo,
-                                onChanged: (v) =>
-                                    setState(() => _activo = v),
+                        )
+                        .toList(),
+                    onChanged: (ocupado || esCuentaPropia)
+                        ? null
+                        : (v) {
+                            if (v == null) return;
+                            setState(() => _rol = v);
+                          },
+                    validator: (v) =>
+                        v == null ? 'Selecciona el tipo de usuario' : null,
+                  ),
+                  if (esExterno) ...[
+                    const SizedBox(height: 14),
+                    const _FieldLabel('Eventos autorizados'),
+                    const SizedBox(height: 6),
+                    if (!_eventosCargados)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: LinearProgressIndicator(),
+                      )
+                    else
+                      eventosAsync!.when(
+                        loading: () => const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: LinearProgressIndicator(),
+                        ),
+                        error: (_, _) => const Text(
+                          'No se pudieron cargar los eventos.',
+                          style: TextStyle(color: AppColors.danger),
+                        ),
+                        data: (eventos) {
+                          return SelectorEventosMultiples(
+                            eventos: eventos,
+                            seleccionados: _eventoIds,
+                            enabled: !ocupado,
+                            soloActivosDisponibles: true,
+                            errorText: _intentoGuardar && _eventoIds.isEmpty
+                                ? 'Selecciona al menos un evento'
+                                : null,
+                            onChanged: (ids) => setState(() {
+                              _eventoIds
+                                ..clear()
+                                ..addAll(ids);
+                            }),
+                          );
+                        },
+                      ),
+                  ],
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Cuenta activa',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink,
                               ),
                             ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Desactivar bloquea el acceso a la app',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IgnorePointer(
+                        ignoring: ocupado || bloquearActivoPropio,
+                        child: Opacity(
+                          opacity: (ocupado || bloquearActivoPropio) ? 0.5 : 1,
+                          child: NexusToggle(
+                            value: _activo,
+                            onChanged: bloquearActivoPropio
+                                ? (_) {}
+                                : (v) => setState(() => _activo = v),
                           ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                PrimaryGradientButton(
-                  label: 'Guardar cambios',
-                  loading: _guardando,
-                  onPressed: ocupado ? null : _guardar,
-                ),
-                if (!esCuentaPropia) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.danger,
-                      side: BorderSide(
-                          color: AppColors.danger.withValues(alpha: 0.5)),
-                    ),
-                    onPressed: ocupado
-                        ? null
-                        : () => _eliminar(usuario.nombreCompleto),
-                    icon: _eliminando
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: AppColors.danger),
-                          )
-                        : const Icon(Symbols.delete_outline_rounded),
-                    label: const Text('Eliminar usuario'),
+                  const SizedBox(height: 28),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: ocupado
+                              ? null
+                              : () => _compartir(_nombreController.text.trim()),
+                          icon: const Icon(Symbols.share_rounded),
+                          label: const Text('Compartir'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: PrimaryGradientButton(
+                          label: _guardando ? 'Guardando…' : 'Guardar',
+                          loading: _guardando,
+                          onPressed: ocupado ? null : _guardar,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ],
+              ),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: AppColors.ink,
       ),
     );
   }

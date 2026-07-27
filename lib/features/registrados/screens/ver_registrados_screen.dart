@@ -151,6 +151,7 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen> {
       ),
       pinnedContent: _buildPinnedControls(),
       pinnedContentHeight: 112,
+      scrollResetToken: '$_busqueda|$_filtro',
       onRefresh: () async =>
           ref.invalidate(registradosPorEventoProvider(widget.eventoId)),
       slivers: [
@@ -265,8 +266,7 @@ class _RegistradoTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final esAdmin = ref.watch(isAdminProvider);
-    final puedeEditar = esAdmin || !registrado.pendienteDeSincronizar;
+    final puedeEditar = !registrado.pendienteDeSincronizar;
 
     return Pressable(
       onTap: puedeEditar

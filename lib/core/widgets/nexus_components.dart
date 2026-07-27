@@ -664,25 +664,8 @@ class StaggeredListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (AppMotion.reduceMotion(context)) return child;
-    final delay = AppMotion.stagger * (index.clamp(0, 10));
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: AppMotion.cardIn + delay,
-      curve: Interval(
-        (delay.inMilliseconds / (AppMotion.cardIn.inMilliseconds + delay.inMilliseconds))
-            .clamp(0.0, 0.9),
-        1,
-        curve: AppMotion.ease,
-      ),
-      builder: (context, t, child) => Opacity(
-        opacity: t,
-        child: Transform.translate(
-          offset: Offset(0, 10 * (1 - t)),
-          child: child,
-        ),
-      ),
-      child: child,
-    );
+    // Sin animación: el stagger (Opacity + Translate) trababa el scroll a
+    // 120 Hz y dejaba filas “volando” al filtrar/buscar.
+    return child;
   }
 }

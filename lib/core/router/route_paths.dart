@@ -6,12 +6,15 @@
 class RoutePaths {
   RoutePaths._();
 
+  static const splash = '/splash';
   static const login = '/login';
-  static const registro = '/registro';
   static const recuperarPassword = '/recuperar-password';
   static const recrearPass = '/recrear-pass';
+  static const eventoFinalizado = '/evento-finalizado';
 
   static const home = '/';
+  static const perfil = '/perfil';
+  static const actualizaciones = '/actualizaciones';
 
   static const eventos = '/eventos';
   static const crearEvento = '/eventos/crear';
@@ -27,7 +30,10 @@ class RoutePaths {
   static String kpi(String id) => '/eventos/$id/kpi';
   static String exportar(String id) => '/eventos/$id/exportar';
 
+  static String externoEvento(String id) => '/externo/eventos/$id';
+
   static const usuarios = '/usuarios';
+  static const nuevoUsuario = '/usuarios/nuevo';
   static String editarUsuario(String id) => '/usuarios/$id/editar';
 
   /// Módulo Capturador de leads (`eventos_leads` / `leads`).
@@ -35,7 +41,11 @@ class RoutePaths {
   static const crearEventoLead = '/capturador/crear';
   static String editarEventoLead(String id) => '/capturador/$id/editar';
   static String usarEventoLead(String id) => '/capturador/$id/usar';
-  static String capturarLead(String id) => '/capturador/$id/capturar';
+  static String capturarLead(String id, {String? desdeEvento}) {
+    final base = '/capturador/$id/capturar';
+    if (desdeEvento == null || desdeEvento.isEmpty) return base;
+    return '$base?desdeEvento=${Uri.encodeQueryComponent(desdeEvento)}';
+  }
   static String verLeads(String id) => '/capturador/$id/leads';
   static String detalleLead(String eventoId, String leadId) =>
       '/capturador/$eventoId/leads/$leadId';

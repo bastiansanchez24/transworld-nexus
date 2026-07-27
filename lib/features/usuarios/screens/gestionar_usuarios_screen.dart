@@ -9,7 +9,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/pressable.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/models/perfil.dart';
@@ -102,6 +101,19 @@ class _GestionarUsuariosBodyState
     );
   }
 
+  Widget _buildPinnedSearch() {
+    return Row(
+      children: [
+        Expanded(child: _buildSearchField()),
+        const SizedBox(width: 8),
+        PinnedSearchActionButton(
+          icon: Symbols.person_add_rounded,
+          onTap: () => context.push(RoutePaths.nuevoUsuario),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final usuariosAsync = ref.watch(usuariosListProvider);
@@ -109,7 +121,9 @@ class _GestionarUsuariosBodyState
     return CollapsingScrollScaffold(
       title: 'Usuarios',
       onRefresh: () async => ref.invalidate(usuariosListProvider),
-      pinnedSearch: _buildSearchField(),
+      pinnedSearch: _buildPinnedSearch(),
+      pinnedContentHeight: 60,
+      scrollResetToken: _query,
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -205,56 +219,19 @@ class _GestionarUsuariosBodyState
             return [
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      if (index == filtrados.length) {
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: DashedBorderBox(
-                            height: 52,
-                            onTap: () {
-                              NexusToast.show(
-                                context,
-                                'Invitación disponible próximamente.',
-                              );
-                            },
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Symbols.person_add_rounded,
-                                  color: AppColors.primary,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Invitar usuario',
-                                  style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-                      final usuario = filtrados[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: StaggeredListItem(
-                          index: index,
-                          child: _UsuarioRow(
-                            usuario: usuario,
-                            index: index,
-                          ),
-                        ),
-                      );
-                    },
-                    childCount: filtrados.length + 1,
-                  ),
+                sliver: SliverList.separated(
+                  itemCount: filtrados.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final usuario = filtrados[index];
+                    return StaggeredListItem(
+                      index: index,
+                      child: _UsuarioRow(
+                        usuario: usuario,
+                        index: index,
+                      ),
+                    );
+                  },
                 ),
               ),
             ];
@@ -292,28 +269,15 @@ class _UsuarioRow extends StatelessWidget {
             ),
             const SizedBox(width: 13),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    usuario.nombreCompleto,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    usuario.activo ? usuario.rol.label : 'Inactivo',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textTertiary,
-                    ),
-                  ),
-                ],
+              child: Text(
+                usuario.nombreCompleto,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink,
+                ),
               ),
             ),
             StatusChip(

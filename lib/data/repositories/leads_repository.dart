@@ -33,6 +33,24 @@ class LeadsRepository implements SyncExecutor {
     return _mapRows(rows);
   }
 
+  /// Leads capturados por un perfil concreto (más recientes primero).
+  Future<List<Lead>> listarPorPerfil(String perfilId) async {
+    final rows = await _client
+        .from(SupabaseTables.leads)
+        .select(_selectConPerfil)
+        .eq('perfil_id', perfilId)
+        .order('created_at', ascending: false);
+    return _mapRows(rows);
+  }
+
+  Future<int> contarPorPerfil(String perfilId) async {
+    final rows = await _client
+        .from(SupabaseTables.leads)
+        .select('id')
+        .eq('perfil_id', perfilId);
+    return rows.length;
+  }
+
   Future<Lead> obtenerPorId(String id) async {
     final row = await _client
         .from(SupabaseTables.leads)
@@ -59,7 +77,7 @@ class LeadsRepository implements SyncExecutor {
     await _client.from(SupabaseTables.leads).update(changes).eq('id', id);
   }
 
-  /// Solo admin (política `cl_leads_delete`).
+  /// Solo admin (política `cl_leads_delete` / `rpe_is_admin`).
   Future<void> eliminar(String id) async {
     await _client.from(SupabaseTables.leads).delete().eq('id', id);
   }

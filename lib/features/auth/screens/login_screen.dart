@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/router/route_paths.dart';
+import '../../../core/permissions/app_permissions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../providers/auth_providers.dart';
 import '../widgets/login/login_button.dart';
 import '../widgets/login/login_form.dart';
 import '../widgets/login/login_header.dart';
@@ -67,12 +67,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             email: email,
             password: _passwordController.text,
           );
+      // Evita que el router lea un AsyncData(null) stale (pre-login) y
+      // cierre la sesión antes de que el perfil se recargue.
+      ref.invalidate(currentPerfilProvider);
       final prefs = ref.read(sharedPreferencesProvider);
       if (_rememberMe) {
         await prefs.setString(_rememberedEmailKey, email);
       } else {
         await prefs.remove(_rememberedEmailKey);
       }
+      // Permisos runtime (cámara / mic / fotos) justo tras autenticarse.
+      await AppPermissions.requestAll();
       // La navegación post-login la resuelve el redirect del router,
       // reaccionando a los cambios de sesión de Supabase.
     } on AuthException catch (e) {
@@ -210,25 +215,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               loading: _loading,
               loadingSemanticsLabel: 'Iniciando sesión…',
               onPressed: _handleLogin,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _Entrada(
-            animation: _enter,
-            intervalo: const Interval(0.45, 1, curve: LoginTheme.curve),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('¿No tienes cuenta?',
-                    style: TextStyle(color: AppColors.textSecondary)),
-                TextButton(
-                  style: TextButton.styleFrom(minimumSize: const Size(44, 44)),
-                  onPressed:
-                      _loading ? null : () => context.push(RoutePaths.registro),
-                  child: const Text('Crear cuenta',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                ),
-              ],
             ),
           ),
         ],

@@ -1,23 +1,28 @@
-/// Roles de negocio de la aplicación.
-///
-/// En el proyecto legado el control de acceso por rol vivía únicamente en
-/// condicionales de UI (`rol === 'admin'` repetido en decenas de archivos,
-/// ver documentacion_zips_registro_pro.md Sección 17.6) y la base de datos
-/// no lo hacía cumplir. Acá seguimos necesitando estas comprobaciones en la
-/// UI para una buena experiencia (ocultar botones que de todas formas
-/// fallarían), pero la aplicación real de la regla vive en `supabase/schema.sql`
-/// (RLS + trigger anti-escalación). Este enum es solo el reflejo tipado en
-/// el cliente de esa misma regla de negocio.
+/// Roles globales de la aplicación.
 enum AppRole {
   admin('admin'),
-  vendedor('vendedor'),
-  user('user');
+  organizador('organizador'),
+  user('user'),
+  externo('externo');
 
   const AppRole(this.value);
 
   final String value;
 
+  /// Roles asignables al crear un usuario (admin).
+  static const creatableRoles = [
+    AppRole.admin,
+    AppRole.organizador,
+    AppRole.user,
+    AppRole.externo,
+  ];
+
+  /// Roles asignables al editar un usuario interno (externo solo vía creación).
+  static const assignableRoles = [AppRole.admin, AppRole.organizador, AppRole.user];
+
   static AppRole fromString(String? raw) {
+    if (raw == null || raw.isEmpty) return AppRole.user;
+    if (raw == 'vendedor') return AppRole.user;
     return AppRole.values.firstWhere(
       (r) => r.value == raw,
       orElse: () => AppRole.user,
@@ -25,10 +30,18 @@ enum AppRole {
   }
 
   bool get isAdmin => this == AppRole.admin;
+  bool get isOrganizador => this == AppRole.organizador;
+  bool get isUsuario => this == AppRole.user;
+  bool get isExterno => this == AppRole.externo;
+
+  bool get canManageUsers => isAdmin;
+  bool get canCreateContent => isAdmin || isOrganizador;
+  bool get usesFullShell => !isExterno;
 
   String get label => switch (this) {
         AppRole.admin => 'Administrador',
-        AppRole.vendedor => 'Vendedor',
+        AppRole.organizador => 'Organizador',
         AppRole.user => 'Usuario',
+        AppRole.externo => 'Usuario Externo',
       };
 }

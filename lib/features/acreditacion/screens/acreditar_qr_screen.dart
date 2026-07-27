@@ -1,33 +1,28 @@
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:material_symbols_icons/symbols.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/route_paths.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../data/models/capturar_lead_route_extra.dart';
+import '../../../data/models/lead_prefill.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../capturador/services/campana_desde_evento_service.dart';
+import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
-import '../qr_codigo_parser.dart';
-import '../widgets/qr_scan_overlay.dart';
+import '../scanner/qr_scanner_service.dart';
+import '../scanner/scanner_controller.dart';
+import '../scanner/widgets/scanner_view.dart';
 
-/// Escaneo de QR para acreditación rápida. El QR de cada asistente codifica
-/// simplemente su `registrados.id`. Al detectar un código válido se pide
-/// confirmación antes de acreditar. Funciona igual online u offline: el
-/// cambio se aplica localmente contra la lista ya cacheada por
-/// [registradosPorEventoProvider] y se encola con la misma cola unificada
-/// que usa el resto de la app (ver Sección 17.3 de la auditoría — acá no
-/// hay una segunda cola paralela como en el proyecto legado).
+/// Pantalla de dominio: acredita o captura lead tras un QR.
 ///
-/// Nota: usa [Scaffold] (no AppScaffold) porque el visor de cámara necesita
-/// pantalla completa negra sin header Nexus.
+/// La UI de cámara vive en [ScannerView]; esta pantalla solo orquesta
+/// reglas de negocio sobre el resultado del [ScannerController].
 class AcreditarQrScreen extends ConsumerStatefulWidget {
   const AcreditarQrScreen({super.key, required this.eventoId});
 
@@ -37,22 +32,38 @@ class AcreditarQrScreen extends ConsumerStatefulWidget {
   ConsumerState<AcreditarQrScreen> createState() => _AcreditarQrScreenState();
 }
 
-class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
-  final _controller = MobileScannerController(
-    formats: [BarcodeFormat.qrCode],
-    // `noDuplicates` en web deja el escáner bloqueado tras el primer intento fallido.
-    detectionSpeed: DetectionSpeed.normal,
-    detectionTimeoutMs: 500,
-  );
-  bool _procesando = false;
-  String? _ultimoMensaje;
-  bool _ultimoEsError = false;
-  Rect? _scanWindow;
+class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
+    with WidgetsBindingObserver {
+  late final ScannerController _scanner;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _scanner = ScannerController(onCodeDetected: _onCodeDetected);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scanner.initialize();
+    });
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _scanner.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _scanner.resumeCamera();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _scanner.pauseCamera();
+    }
   }
 
   Future<List<Registrado>> _listaAsistentes() async {
@@ -60,7 +71,8 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
     if (async.hasValue) return async.requireValue;
     if (async.isLoading) {
       try {
-        return await ref.read(registradosPorEventoProvider(widget.eventoId).future);
+        return await ref
+            .read(registradosPorEventoProvider(widget.eventoId).future);
       } catch (_) {
         return [];
       }
@@ -82,335 +94,181 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen> {
         .obtenerPorIdEnEvento(registradoId, widget.eventoId);
   }
 
-  Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_procesando) return;
-    if (capture.barcodes.isEmpty) return;
-
-    final registradosAsync = ref.read(registradosPorEventoProvider(widget.eventoId));
+  Future<void> _acreditar(Registrado registrado) async {
+    final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
     final isOnline = ref.read(isOnlineProvider);
-    if (!isOnline && registradosAsync.isLoading) {
-      _mostrarResultado(
-        'Espera a que carguen los asistentes (modo offline).',
-        esError: true,
+    if (isOnline && !registrado.pendienteDeSincronizar) {
+      await ref
+          .read(registradosRepositoryProvider)
+          .acreditar(registrado.id, acreditadoPorId: userId ?? '');
+    } else {
+      await ref.read(syncQueueServiceProvider.notifier).enqueueUpdate(
+            table: 'registrados',
+            entityId: registrado.id,
+            changes: {'acreditado': true},
+          );
+    }
+    ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+  }
+
+  Future<void> _acreditarSiConfirmaParaLead(Registrado registrado) async {
+    if (registrado.acreditado) return;
+
+    if (!mounted) return;
+    final confirmar = await confirmDialog(
+      context,
+      title: 'Acreditar asistente',
+      message:
+          '${registrado.nombreCompleto} aún no está acreditado/a.\n\n¿Deseas acreditarlo/a antes de capturar el lead?',
+      confirmLabel: 'Acreditar',
+    );
+    if (!confirmar || !mounted) return;
+
+    await _acreditar(registrado);
+  }
+
+  Future<void> _navegarACaptura(Registrado registrado) async {
+    final evento = await ref.read(eventoByIdProvider(widget.eventoId).future);
+    final campana = await obtenerOCrearCampanaDesdeEvento(ref, evento);
+
+    if (!mounted) return;
+    await _scanner.pauseCamera();
+    if (!mounted) return;
+    await context.push(
+      RoutePaths.capturarLead(
+        campana.id,
+        desdeEvento: widget.eventoId,
+      ),
+      extra: CapturarLeadRouteExtra(
+        prefill: LeadPrefill.fromRegistrado(registrado),
+        eventoRegistroId: widget.eventoId,
+      ),
+    );
+    if (!mounted) return;
+    // Si el usuario vuelve (guardar o cancelar), reanudar cámara y escaneo.
+    await _scanner.resumeCamera();
+    _scanner.resumeScanning();
+  }
+
+  Future<void> _procesarAcreditar(Registrado registrado) async {
+    if (registrado.acreditado) {
+      _scanner.showFeedback(
+        '${registrado.nombreCompleto} ya había ingresado.',
+        isError: false,
       );
       return;
     }
 
-    setState(() => _procesando = true);
+    if (!mounted) return;
+    final confirmar = await confirmDialog(
+      context,
+      title: 'Acreditar asistente',
+      message:
+          'Se detectó a ${registrado.nombreCompleto}.\n\n¿Deseas acreditar a esta persona?',
+      confirmLabel: 'Acreditar',
+    );
+    if (!confirmar || !mounted) {
+      _scanner.resumeScanning(delay: const Duration(seconds: 2));
+      return;
+    }
 
-    final textoLeido = textoLeidoDeCaptura(capture);
-    final registradoId = extraerRegistradoIdDeCaptura(capture);
+    await _acreditar(registrado);
+    _scanner.showFeedback(
+      'Bienvenido/a ${registrado.nombreCompleto}',
+      isError: false,
+    );
+  }
+
+  Future<void> _procesarCapturarLead(Registrado registrado) async {
+    await _acreditarSiConfirmaParaLead(registrado);
+    if (!mounted) return;
+    await _navegarACaptura(registrado);
+  }
+
+  void _cerrarEscaner() {
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    // Fallback si el stack quedó sin historial (p. ej. un go previo).
+    final isExterno =
+        ref.read(currentPerfilProvider).valueOrNull?.isExterno ?? false;
+    context.go(
+      isExterno
+          ? RoutePaths.externoEvento(widget.eventoId)
+          : RoutePaths.usarEvento(widget.eventoId),
+    );
+  }
+
+  Future<void> _onCodeDetected(QrScanDecode decode) async {
+    final registradosAsync =
+        ref.read(registradosPorEventoProvider(widget.eventoId));
+    final isOnline = ref.read(isOnlineProvider);
+    if (!isOnline && registradosAsync.isLoading) {
+      _scanner.showFeedback(
+        'Espera a que carguen los asistentes (modo offline).',
+        isError: true,
+      );
+      return;
+    }
 
     try {
-      if (registradoId == null) {
-        final preview = textoLeido == null
+      if (!decode.isValid) {
+        final preview = decode.rawText == null
             ? '(vacío)'
-            : (textoLeido.length > 40 ? '${textoLeido.substring(0, 40)}…' : textoLeido);
-        _mostrarResultado(
+            : (decode.rawText!.length > 40
+                ? '${decode.rawText!.substring(0, 40)}…'
+                : decode.rawText!);
+        _scanner.showFeedback(
           'No se pudo leer el QR. Datos detectados: $preview',
-          esError: true,
+          isError: true,
         );
         return;
       }
 
-      final registrado = await _resolverRegistrado(registradoId);
+      final registrado = await _resolverRegistrado(decode.registradoId!);
 
       if (registrado == null) {
-        _mostrarResultado('Código no válido o no pertenece a este evento.', esError: true);
-        return;
-      }
-      if (registrado.acreditado) {
-        _mostrarResultado('${registrado.nombreCompleto} ya había ingresado.', esError: false);
-        return;
-      }
-
-      if (!mounted) return;
-      final confirmar = await confirmDialog(
-        context,
-        title: 'Acreditar asistente',
-        message:
-            'Se detectó a ${registrado.nombreCompleto}.\n\n¿Deseas acreditar a esta persona?',
-        confirmLabel: 'Acreditar',
-      );
-      if (!confirmar || !mounted) {
-        // Evita que el mismo QR vuelva a abrir el diálogo de inmediato.
-        await Future.delayed(const Duration(seconds: 2));
+        _scanner.showFeedback(
+          'Código no válido o no pertenece a este evento.',
+          isError: true,
+        );
         return;
       }
 
-      final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
-      final isOnline = ref.read(isOnlineProvider);
-      if (isOnline && !registrado.pendienteDeSincronizar) {
-        await ref
-            .read(registradosRepositoryProvider)
-            .acreditar(registrado.id, acreditadoPorId: userId ?? '');
+      if (_scanner.captureLeadMode) {
+        await _procesarCapturarLead(registrado);
       } else {
-        await ref.read(syncQueueServiceProvider.notifier).enqueueUpdate(
-              table: 'registrados',
-              entityId: registrado.id,
-              changes: {'acreditado': true},
-            );
+        await _procesarAcreditar(registrado);
       }
-      ref.invalidate(registradosPorEventoProvider(widget.eventoId));
-      _mostrarResultado('Bienvenido/a ${registrado.nombreCompleto}', esError: false);
     } catch (e) {
-      _mostrarResultado('No se pudo acreditar. Intenta de nuevo.', esError: true);
-    } finally {
-      if (mounted && _ultimoMensaje == null) {
-        setState(() => _procesando = false);
-      }
+      _scanner.showFeedback(
+        _scanner.captureLeadMode
+            ? e.toString().replaceFirst('Exception: ', '')
+            : 'No se pudo acreditar. Intenta de nuevo.',
+        isError: true,
+      );
     }
-  }
-
-  void _mostrarResultado(String mensaje, {required bool esError}) {
-    setState(() {
-      _ultimoMensaje = mensaje;
-      _ultimoEsError = esError;
-    });
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _ultimoMensaje = null;
-          _procesando = false;
-        });
-      }
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Precarga la lista al abrir la pantalla; antes solo se leía al escanear
-    // y el provider autoDispose podía devolver [] si aún estaba cargando.
-    final registradosAsync = ref.watch(registradosPorEventoProvider(widget.eventoId));
+    // Precarga asistentes sin reconstruir el preview de cámara.
+    ref.watch(registradosPorEventoProvider(widget.eventoId));
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-            tapToFocus: !kIsWeb,
-            scanWindow: kIsWeb ? null : _scanWindow,
-            overlayBuilder: (context, constraints) {
-              final scanWindow = computeQrScanWindow(constraints);
-              if (_scanWindow != scanWindow) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) setState(() => _scanWindow = scanWindow);
-                });
-              }
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (kIsWeb)
-                    QrScanDimOverlay(scanWindow: scanWindow)
-                  else
-                    ScanWindowOverlay(
-                      controller: _controller,
-                      scanWindow: scanWindow,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      borderWidth: 0,
-                    ),
-                  QrScanCornerFrame(scanWindow: scanWindow),
-                ],
-              );
-            },
-            errorBuilder: (context, error) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Symbols.videocam_off_rounded,
-                      color: Colors.white,
-                      size: 48,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      error.errorCode.message,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    if (kIsWeb) ...[
-                      const SizedBox(height: 12),
-                      const Text(
-                        'En navegador necesitas permitir la cámara y usar HTTPS. '
-                        'Para acreditación en terreno, preferir Android o iOS.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(
-                          Symbols.close_rounded,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                        onPressed: () => context.pop(),
-                      ),
-                      const Expanded(
-                        child: Text(
-                          'Escanear QR',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      if (!kIsWeb)
-                        IconButton(
-                          icon: const Icon(
-                            Symbols.flash_on_rounded,
-                            color: Colors.white,
-                          ),
-                          onPressed: () => _controller.toggleTorch(),
-                        )
-                      else
-                        const SizedBox(width: 48),
-                    ],
-                  ),
-                ),
-                if (kIsWeb)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.warning,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                    child: const Text(
-                      'Modo navegador: el QR debe mostrarse en otro dispositivo o impreso. '
-                      'No puedes escanear un QR en la misma pantalla.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                if (registradosAsync.isLoading)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          'Cargando asistentes...',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  )
-                else if (registradosAsync.hasError)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: ErrorView(
-                      message: 'No se pudo cargar la lista de asistentes.',
-                      onRetry: () => ref.invalidate(registradosPorEventoProvider(widget.eventoId)),
-                    ),
-                  ),
-                const Spacer(),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24),
-                  child: Text(
-                    'Apunta el QR del asistente al centro',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                if (_ultimoMensaje != null)
-                  Container(
-                    margin: const EdgeInsets.all(24),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(
-                        color: _ultimoEsError
-                            ? AppColors.danger
-                            : AppColors.success,
-                        width: 1.5,
-                      ),
-                      boxShadow: AppColors.shadowLifted,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _ultimoEsError
-                              ? Symbols.error_rounded
-                              : Symbols.check_circle_rounded,
-                          color: _ultimoEsError
-                              ? AppColors.danger
-                              : AppColors.success,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _ultimoMensaje!,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.ink,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                TextButton.icon(
-                  onPressed: () => context.pushReplacement(
-                    RoutePaths.acreditarConfirmado(widget.eventoId),
-                  ),
-                  icon: const Icon(
-                    Symbols.list_alt_rounded,
-                    color: Colors.white,
-                  ),
-                  label: const Text(
-                    'Ir a acreditación manual',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _cerrarEscaner();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: ScannerView(
+          controller: _scanner,
+          onClose: _cerrarEscaner,
+        ),
       ),
     );
   }

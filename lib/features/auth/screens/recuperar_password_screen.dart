@@ -40,7 +40,7 @@ class _RecuperarPasswordScreenState
       if (mounted) {
         showAppSnackBar(
           context,
-          'No se pudo enviar el correo de recuperación.',
+          'No se pudo enviar la nueva contraseña.',
           isError: true,
         );
       }
@@ -66,8 +66,8 @@ class _RecuperarPasswordScreenState
                           size: 56, color: AppColors.success),
                       const SizedBox(height: 16),
                       const Text(
-                        'Si el correo existe, te enviamos instrucciones '
-                        'para recuperar tu contraseña.',
+                        'Si el correo existe, te enviamos una nueva '
+                        'contraseña de acceso.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: AppColors.textSecondary),
                       ),
@@ -79,8 +79,8 @@ class _RecuperarPasswordScreenState
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const Text(
-                          'Ingresa tu correo y te enviaremos instrucciones '
-                          'para restablecer tu contraseña.',
+                          'Ingresa tu correo y te enviaremos una nueva '
+                          'contraseña autogenerada.',
                           style: TextStyle(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 16),
@@ -98,7 +98,7 @@ class _RecuperarPasswordScreenState
                         ),
                         const SizedBox(height: 24),
                         PrimaryGradientButton(
-                          label: 'Enviar instrucciones',
+                          label: 'Enviar nueva contraseña',
                           loading: _loading,
                           onPressed: _loading ? null : _enviar,
                         ),

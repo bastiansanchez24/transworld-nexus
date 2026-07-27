@@ -202,6 +202,22 @@ class RegistradosRepository implements SyncExecutor {
     }
     return (total: rows.length, acreditados: acreditados);
   }
+
+  Future<int> contarPorIngresadoPor(String perfilId) async {
+    final rows = await _client
+        .from(SupabaseTables.registrados)
+        .select('id')
+        .eq('ingresado_por', perfilId);
+    return rows.length;
+  }
+
+  Future<int> contarPorAcreditadoPor(String perfilId) async {
+    final rows = await _client
+        .from(SupabaseTables.registrados)
+        .select('id')
+        .eq('acreditado_por', perfilId);
+    return rows.length;
+  }
 }
 
 final registradosRepositoryProvider = Provider<RegistradosRepository>((ref) {

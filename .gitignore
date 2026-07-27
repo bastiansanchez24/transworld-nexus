@@ -50,3 +50,9 @@ app.*.map.json
 .env
 .env.*
 !.env.example
+
+# Android release signing — nunca versionar keystore ni key.properties.
+android/key.properties
+*.jks
+*.keystore
+upload-keystore.jks

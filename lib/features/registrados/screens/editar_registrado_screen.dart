@@ -111,8 +111,8 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
 
   @override
   Widget build(BuildContext context) {
-    final registradosAsync = ref.watch(registradosPorEventoProvider(widget.eventoId));
     final esAdmin = ref.watch(isAdminProvider);
+    final registradosAsync = ref.watch(registradosPorEventoProvider(widget.eventoId));
 
     return AppScaffold(
       title: 'Editar registrado',

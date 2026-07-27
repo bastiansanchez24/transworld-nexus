@@ -3,8 +3,15 @@
     <!-- Acreditación por QR (mobile_scanner). El equipo puede seguir
          acreditando manualmente si el dispositivo no tiene cámara. -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Galería / fotos en captura de leads (image_picker). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
     <!-- Dictado por voz en captura de leads (speech_to_text). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- OTA: instalar APK descargado desde GitHub Releases (Android 8+). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
     <application
@@ -38,6 +45,22 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Impeller: rasterización más estable a 90/120 Hz. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="true" />
+        <!-- FileProvider para exponer el APK OTA al instalador del sistema.
+             open_filex también registra el suyo; este cubre rutas de cache
+             propias si se abre el APK vía content URI. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -52,6 +75,14 @@
         <!-- Reconocimiento de voz (speech_to_text) en Android 11+. -->
         <intent>
             <action android:name="android.speech.RecognitionService"/>
+        </intent>
+        <!-- OTA: visibilidad del instalador de paquetes (Android 11+). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="application/vnd.android.package-archive"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.INSTALL_PACKAGE"/>
         </intent>
     </queries>
 </manifest>

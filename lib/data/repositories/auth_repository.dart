@@ -7,17 +7,8 @@ import '../supabase/supabase_client_provider.dart';
 
 /// Encapsula toda la interacción con Supabase Auth + tabla `perfiles`.
 ///
-/// A diferencia del `authService.ts` legado (duplicado byte a byte entre
-/// las dos apps, con pequeñas divergencias de caché local — ver
-/// documentacion_zips_registro_pro.md Sección 3.8/4.8), acá hay una sola
-/// implementación para las tres plataformas (móvil, web, escritorio).
-///
-/// También se simplifica el flujo de registro: en el legado, `registrarUsuario`
-/// tenía que lidiar manualmente con "usuario ofuscado" y "ya existe en
-/// auth.users" porque el proyecto compartía autenticación con la app hermana
-/// "capturador-leads". Ese manejo especial ahora vive del lado del backend
-/// (trigger `rpe_handle_new_user`, ver supabase/schema.sql), así que el
-/// cliente solo necesita llamar `signUp` de forma estándar.
+/// La creación de cuentas es exclusiva de administradores (Edge Function
+/// `crear-usuario`). El autoregistro público está deshabilitado.
 class AuthRepository {
   AuthRepository(this._client);
 
@@ -34,29 +25,21 @@ class AuthRepository {
     await _client.auth.signInWithPassword(email: email, password: password);
   }
 
-  Future<void> registrarUsuario({
-    required String email,
-    required String password,
-    required String nombreCompleto,
-  }) async {
-    await _client.auth.signUp(
-      email: email,
-      password: password,
-      data: {'nombre_completo': nombreCompleto},
-    );
-  }
-
   Future<void> cerrarSesion() => _client.auth.signOut();
 
+  /// Solicita una nueva contraseña autogenerada enviada por correo.
   Future<void> recuperarContrasena(String email) async {
-    await _client.rpc(
-      SupabaseRpc.marcarRecuperacionPass,
-      params: {'email_input': email},
-    );
-    await _client.functions.invoke(
+    final response = await _client.functions.invoke(
       SupabaseFunctions.resetPassword,
-      body: {'email': email},
+      body: {'email': email.trim().toLowerCase()},
     );
+    if (response.status != 200) {
+      final data = response.data;
+      final message = data is Map && data['error'] != null
+          ? data['error'].toString()
+          : 'No se pudo enviar la nueva contraseña.';
+      throw Exception(message);
+    }
   }
 
   Future<bool> verificarEmailRegistrado(String email) async {
@@ -97,13 +80,20 @@ class AuthRepository {
         .update({'nombre_completo': nuevoNombre}).eq('id', id);
   }
 
+  /// Actualiza solo el nombre del usuario autenticado (nunca de terceros).
+  Future<void> actualizarNombrePropio(String nuevoNombre) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      throw Exception('No hay sesión activa.');
+    }
+    await actualizarNombre(userId, nuevoNombre);
+  }
+
+  /// Email de la sesión actual (`auth.users`), no de la tabla `perfiles`.
+  String? get emailSesionActual => _client.auth.currentUser?.email;
+
   /// Cambia el rol de otro usuario. Usa el RPC `rpe_actualizar_rol_usuario`
-  /// (`SECURITY DEFINER`) en vez de un `UPDATE` directo sobre `perfiles.rol`:
-  /// es la corrección al hallazgo crítico de escalación de privilegios
-  /// documentado en la Sección 8.2/17.6 (la policy de `perfiles` por sí sola
-  /// no puede impedir que un usuario se autoasigne rol admin; ahora, además
-  /// del trigger de base de datos, el cliente ni siquiera intenta el camino
-  /// inseguro).
+  /// (`SECURITY DEFINER`) en vez de un `UPDATE` directo sobre `perfiles.rol`.
   Future<void> actualizarRolUsuario(String usuarioId, String nuevoRol) async {
     await _client.rpc(
       SupabaseRpc.actualizarRolUsuario,
@@ -132,16 +122,20 @@ class AuthRepository {
     return Perfil.fromMap(row);
   }
 
-  /// Elimina la cuenta de un usuario mediante el RPC `rpe_eliminar_usuario`
-  /// (`SECURITY DEFINER`). Las acreditaciones (`acreditado_por`) se
-  /// reasignan al perfil sistema "Usuario eliminado"; otras FKs
-  /// históricas (`ingresado_por`, `creado_por`, etc.) quedan en NULL.
-  /// El RPC rechaza la operación si quien la ejecuta no es admin o
-  /// intenta eliminarse a sí mismo.
+  /// Email de auth.users (solo admin; RPC `rpe_obtener_email_usuario`).
+  Future<String?> obtenerEmailUsuario(String usuarioId) async {
+    final result = await _client.rpc(
+      SupabaseRpc.obtenerEmailUsuario,
+      params: {'usuario_id': usuarioId},
+    );
+    return result as String?;
+  }
+
+  /// Elimina la cuenta de un usuario mediante el RPC `rpe_eliminar_usuario`.
   ///
   /// Devuelve `true` si la cuenta se eliminó por completo, `false` si otra
   /// aplicación de la base compartida aún referencia la cuenta y solo pudo
-  /// desactivarse (ban permanente: pierde el acceso igualmente).
+  /// desactivarse.
   Future<bool> eliminarUsuario(String usuarioId) async {
     final resultado = await _client.rpc(
       SupabaseRpc.eliminarUsuario,
@@ -150,13 +144,164 @@ class AuthRepository {
     return resultado == 'eliminado';
   }
 
-  /// Solo un admin puede activar/desactivar cuentas (lo hace cumplir el
-  /// trigger `rpe_prevent_role_self_escalation` en la base de datos).
+  /// Solo un admin puede activar/desactivar cuentas.
   Future<void> establecerActivo(String id, bool activo) async {
     await _client
         .from(SupabaseTables.perfiles)
         .update({'activo': activo}).eq('id', id);
   }
+
+  /// Crea un usuario (cualquier rol) y envía credenciales por correo.
+  ///
+  /// Para rol `externo`, pasar [eventoIds] (≥1). [eventoId] se mantiene por
+  /// compatibilidad y se fusiona en la lista.
+  Future<CrearUsuarioResultado> crearUsuario({
+    required String nombreCompleto,
+    required String email,
+    required String password,
+    required String rol,
+    String? eventoId,
+    List<String>? eventoIds,
+  }) async {
+    try {
+      final ids = <String>{
+        ...?eventoIds?.where((id) => id.isNotEmpty),
+        if (eventoId != null && eventoId.isNotEmpty) eventoId,
+      }.toList();
+
+      final response = await _client.functions.invoke(
+        SupabaseFunctions.crearUsuario,
+        body: {
+          'nombre_completo': nombreCompleto,
+          'email': email.trim().toLowerCase(),
+          'password': password,
+          'rol': rol,
+          if (ids.isNotEmpty) 'evento_ids': ids,
+        },
+      );
+
+      if (response.status != 200) {
+        final data = response.data;
+        final message = data is Map && data['error'] != null
+            ? data['error'].toString()
+            : 'No se pudo crear el usuario.';
+        throw Exception(message);
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      final nombresRaw = data['evento_nombres'];
+      final nombres = nombresRaw is List
+          ? nombresRaw.map((e) => e.toString()).toList()
+          : <String>[];
+      return CrearUsuarioResultado(
+        userId: data['user_id'] as String,
+        email: data['email'] as String,
+        password: data['password'] as String,
+        rol: data['rol'] as String? ?? rol,
+        eventoNombre: data['evento_nombre'] as String?,
+        eventoNombres: nombres,
+      );
+    } on FunctionException catch (e) {
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        throw Exception(details['error'].toString());
+      }
+      rethrow;
+    }
+  }
+
+  /// IDs de eventos autorizados para un usuario (tabla `usuarios_eventos`).
+  Future<List<String>> listarEventosAutorizadosUsuario(String usuarioId) async {
+    final rows = await _client
+        .from(SupabaseTables.usuariosEventos)
+        .select('evento_id')
+        .eq('usuario_id', usuarioId);
+    return rows
+        .map((r) => r['evento_id'] as String?)
+        .whereType<String>()
+        .toList();
+  }
+
+  /// Reemplaza el set de eventos autorizados de un externo (RPC admin).
+  Future<void> sincronizarEventosExterno(
+    String usuarioId,
+    List<String> eventoIds,
+  ) async {
+    await _client.rpc(
+      SupabaseRpc.sincronizarEventosExterno,
+      params: {
+        'p_usuario_id': usuarioId,
+        'p_evento_ids': eventoIds,
+      },
+    );
+  }
+
+  /// Persiste el evento activo/preferido del externo autenticado.
+  Future<void> actualizarEventoActivoExterno(String eventoId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    await _client
+        .from(SupabaseTables.perfiles)
+        .update({'evento_asignado_id': eventoId}).eq('id', userId);
+  }
+
+  /// Genera nueva contraseña, la aplica y la envía por correo (solo admin).
+  Future<RegenerarPasswordResultado> regenerarPasswordUsuario(
+    String usuarioId,
+  ) async {
+    final response = await _client.functions.invoke(
+      SupabaseFunctions.regenerarPasswordUsuario,
+      body: {'user_id': usuarioId},
+    );
+
+    if (response.status != 200) {
+      final data = response.data;
+      final message = data is Map && data['error'] != null
+          ? data['error'].toString()
+          : 'No se pudo regenerar la contraseña.';
+      throw Exception(message);
+    }
+
+    final data = response.data as Map<String, dynamic>;
+    return RegenerarPasswordResultado(
+      userId: data['user_id'] as String,
+      email: data['email'] as String,
+      password: data['password'] as String,
+      nombreCompleto: data['nombre_completo'] as String? ?? '',
+    );
+  }
+}
+
+class CrearUsuarioResultado {
+  const CrearUsuarioResultado({
+    required this.userId,
+    required this.email,
+    required this.password,
+    required this.rol,
+    this.eventoNombre,
+    this.eventoNombres = const [],
+  });
+
+  final String userId;
+  final String email;
+  final String password;
+  final String rol;
+  final String? eventoNombre;
+  final List<String> eventoNombres;
+}
+
+class RegenerarPasswordResultado {
+  const RegenerarPasswordResultado({
+    required this.userId,
+    required this.email,
+    required this.password,
+    required this.nombreCompleto,
+  });
+
+  final String userId;
+  final String email;
+  final String password;
+  final String nombreCompleto;
 }
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {

@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
@@ -33,6 +34,9 @@ class CollapsingNavOverlay extends StatelessWidget {
     this.leading,
     this.trailing,
     this.alwaysShowActions = false,
+    /// Distancia de scroll hasta que el buscador toca el título colapsado.
+    /// Alinea fade del título/blur con ese momento.
+    this.collapseExtent = 48,
   });
 
   final double scrollOffset;
@@ -42,9 +46,20 @@ class CollapsingNavOverlay extends StatelessWidget {
   final Widget? leading;
   final Widget? trailing;
   final bool alwaysShowActions;
+  final double collapseExtent;
 
-  double get bgOpacity => (scrollOffset / 48).clamp(0.0, 1.0);
-  double get titleOpacity => ((scrollOffset - 28) / 30).clamp(0.0, 1.0);
+  double get _extent => collapseExtent <= 0 ? 48.0 : collapseExtent;
+
+  double get bgOpacity => (scrollOffset / _extent).clamp(0.0, 1.0);
+
+  /// El título colapsado queda opaco antes de que el buscador se fije.
+  double get titleOpacity {
+    final start = _extent * 0.18;
+    final end = _extent * 0.82;
+    final range = (end - start).clamp(1.0, _extent);
+    return ((scrollOffset - start) / range).clamp(0.0, 1.0);
+  }
+
   double get titleTranslateY => (1 - titleOpacity) * 6;
 
   @override
@@ -79,20 +94,26 @@ class CollapsingNavOverlay extends StatelessWidget {
         height: height,
         child: Stack(
           children: [
+            // Bloquea taps en toda la zona de la navbar; sin esto el scroll
+            // recibe toques en áreas sin widget interactivo (título, blur, etc.).
+            Positioned.fill(
+              child: AbsorbPointer(
+                child: const SizedBox.expand(),
+              ),
+            ),
             if (showBlur)
               Positioned.fill(
                 child: IgnorePointer(
                   child: ClipRect(
-                    // Blur moderado: sigma 22 por frame mataba el scroll
-                    // en Eventos/Leads (listas bajo este overlay).
+                    // Blur visible sin volver a sigma 22 (afectaba scroll en listas).
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: isHome
                               ? null
                               : AppColors.background.withValues(
-                                  alpha: 0.88 * bgOpacity,
+                                  alpha: 0.30 * bgOpacity,
                                 ),
                           gradient: isHome
                               ? LinearGradient(
@@ -103,13 +124,13 @@ class CollapsingNavOverlay extends StatelessWidget {
                                       12,
                                       51,
                                       87,
-                                      0.88 * bgOpacity,
+                                      0.55 * bgOpacity,
                                     ),
                                     Color.fromRGBO(
                                       23,
                                       94,
                                       147,
-                                      0.88 * bgOpacity,
+                                      0.55 * bgOpacity,
                                     ),
                                   ],
                                 )
@@ -140,22 +161,20 @@ class CollapsingNavOverlay extends StatelessWidget {
                           : null,
                     ),
                     Expanded(
-                      child: IgnorePointer(
-                        child: Opacity(
-                          opacity: titleOpacity,
-                          child: Transform.translate(
-                            offset: Offset(0, titleTranslateY),
-                            child: Text(
-                              title,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.2,
-                                color: titleColor,
-                              ),
+                      child: Opacity(
+                        opacity: titleOpacity,
+                        child: Transform.translate(
+                          offset: Offset(0, titleTranslateY),
+                          child: Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                              color: titleColor,
                             ),
                           ),
                         ),
@@ -209,6 +228,106 @@ class CollapsingNavButton extends StatelessWidget {
   }
 }
 
+/// Botón cuadrado al lado del buscador fijado (misma altura y estilo).
+class PinnedSearchActionButton extends StatelessWidget {
+  const PinnedSearchActionButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      scale: 0.9,
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.input),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppColors.shadowRest,
+        ),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(icon, size: 22, color: AppColors.ink),
+        ),
+      ),
+    );
+  }
+}
+
+/// Ancla al inicio del bloque fijable; reporta la extensión del título grande
+/// (scroll necesario para que el buscador toque la navbar colapsada).
+class _PinThresholdAnchor extends StatefulWidget {
+  const _PinThresholdAnchor({
+    required this.topSpacer,
+    required this.onExtent,
+  });
+
+  final double topSpacer;
+  final ValueChanged<double> onExtent;
+
+  @override
+  State<_PinThresholdAnchor> createState() => _PinThresholdAnchorState();
+}
+
+class _PinThresholdAnchorState extends State<_PinThresholdAnchor> {
+  double? _lastReported;
+  bool _measureScheduled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleMeasure();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PinThresholdAnchor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.topSpacer != widget.topSpacer) {
+      _scheduleMeasure();
+    }
+  }
+
+  void _scheduleMeasure() {
+    if (_measureScheduled) return;
+    _measureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measureScheduled = false;
+      _measure();
+    });
+  }
+
+  void _measure() {
+    if (!mounted) return;
+    final ro = context.findRenderObject();
+    if (ro == null || !ro.attached) return;
+    final viewport = RenderAbstractViewport.maybeOf(ro);
+    if (viewport == null) return;
+
+    final offsetToViewportTop =
+        viewport.getOffsetToReveal(ro, 0.0).offset;
+    final extent = (offsetToViewportTop - widget.topSpacer).clamp(0.0, 400.0);
+    if (_lastReported != null && (extent - _lastReported!).abs() <= 0.5) {
+      return;
+    }
+    _lastReported = extent;
+    widget.onExtent(extent);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Cada rebuild del header (p. ej. al cargar conteos) vuelve a medir.
+    _scheduleMeasure();
+    return const SizedBox(width: double.infinity, height: 0);
+  }
+}
+
 /// Pantalla scrollable con overlay colapsable.
 class CollapsingScrollScaffold extends StatefulWidget {
   const CollapsingScrollScaffold({
@@ -225,6 +344,9 @@ class CollapsingScrollScaffold extends StatefulWidget {
     this.alwaysShowActions = false,
     this.topBanner,
     this.onRefresh,
+    /// Si cambia (p. ej. query/filtro), el scroll vuelve arriba para no dejar
+    /// filas “volando” con el offset anterior.
+    this.scrollResetToken,
   }) : assert(pinnedSearch == null || pinnedContent == null);
 
   final String title;
@@ -247,8 +369,12 @@ class CollapsingScrollScaffold extends StatefulWidget {
   final bool alwaysShowActions;
   final Widget? topBanner;
   final Future<void> Function()? onRefresh;
+  final Object? scrollResetToken;
 
   Widget? get effectivePinnedContent => pinnedContent ?? pinnedSearch;
+
+  /// Padding idéntico in-flow y fijado (evita saltos de chips/buscador).
+  static const pinnedPadding = EdgeInsets.fromLTRB(20, 4, 20, 8);
 
   @override
   State<CollapsingScrollScaffold> createState() =>
@@ -257,25 +383,146 @@ class CollapsingScrollScaffold extends StatefulWidget {
 
 class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
   final ValueNotifier<double> _scrollY = ValueNotifier(0);
-  bool _contentPinned = false;
-  static const _pinAfter = 48.0;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey<NestedScrollViewState> _nestedKey =
+      GlobalKey<NestedScrollViewState>();
+
+  /// Extensión del título grande: el buscador se fija al alcanzarla.
+  double _collapseExtent = 48.0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Escucha el scroll exterior (NestedScrollView) o el único CustomScrollView.
+    // Así el pull-to-refresh del body no reinicia el offset del overlay.
+    _scrollController.addListener(_handleScroll);
+  }
+
+  @override
+  void didUpdateWidget(covariant CollapsingScrollScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrollResetToken != widget.scrollResetToken) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _resetScroll();
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollY.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  void _onScroll(double y) {
-    if ((y - _scrollY.value).abs() <= 0.5) return;
-    _scrollY.value = y;
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    _onScroll(_scrollController.offset);
+  }
 
-    // Solo reconstruir la lista al cruzar el umbral del contenido fijo.
-    if (widget.effectivePinnedContent == null) return;
-    final pinned = y >= _pinAfter;
-    if (pinned != _contentPinned) {
-      setState(() => _contentPinned = pinned);
+  void _resetScroll() {
+    // Solo resetea offset: el buscador vive siempre en el overlay, así
+    // el TextField no se desmonta y el teclado/foco se mantienen.
+    //
+    // El inner se resetea primero (por si hubiera un NestedScrollView, cuyo
+    // coordinador re-empuja el outer si el inner sigue scrolleado) y _scrollY
+    // toma el offset real, no un 0 asumido, para no desincronizarse de la lista.
+    final inner = _nestedKey.currentState?.innerController;
+    if (inner != null && inner.hasClients) {
+      inner.jumpTo(0);
     }
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+    _scrollY.value =
+        _scrollController.hasClients ? _scrollController.offset : 0;
+  }
+
+  void _onCollapseExtent(double extent) {
+    if ((extent - _collapseExtent).abs() <= 0.5) return;
+    setState(() => _collapseExtent = extent);
+  }
+
+  void _onScroll(double y) {
+    // Umbral bajo para que el fade del overlay se sienta fluido a 120 Hz.
+    if ((y - _scrollY.value).abs() <= 0.1) return;
+    _scrollY.value = y;
+  }
+
+  List<Widget> _pinnedHeaderSlivers(CollapsingNavMetrics metrics) {
+    final header = widget.slivers.isEmpty ? null : widget.slivers.first;
+    return [
+      ?header,
+      // Ancla justo encima del bloque fijable → extent = alto del título.
+      SliverToBoxAdapter(
+        child: _PinThresholdAnchor(
+          topSpacer: metrics.barHeight,
+          onExtent: _onCollapseExtent,
+        ),
+      ),
+      // Solo reserva espacio: el buscador real vive en el Stack para no
+      // recrear el TextField al fijar/desfijar (y al resetear el scroll).
+      SliverToBoxAdapter(
+        child: SizedBox(height: widget.pinnedContentHeight),
+      ),
+    ];
+  }
+
+  List<Widget> _listSlivers() {
+    if (widget.slivers.length <= 1) return const <Widget>[];
+    return widget.slivers.sublist(1);
+  }
+
+  static const _scrollPhysics = BouncingScrollPhysics(
+    parent: AlwaysScrollableScrollPhysics(),
+  );
+
+  Widget _buildScrollable({
+    required CollapsingNavMetrics metrics,
+    required bool hasPinnedContent,
+  }) {
+    final topSpacer = [
+      SliverToBoxAdapter(child: SizedBox(height: metrics.barHeight)),
+    ];
+    final bottomSpacer = const [
+      SliverToBoxAdapter(child: SizedBox(height: 120)),
+    ];
+
+    // Un único CustomScrollView (sin NestedScrollView): con contenido más corto
+    // que la pantalla el maxScrollExtent es 0, así el título/lista no pueden
+    // colapsar dejando el único ítem escondido tras la navbar. El NestedScrollView
+    // colapsaba su cabecera siempre, sin importar el largo del cuerpo.
+    final List<Widget> contentSlivers;
+    if (!hasPinnedContent) {
+      contentSlivers = widget.slivers;
+    } else {
+      contentSlivers = [
+        ..._pinnedHeaderSlivers(metrics),
+        ..._listSlivers(),
+      ];
+    }
+
+    final scrollView = CustomScrollView(
+      controller: _scrollController,
+      physics: _scrollPhysics,
+      slivers: [
+        ...topSpacer,
+        ...contentSlivers,
+        ...bottomSpacer,
+      ],
+    );
+
+    if (widget.onRefresh != null) {
+      return RefreshIndicator(
+        color: AppColors.primary,
+        edgeOffset: metrics.barHeight,
+        onRefresh: widget.onRefresh!,
+        child: scrollView,
+      );
+    }
+    return scrollView;
   }
 
   @override
@@ -283,42 +530,6 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
     final metrics = CollapsingNavMetrics(context);
     final pinnedContent = widget.effectivePinnedContent;
     final hasPinnedContent = pinnedContent != null;
-
-    final List<Widget> contentSlivers;
-    if (!hasPinnedContent) {
-      contentSlivers = widget.slivers;
-    } else {
-      final header = widget.slivers.isEmpty ? null : widget.slivers.first;
-      final rest = widget.slivers.length <= 1
-          ? const <Widget>[]
-          : widget.slivers.sublist(1);
-      contentSlivers = [
-        ?header,
-        SliverToBoxAdapter(
-          child: SizedBox(
-            height: widget.pinnedContentHeight,
-            child: _contentPinned
-                ? null
-                : Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                    child: pinnedContent,
-                  ),
-          ),
-        ),
-        ...rest,
-      ];
-    }
-
-    final scrollView = CustomScrollView(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
-      slivers: [
-        SliverToBoxAdapter(child: SizedBox(height: metrics.barHeight)),
-        ...contentSlivers,
-        const SliverToBoxAdapter(child: SizedBox(height: 120)),
-      ],
-    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -335,61 +546,71 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
         children: [
           ?widget.topBanner,
           Expanded(
-            child: NotificationListener<ScrollNotification>(
-              onNotification: (n) {
-                if (n.metrics.axis == Axis.vertical) {
-                  _onScroll(n.metrics.pixels);
-                }
-                return false;
-              },
-              child: Stack(
-                children: [
-                  if (widget.onRefresh != null)
-                    RefreshIndicator(
-                      color: AppColors.primary,
-                      edgeOffset: metrics.barHeight,
-                      onRefresh: widget.onRefresh!,
-                      child: scrollView,
-                    )
-                  else
-                    scrollView,
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: RepaintBoundary(
-                      child: ValueListenableBuilder<double>(
-                        valueListenable: _scrollY,
-                        builder: (context, scrollY, _) {
-                          final overlayH =
-                              hasPinnedContent && scrollY >= _pinAfter
-                              ? metrics.barHeight + widget.pinnedContentHeight
-                              : metrics.barHeight;
-                          return CollapsingNavOverlay(
-                            scrollOffset: scrollY,
-                            title: widget.title,
-                            style: widget.style,
-                            extendedHeight: overlayH,
-                            leading: widget.overlayLeading,
-                            trailing: widget.overlayTrailing,
-                            alwaysShowActions: widget.alwaysShowActions,
-                          );
-                        },
-                      ),
+            child: Stack(
+              children: [
+                _buildScrollable(
+                  metrics: metrics,
+                  hasPinnedContent: hasPinnedContent,
+                ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: RepaintBoundary(
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _scrollY,
+                      builder: (context, scrollY, _) {
+                        final overlayH =
+                            hasPinnedContent &&
+                                scrollY >= _collapseExtent
+                            ? metrics.barHeight +
+                                  widget.pinnedContentHeight
+                            : metrics.barHeight;
+                        return CollapsingNavOverlay(
+                          scrollOffset: scrollY,
+                          title: widget.title,
+                          style: widget.style,
+                          extendedHeight: overlayH,
+                          collapseExtent: _collapseExtent,
+                          leading: widget.overlayLeading,
+                          trailing: widget.overlayTrailing,
+                          alwaysShowActions: widget.alwaysShowActions,
+                        );
+                      },
                     ),
                   ),
-                  if (_contentPinned)
-                    Positioned(
-                      top: metrics.barHeight + 4,
-                      left: 20,
-                      right: 20,
-                      child: SizedBox(
-                        height: widget.pinnedContentHeight - 8,
+                ),
+                if (hasPinnedContent)
+                  Positioned.fill(
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _scrollY,
+                      builder: (context, scrollY, child) {
+                        // Sigue el hueco del spacer hasta fijarse bajo la navbar.
+                        // Sin tope superior: en overscroll (pull-to-refresh,
+                        // scrollY negativo) acompaña al contenido hacia abajo en
+                        // vez de quedarse clavado mientras el resto hace rubber-band.
+                        final top = metrics.barHeight +
+                            (_collapseExtent - scrollY)
+                                .clamp(0.0, double.infinity);
+                        return Stack(
+                          children: [
+                            Positioned(
+                              top: top,
+                              left: 0,
+                              right: 0,
+                              height: widget.pinnedContentHeight,
+                              child: child!,
+                            ),
+                          ],
+                        );
+                      },
+                      child: Padding(
+                        padding: CollapsingScrollScaffold.pinnedPadding,
                         child: pinnedContent,
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ],

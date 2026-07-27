@@ -1,18 +1,21 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../features/auth/providers/auth_providers.dart';
 import '../theme/app_theme.dart';
+import 'app_widgets.dart';
+import 'permissions_bootstrap.dart';
 import 'pressable.dart';
 
 /// Tab bar frosted con pill activo (HANDOFF §4.3).
 ///
-/// No envuelve [navigationShell] en PageTransitionSwitcher: go_router usa
-/// un GlobalKey interno y eso provoca Duplicate GlobalKey.
+/// Un único [PopScope] en el shell (no por rama) evita que el diálogo de
+/// salida deje de aparecer tras cambiar de tab o volver de rutas hijas.
 class MainShellScaffold extends ConsumerWidget {
   const MainShellScaffold({super.key, required this.navigationShell});
 
@@ -25,7 +28,7 @@ class MainShellScaffold extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final esAdmin = ref.watch(isAdminProvider);
+    final puedeGestionarUsuarios = ref.watch(canManageUsersProvider);
     final branchActual = navigationShell.currentIndex;
 
     final tabs = <_TabItem>[
@@ -44,7 +47,7 @@ class MainShellScaffold extends ConsumerWidget {
         label: 'Leads',
         branch: _branchCapturador,
       ),
-      if (esAdmin)
+      if (puedeGestionarUsuarios)
         const _TabItem(
           icon: Symbols.group_rounded,
           label: 'Usuarios',
@@ -56,45 +59,62 @@ class MainShellScaffold extends ConsumerWidget {
     final selectedIndex = selectedVisual < 0 ? 0 : selectedVisual;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    return Scaffold(
-      body: navigationShell,
-      extendBody: true,
-      bottomNavigationBar: Material(
-        color: Colors.transparent,
-        child: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.94),
-                border: const Border(
-                  top: BorderSide(color: AppColors.border, width: 1),
-                ),
-              ),
-              padding: EdgeInsets.only(bottom: bottomInset),
-              child: SafeArea(
-                top: false,
-                bottom: false,
-                child: SizedBox(
-                  height: AppSpacing.shellTabBarHeight,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      for (var i = 0; i < tabs.length; i++)
-                        Expanded(
-                          child: _TabButton(
-                            item: tabs[i],
-                            selected: i == selectedIndex,
-                            onTap: () {
-                              navigationShell.goBranch(
-                                tabs[i].branch,
-                                initialLocation: tabs[i].branch ==
-                                    navigationShell.currentIndex,
-                              );
-                            },
-                          ),
-                        ),
-                    ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final salir = await confirmDialog(
+          context,
+          title: 'Salir de la aplicación',
+          message: '¿Deseas cerrar Nexus?',
+          confirmLabel: 'Salir',
+        );
+        if (salir && context.mounted) {
+          SystemNavigator.pop();
+        }
+      },
+      child: PermissionsBootstrap(
+        child: Scaffold(
+          body: navigationShell,
+          extendBody: true,
+          bottomNavigationBar: Material(
+            color: Colors.transparent,
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withValues(alpha: 0.94),
+                    border: const Border(
+                      top: BorderSide(color: AppColors.border, width: 1),
+                    ),
+                  ),
+                  padding: EdgeInsets.only(bottom: bottomInset),
+                  child: SafeArea(
+                    top: false,
+                    bottom: false,
+                    child: SizedBox(
+                      height: AppSpacing.shellTabBarHeight,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          for (var i = 0; i < tabs.length; i++)
+                            Expanded(
+                              child: _TabButton(
+                                item: tabs[i],
+                                selected: i == selectedIndex,
+                                onTap: () {
+                                  navigationShell.goBranch(
+                                    tabs[i].branch,
+                                    initialLocation: tabs[i].branch ==
+                                        navigationShell.currentIndex,
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),

@@ -23,6 +23,7 @@ class ListarEventosScreen extends ConsumerStatefulWidget {
 class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+  String _filtro = 'Todos';
 
   @override
   void dispose() {
@@ -31,9 +32,15 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
   }
 
   List<Evento> _filtrar(List<Evento> eventos) {
+    final porEstado = switch (_filtro) {
+      'Activos' => eventos.where((e) => !e.yaOcurrio).toList(),
+      'Finalizados' => eventos.where((e) => e.yaOcurrio).toList(),
+      _ => eventos,
+    };
+
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return eventos;
-    return eventos.where((e) {
+    if (q.isEmpty) return porEstado;
+    return porEstado.where((e) {
       final lugar = (e.lugar ?? e.pais ?? '').toLowerCase();
       return e.nombre.toLowerCase().contains(q) || lugar.contains(q);
     }).toList();
@@ -84,49 +91,95 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
     );
   }
 
+  Widget _buildPinnedControls({required bool puedeCrear}) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              Expanded(child: _buildSearchField()),
+              if (puedeCrear) ...[
+                const SizedBox(width: 8),
+                PinnedSearchActionButton(
+                  icon: Symbols.add_rounded,
+                  onTap: () => context.push(RoutePaths.crearEvento),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: FilterChipBar(
+                options: const ['Todos', 'Activos', 'Finalizados'],
+                selected: _filtro,
+                onSelected: (v) => setState(() => _filtro = v),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader({int? total, int? proximos}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Eventos', style: Theme.of(context).textTheme.displaySmall),
+        const SizedBox(height: 2),
+        const Text(
+          'Registre eventos, invite a sus asistentes y acredite su entrada al evento',
+          style: TextStyle(
+            fontSize: 13,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        if (total != null && proximos != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            '$total eventos · $proximos próximos',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final eventosAsync = ref.watch(eventosListProvider);
-    final esAdmin = ref.watch(isAdminProvider);
+
+    final puedeCrear = ref.watch(canCreateContentProvider);
 
     return CollapsingScrollScaffold(
       title: 'Eventos',
       onRefresh: () async => ref.invalidate(eventosListProvider),
-      pinnedSearch: _buildSearchField(),
-      floatingActionButton: esAdmin
-          ? NexusExtendedFab(
-              label: 'Nuevo evento',
-              icon: Symbols.add_rounded,
-              onPressed: () => context.push(RoutePaths.crearEvento),
-            )
-          : null,
+      pinnedContent: _buildPinnedControls(puedeCrear: puedeCrear),
+      pinnedContentHeight: 112,
+      scrollResetToken: '$_query|$_filtro',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: eventosAsync.when(
-              loading: () => const SizedBox.shrink(),
-              error: (_, _) => const SizedBox.shrink(),
+              loading: () => _buildHeader(),
+              error: (_, _) => _buildHeader(),
               data: (eventos) {
                 final proximos =
                     eventos.where((e) => !e.yaOcurrio && e.activo).length;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Eventos',
-                      style: Theme.of(context).textTheme.displaySmall,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${eventos.length} eventos · $proximos próximos',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
+                return _buildHeader(
+                  total: eventos.length,
+                  proximos: proximos,
                 );
               },
             ),
@@ -157,12 +210,16 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
               ];
             }
             if (filtrados.isEmpty) {
+              final porBusqueda = _query.trim().isNotEmpty;
               return [
-                const SliverFillRemaining(
+                SliverFillRemaining(
                   child: EmptyStateView(
-                    icon: Icons.search_off_rounded,
-                    message:
-                        'No hay eventos que coincidan con la búsqueda.',
+                    icon: porBusqueda
+                        ? Icons.search_off_rounded
+                        : Icons.filter_list_off_rounded,
+                    message: porBusqueda
+                        ? 'No hay eventos que coincidan con la búsqueda.'
+                        : 'No hay eventos en este filtro.',
                   ),
                 ),
               ];

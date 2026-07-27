@@ -50,6 +50,7 @@ lib/
     kpi/
     exportacion/
     usuarios/
+    updates/      # OTA vía GitHub Releases (Android)
 ```
 
 - **Sistema de diseño**: `core/theme/app_theme.dart` define los tokens
@@ -141,8 +142,57 @@ lib/
 - Subir `Plantilla_Registro.xlsx` al bucket `plantillas` de Storage (lo
   referencia `StorageRepository.urlPlantillaRegistro`, pero el archivo en
   sí no se genera desde este repo).
-- Las Edge Functions `reset-password` y `enviar-qr` se invocan desde la app
-  (recuperación de contraseña y envío de QR por email) pero su código Deno
-  no vive en este repo: deben desplegarse en el proyecto Supabase
-  (`supabase functions deploy`). Mientras no existan, esos dos botones
-  fallarán con un error controlado; el resto de la app no depende de ellas.
+- Las Edge Functions de correo viven en `supabase/functions/`:
+  - `crear-usuario` — alta de usuario por admin + email de credenciales
+  - `regenerar-password-usuario` — nueva password por admin + email
+  - `reset-password` — olvido de contraseña: autogenera y envía por email
+  - `enviar-qr` — QR de acreditación (ya desplegada; usa Brevo)
+  El envío de credenciales reutiliza el secret existente `BREVO_API_KEY`
+  (mismo mailer que `enviar-qr` / `reset-password`).
+  Desplegar con `supabase functions deploy`. Para `reset-password` usar
+  `--no-verify-jwt` (se invoca sin sesión). El esquema completo (tablas,
+  RLS, RPCs) vive en `supabase/schema.sql`.
+
+## Actualizaciones OTA (Android / GitHub Releases)
+
+Nexus se distribuye de forma privada vía **GitHub Releases** (sin Play Store
+ni Supabase Storage). En Android, tras el login la app consulta:
+
+`GET https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest`
+
+y ofrece instalar el APK si el `tag_name` (SemVer) es mayor que la versión
+instalada (`package_info_plus` ↔ `pubspec.yaml`).
+
+### Convención de Release
+
+| Elemento | Contrato |
+|----------|----------|
+| Tag | `vMAJOR.MINOR.PATCH` (ej. `v1.2.0`) |
+| `pubspec.yaml` | `version: MAJOR.MINOR.PATCH+BUILD` **debe coincidir** con el tag (sin `v`) |
+| Asset APK | `android-NEXUS-vMAJOR.MINOR.PATCH.apk` |
+| Force update | Incluir la línea `[FORCE_UPDATE]` en el body de la Release |
+
+Si el body contiene `[FORCE_UPDATE]`, el diálogo no se puede cerrar ni
+posponer hasta instalar.
+
+### Firma release (obligatoria para upgrades reales)
+
+1. Genera un keystore (una sola vez) y guárdalo fuera de git.
+2. Copia `android/key.properties.example` → `android/key.properties` y completa.
+3. En CI, configura secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
+   `KEY_PASSWORD`, `KEY_ALIAS`.
+
+Sin keystore, Gradle firma con debug (útil en local; **no** para distribución).
+
+### Publicar una versión
+
+1. Sube `pubspec.yaml` (`version: X.Y.Z+N`) y haz merge a `main`.
+2. Crea y pushea el tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. El workflow [`.github/workflows/release-android.yml`](.github/workflows/release-android.yml)
+   valida que pubspec == tag, construye el APK y crea/actualiza el Release
+   con el asset `android-NEXUS-vX.Y.Z.apk`.
+4. (Opcional) Edita las notas del Release y agrega `[FORCE_UPDATE]` si aplica.
+
+### Variables `.env`
+
+Ver `.env.example`: `GITHUB_OWNER`, `GITHUB_REPO`, `UPDATE_CHANNEL`.

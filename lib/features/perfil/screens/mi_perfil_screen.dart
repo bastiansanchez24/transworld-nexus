@@ -1,0 +1,515 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/require_permission.dart';
+import '../../../data/models/lead.dart';
+import '../../../data/models/perfil.dart';
+import '../../../data/repositories/auth_repository.dart';
+import '../../auth/providers/auth_providers.dart';
+import '../providers/perfil_providers.dart';
+import '../widgets/perfil_expandable_section.dart';
+
+class MiPerfilScreen extends StatelessWidget {
+  const MiPerfilScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return RequirePermission(
+      allowed: (p) => p.usesFullShell,
+      deniedMessage: 'Mi Perfil solo está disponible para usuarios internos.',
+      builder: (context) => const _MiPerfilBody(),
+    );
+  }
+}
+
+class _MiPerfilBody extends ConsumerStatefulWidget {
+  const _MiPerfilBody();
+
+  @override
+  ConsumerState<_MiPerfilBody> createState() => _MiPerfilBodyState();
+}
+
+class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
+  final _formKey = GlobalKey<FormState>();
+  final _nombreController = TextEditingController();
+
+  bool _leadsExpandido = false;
+  bool _datosExpandido = false;
+  bool _nombreCargado = false;
+  bool _guardando = false;
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _guardarNombre() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _guardando = true);
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .actualizarNombrePropio(_nombreController.text.trim());
+      ref.invalidate(currentPerfilProvider);
+      if (mounted) {
+        showAppSnackBar(context, 'Nombre actualizado.');
+      }
+    } on PostgrestException catch (e) {
+      if (mounted) showAppSnackBar(context, e.message, isError: true);
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final perfilAsync = ref.watch(currentPerfilProvider);
+    final statsAsync = ref.watch(miPerfilStatsProvider);
+    final leadsAsync = ref.watch(misLeadsProvider);
+    final email =
+        ref.watch(authRepositoryProvider).emailSesionActual ?? 'Sin correo';
+
+    return AppScaffold(
+      title: 'Mi Perfil',
+      body: perfilAsync.when(
+        loading: () => const LoadingView(),
+        error: (e, _) => ErrorView(
+          message: 'No se pudo cargar tu perfil.',
+          onRetry: () => ref.invalidate(currentPerfilProvider),
+        ),
+        data: (perfil) {
+          if (perfil == null) {
+            return const EmptyStateView(
+              icon: Icons.person_off_outlined,
+              message: 'No se encontró tu perfil.',
+            );
+          }
+
+          if (!_nombreCargado) {
+            _nombreController.text = perfil.nombreCompleto;
+            _nombreCargado = true;
+          }
+
+          return RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () async {
+              ref.invalidate(currentPerfilProvider);
+              ref.invalidate(miPerfilStatsProvider);
+              ref.invalidate(misLeadsProvider);
+              await Future.wait([
+                ref.read(currentPerfilProvider.future),
+                ref.read(miPerfilStatsProvider.future),
+                ref.read(misLeadsProvider.future),
+              ]);
+            },
+            child: ListView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+              children: [
+                _PerfilHeader(perfil: perfil, email: email),
+                const SizedBox(height: AppSpacing.sectionGap),
+                const SectionLabel('Resumen'),
+                const SizedBox(height: 12),
+                _KpiSection(statsAsync: statsAsync),
+                const SizedBox(height: AppSpacing.sectionGap),
+                PerfilExpandableSection(
+                  icon: Symbols.group_rounded,
+                  title: 'Detalle de Leads Capturados',
+                  subtitle: leadsAsync.maybeWhen(
+                    data: (leads) => leads.isEmpty
+                        ? 'Sin registros'
+                        : '${leads.length} lead${leads.length == 1 ? '' : 's'}',
+                    orElse: () => null,
+                  ),
+                  expanded: _leadsExpandido,
+                  onToggle: () =>
+                      setState(() => _leadsExpandido = !_leadsExpandido),
+                  child: _LeadsDetalle(leadsAsync: leadsAsync),
+                ),
+                const SizedBox(height: 12),
+                PerfilExpandableSection(
+                  icon: Symbols.badge_rounded,
+                  title: 'Mis Datos de Usuario',
+                  subtitle: 'Nombre, correo y tipo de cuenta',
+                  expanded: _datosExpandido,
+                  onToggle: () =>
+                      setState(() => _datosExpandido = !_datosExpandido),
+                  child: _DatosUsuarioForm(
+                    formKey: _formKey,
+                    nombreController: _nombreController,
+                    email: email,
+                    rolLabel: perfil.rol.label,
+                    guardando: _guardando,
+                    onGuardar: _guardarNombre,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PerfilHeader extends StatelessWidget {
+  const _PerfilHeader({required this.perfil, required this.email});
+
+  final Perfil perfil;
+  final String email;
+
+  @override
+  Widget build(BuildContext context) {
+    return StaggeredListItem(
+      index: 0,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppColors.shadowRest,
+        ),
+        child: Row(
+          children: [
+            AvatarInitials(name: perfil.nombreCompleto, size: 52, index: 0),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    perfil.nombreCompleto,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.ink,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    email,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  StatusChip(
+                    label: perfil.rol.label,
+                    variant: StatusChipVariant.navy,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KpiSection extends ConsumerWidget {
+  const _KpiSection({required this.statsAsync});
+
+  final AsyncValue<MiPerfilStats> statsAsync;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return statsAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: LoadingView(message: 'Cargando resumen...'),
+      ),
+      error: (e, _) => ErrorView(
+        message: 'No se pudieron cargar los indicadores.',
+        onRetry: () => ref.invalidate(miPerfilStatsProvider),
+      ),
+      data: (stats) {
+        final cards = [
+          (
+            '${stats.leadsCapturados}',
+            'Leads capturados',
+            Symbols.person_search_rounded,
+            AppColors.tintNavy,
+            AppColors.primary,
+          ),
+          (
+            '${stats.asistentesRegistrados}',
+            'Asistentes registrados',
+            Symbols.group_rounded,
+            AppColors.successTint,
+            AppColors.success,
+          ),
+          (
+            '${stats.acreditaciones}',
+            'Acreditaciones',
+            Symbols.verified_rounded,
+            AppColors.successTint,
+            AppColors.success,
+          ),
+          (
+            '${stats.eventosCreados}',
+            'Eventos creados',
+            Symbols.calendar_month_rounded,
+            AppColors.warningTint,
+            AppColors.warning,
+          ),
+        ];
+
+        return Column(
+          children: [
+            for (var row = 0; row < 2; row++) ...[
+              if (row > 0) const SizedBox(height: 12),
+              Row(
+                children: [
+                  for (var col = 0; col < 2; col++) ...[
+                    if (col > 0) const SizedBox(width: 12),
+                    Expanded(
+                      child: StaggeredListItem(
+                        index: row * 2 + col + 1,
+                        child: StatCard(
+                          value: cards[row * 2 + col].$1,
+                          label: cards[row * 2 + col].$2,
+                          icon: cards[row * 2 + col].$3,
+                          tint: cards[row * 2 + col].$4,
+                          iconColor: cards[row * 2 + col].$5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LeadsDetalle extends ConsumerWidget {
+  const _LeadsDetalle({required this.leadsAsync});
+
+  final AsyncValue<List<Lead>> leadsAsync;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return leadsAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: LoadingView(),
+      ),
+      error: (e, _) => ErrorView(
+        message: 'No se pudieron cargar tus leads.',
+        onRetry: () => ref.invalidate(misLeadsProvider),
+      ),
+      data: (leads) {
+        if (leads.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: EmptyStateView(
+              icon: Icons.person_off_outlined,
+              message: 'Aún no has capturado leads.',
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            for (var i = 0; i < leads.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              _LeadResumenTile(lead: leads[i], index: i),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LeadResumenTile extends StatelessWidget {
+  const _LeadResumenTile({required this.lead, required this.index});
+
+  final Lead lead;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final empresa = (lead.empresa == null || lead.empresa!.trim().isEmpty)
+        ? 'Sin empresa'
+        : lead.empresa!.trim();
+    final createdAt = lead.createdAt?.toLocal();
+    final fecha = createdAt == null
+        ? '—'
+        : DateFormat('dd/MM/yyyy').format(createdAt);
+    final hora =
+        createdAt == null ? '—' : DateFormat('HH:mm').format(createdAt);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          AvatarInitials(
+            name: lead.nombreCompleto,
+            size: 40,
+            index: index,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  lead.nombreCompleto,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  empresa,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$fecha · $hora',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DatosUsuarioForm extends StatelessWidget {
+  const _DatosUsuarioForm({
+    required this.formKey,
+    required this.nombreController,
+    required this.email,
+    required this.rolLabel,
+    required this.guardando,
+    required this.onGuardar,
+  });
+
+  final GlobalKey<FormState> formKey;
+  final TextEditingController nombreController;
+  final String email;
+  final String rolLabel;
+  final bool guardando;
+  final VoidCallback onGuardar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _FieldLabel('Nombre'),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: nombreController,
+            enabled: !guardando,
+            decoration: const InputDecoration(
+              hintText: 'Tu nombre completo',
+            ),
+            textInputAction: TextInputAction.done,
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+          ),
+          const SizedBox(height: 14),
+          const _FieldLabel('Correo electrónico'),
+          const SizedBox(height: 6),
+          TextFormField(
+            initialValue: email,
+            readOnly: true,
+            enableInteractiveSelection: true,
+            decoration: const InputDecoration(
+              hintText: 'Correo de la cuenta',
+              helperText: 'El correo pertenece a tu cuenta y no se puede cambiar.',
+            ),
+          ),
+          const SizedBox(height: 14),
+          const _FieldLabel('Tipo de usuario'),
+          const SizedBox(height: 6),
+          TextFormField(
+            initialValue: rolLabel,
+            readOnly: true,
+            decoration: const InputDecoration(
+              hintText: 'Rol',
+            ),
+          ),
+          const SizedBox(height: 18),
+          PrimaryGradientButton(
+            label: 'Guardar cambios',
+            loading: guardando,
+            onPressed: guardando ? null : onGuardar,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: AppColors.ink,
+      ),
+    );
+  }
+}

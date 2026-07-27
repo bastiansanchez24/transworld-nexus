@@ -5,9 +5,9 @@ import '../../../../core/theme/app_theme.dart';
 /// Tokens y overrides de tema exclusivos del flujo de autenticación.
 ///
 /// El login usa una variante "premium" del sistema de diseño global
-/// (campos con relleno gris claro y sin borde en reposo, radios más
-/// generosos, controles de 56 px) sin contaminar el `ThemeData` del resto
-/// de la app: se aplica localmente con `Theme(data: LoginTheme.of(context))`.
+/// (campos con relleno blanco y borde sutil, radios más generosos,
+/// controles de 56 px) sin contaminar el `ThemeData` del resto de la app:
+/// se aplica localmente con `Theme(data: LoginTheme.of(context))`.
 class LoginTheme {
   LoginTheme._();
 
@@ -16,8 +16,8 @@ class LoginTheme {
   static const heroRadius = 28.0;
   static const controlHeight = 56.0;
 
-  /// Fondo gris muy claro de los campos (plan: "fondo gris muy claro").
-  static const fieldFill = AppColors.background;
+  /// Fondo blanco de los campos: contraste claro contra [AppColors.background].
+  static const fieldFill = AppColors.surface;
 
   /// Duración/curva únicas de las microinteracciones del flujo (plan:
   /// 250–350 ms, easeOutCubic).
@@ -44,8 +44,8 @@ class LoginTheme {
         hintStyle: const TextStyle(color: AppColors.textSecondary),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-        border: _border(Colors.transparent, 0),
-        enabledBorder: _border(Colors.transparent, 0),
+        border: _border(AppColors.border, 1),
+        enabledBorder: _border(AppColors.border, 1),
         focusedBorder: _border(AppColors.primaryDeep, 2),
         errorBorder: _border(AppColors.danger, 1.5),
         focusedErrorBorder: _border(AppColors.danger, 2),

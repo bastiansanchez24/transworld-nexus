@@ -5,6 +5,14 @@ import '../../core/constants/supabase_tables.dart';
 import '../models/evento_lead.dart';
 import '../supabase/supabase_client_provider.dart';
 
+/// Escapa comodines de ILIKE para forzar coincidencia literal.
+String _escapeIlikeLiteral(String raw) {
+  return raw
+      .replaceAll(r'\', r'\\')
+      .replaceAll('%', r'\%')
+      .replaceAll('_', r'\_');
+}
+
 /// CRUD de eventos del capturador (`public.eventos_leads`).
 class EventosLeadsRepository {
   EventosLeadsRepository(this._client);
@@ -21,6 +29,37 @@ class EventosLeadsRepository {
           (row) => EventoLead.fromMap(Map<String, dynamic>.from(row as Map)),
         )
         .toList();
+  }
+
+  /// Busca campaña por nombre exacto (case-insensitive), sin comodines ILIKE.
+  /// Si hay homónimos legacy, devuelve la más antigua (`created_at`).
+  Future<EventoLead?> buscarPorNombre(String nombre) async {
+    final nombreNormalizado = nombre.trim();
+    if (nombreNormalizado.isEmpty) return null;
+
+    final rows = await _client
+        .from(SupabaseTables.eventosLeads)
+        .select()
+        .ilike('nombre', _escapeIlikeLiteral(nombreNormalizado));
+
+    final lower = nombreNormalizado.toLowerCase();
+    final matches = rows
+        .map(
+          (row) => EventoLead.fromMap(Map<String, dynamic>.from(row as Map)),
+        )
+        .where((c) => c.nombre.trim().toLowerCase() == lower)
+        .toList();
+
+    if (matches.isEmpty) return null;
+    matches.sort((a, b) {
+      final ac = a.createdAt;
+      final bc = b.createdAt;
+      if (ac != null && bc != null) return ac.compareTo(bc);
+      if (ac != null) return -1;
+      if (bc != null) return 1;
+      return a.id.compareTo(b.id);
+    });
+    return matches.first;
   }
 
   Future<EventoLead> obtenerPorId(String id) async {

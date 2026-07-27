@@ -15,8 +15,9 @@ class SupabaseTables {
   static const eventosLeads = 'eventos_leads';
   static const leads = 'leads';
 
-  /// Perfil sistema al que se reasignan `acreditado_por` al eliminar un
-  /// usuario. No debe listarse en la UI de gestión.
+  /// Perfil sistema al que se reasignan las FKs históricas
+  /// (`acreditado_por`, `ingresado_por`, `creado_por`, `perfil_id` de
+  /// leads) al eliminar un usuario. No debe listarse en la UI de gestión.
   static const perfilUsuarioEliminadoId =
       '00000000-0000-0000-0000-000000000001';
 }
@@ -28,6 +29,8 @@ class SupabaseRpc {
   static const verificarUsuarioRegistrado = 'verificar_usuario_registrado';
   static const actualizarRolUsuario = 'rpe_actualizar_rol_usuario';
   static const eliminarUsuario = 'rpe_eliminar_usuario';
+  static const obtenerEmailUsuario = 'rpe_obtener_email_usuario';
+  static const sincronizarEventosExterno = 'rpe_sincronizar_eventos_externo';
 }
 
 class SupabaseFunctions {
@@ -35,4 +38,6 @@ class SupabaseFunctions {
 
   static const resetPassword = 'reset-password';
   static const enviarQr = 'enviar-qr';
+  static const crearUsuario = 'crear-usuario';
+  static const regenerarPasswordUsuario = 'regenerar-password-usuario';
 }

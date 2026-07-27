@@ -1,0 +1,111 @@
+import '../../core/utils/version_utils.dart';
+
+/// Asset de una GitHub Release (APK u otro).
+class GitHubReleaseAsset {
+  const GitHubReleaseAsset({
+    required this.name,
+    required this.size,
+    required this.browserDownloadUrl,
+    this.digest,
+  });
+
+  final String name;
+  final int size;
+  final String browserDownloadUrl;
+
+  /// Valor crudo de la API (`sha256:...`) o `null`.
+  final String? digest;
+
+  String? get sha256Hex => parseSha256Digest(digest);
+
+  bool get isApk => name.toLowerCase().endsWith('.apk');
+
+  bool get isNexusApk {
+    final lower = name.toLowerCase();
+    return lower.endsWith('.apk') && lower.contains('nexus');
+  }
+
+  factory GitHubReleaseAsset.fromJson(Map<String, dynamic> json) {
+    return GitHubReleaseAsset(
+      name: json['name'] as String? ?? '',
+      size: (json['size'] as num?)?.toInt() ?? 0,
+      browserDownloadUrl: json['browser_download_url'] as String? ?? '',
+      digest: json['digest'] as String?,
+    );
+  }
+}
+
+/// Representación tipada de `GET /repos/{owner}/{repo}/releases/latest`.
+class GitHubRelease {
+  const GitHubRelease({
+    required this.tagName,
+    required this.name,
+    required this.body,
+    required this.prerelease,
+    required this.assets,
+  });
+
+  final String tagName;
+  final String name;
+  final String body;
+  final bool prerelease;
+  final List<GitHubReleaseAsset> assets;
+
+  bool get isForced => isForcedUpdate(body);
+
+  String get notesForDisplay => releaseNotesForDisplay(body);
+
+  /// SemVer derivado de [tagName], o `null` si el tag no es parseable.
+  String? get versionString {
+    final v = tryParseVersion(tagName);
+    return v?.toString();
+  }
+
+  /// Resuelve el APK de Nexus según el contrato del plan.
+  ///
+  /// 1. Assets `.apk` cuyo nombre contiene `NEXUS`.
+  /// 2. Preferir el que coincide con el tag (`android-NEXUS-vX.Y.Z.apk`).
+  /// 3. Si hay varios, el de mayor [GitHubReleaseAsset.size].
+  GitHubReleaseAsset? resolveNexusApk() {
+    final candidates = assets.where((a) => a.isNexusApk).toList();
+    if (candidates.isEmpty) {
+      final fallback = assets.where((a) => a.isApk).toList();
+      if (fallback.isEmpty) return null;
+      fallback.sort((a, b) => b.size.compareTo(a.size));
+      return fallback.first;
+    }
+
+    final tag = stripVersionPrefix(tagName);
+    final exactName = 'android-NEXUS-v$tag.apk';
+    for (final c in candidates) {
+      if (c.name == exactName) return c;
+    }
+
+    candidates.sort((a, b) => b.size.compareTo(a.size));
+    return candidates.first;
+  }
+
+  factory GitHubRelease.fromJson(Map<String, dynamic> json) {
+    final rawAssets = json['assets'];
+    final assets = <GitHubReleaseAsset>[];
+    if (rawAssets is List) {
+      for (final item in rawAssets) {
+        if (item is Map<String, dynamic>) {
+          assets.add(GitHubReleaseAsset.fromJson(item));
+        } else if (item is Map) {
+          assets.add(
+            GitHubReleaseAsset.fromJson(Map<String, dynamic>.from(item)),
+          );
+        }
+      }
+    }
+
+    return GitHubRelease(
+      tagName: json['tag_name'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      body: json['body'] as String? ?? '',
+      prerelease: json['prerelease'] as bool? ?? false,
+      assets: assets,
+    );
+  }
+}

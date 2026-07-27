@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/models/perfil.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../updates/widgets/update_checker.dart';
 import '../providers/home_dashboard_providers.dart';
 import '../widgets/home_dashboard_section.dart';
 import '../widgets/proximo_evento_card.dart';
@@ -36,56 +38,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        body: Column(
-          children: [
-            const OfflineBanner(),
-            _HeaderPerfil(
-              perfil: perfil,
-              menuAbierto: _menuCuentaAbierto,
-              proximoEvento: proximo,
-              onToggleMenu: () => setState(
-                () => _menuCuentaAbierto = !_menuCuentaAbierto,
-              ),
-              onCerrarSesion: () =>
-                  ref.read(authRepositoryProvider).cerrarSesion(),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                color: AppColors.primary,
-                onRefresh: () async {
-                  ref.invalidate(homeDashboardProvider);
-                  ref.invalidate(currentPerfilProvider);
+      child: UpdateChecker(
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          body: Column(
+            children: [
+              const OfflineBanner(),
+              _HeaderPerfil(
+                perfil: perfil,
+                menuAbierto: _menuCuentaAbierto,
+                proximoEvento: proximo,
+                onToggleMenu: () => setState(
+                  () => _menuCuentaAbierto = !_menuCuentaAbierto,
+                ),
+                onMiPerfil: () {
+                  setState(() => _menuCuentaAbierto = false);
+                  context.push(RoutePaths.perfil);
                 },
-                child: ListView(
-                  physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-                  children: [
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 760),
-                        child: perfilAsync.when(
-                          loading: () => const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 48),
-                            child: LoadingView(),
+                onActualizaciones: () {
+                  setState(() => _menuCuentaAbierto = false);
+                  context.push(RoutePaths.actualizaciones);
+                },
+                onCerrarSesion: () =>
+                    ref.read(authRepositoryProvider).cerrarSesion(),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  color: AppColors.primary,
+                  onRefresh: () async {
+                    ref.invalidate(homeDashboardProvider);
+                    ref.invalidate(currentPerfilProvider);
+                  },
+                  child: ListView(
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+                    children: [
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 760),
+                          child: perfilAsync.when(
+                            loading: () => const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 48),
+                              child: LoadingView(),
+                            ),
+                            error: (e, _) => ErrorView(
+                              message: 'No se pudo cargar tu perfil.',
+                              onRetry: () =>
+                                  ref.invalidate(currentPerfilProvider),
+                            ),
+                            data: (_) => const HomeDashboardSection(),
                           ),
-                          error: (e, _) => ErrorView(
-                            message: 'No se pudo cargar tu perfil.',
-                            onRetry: () =>
-                                ref.invalidate(currentPerfilProvider),
-                          ),
-                          data: (_) => const HomeDashboardSection(),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -98,6 +110,8 @@ class _HeaderPerfil extends StatelessWidget {
     required this.menuAbierto,
     required this.proximoEvento,
     required this.onToggleMenu,
+    required this.onMiPerfil,
+    required this.onActualizaciones,
     required this.onCerrarSesion,
   });
 
@@ -105,6 +119,8 @@ class _HeaderPerfil extends StatelessWidget {
   final bool menuAbierto;
   final Evento? proximoEvento;
   final VoidCallback onToggleMenu;
+  final VoidCallback onMiPerfil;
+  final VoidCallback onActualizaciones;
   final VoidCallback onCerrarSesion;
 
   String get _firstName {
@@ -178,7 +194,7 @@ class _HeaderPerfil extends StatelessWidget {
                         child: Icon(
                           menuAbierto
                               ? Symbols.close_rounded
-                              : Symbols.notifications_rounded,
+                              : Symbols.settings_rounded,
                           color: Colors.white,
                           size: 20,
                         ),
@@ -199,7 +215,11 @@ class _HeaderPerfil extends StatelessWidget {
                           padding: EdgeInsets.only(
                             top: proximoEvento != null ? 12 : 16,
                           ),
-                          child: _MenuCuenta(onCerrarSesion: onCerrarSesion),
+                          child: _MenuCuenta(
+                            onMiPerfil: onMiPerfil,
+                            onActualizaciones: onActualizaciones,
+                            onCerrarSesion: onCerrarSesion,
+                          ),
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -240,15 +260,18 @@ class _HeaderRoleChip extends StatelessWidget {
 }
 
 class _MenuCuenta extends StatelessWidget {
-  const _MenuCuenta({required this.onCerrarSesion});
+  const _MenuCuenta({
+    required this.onMiPerfil,
+    required this.onActualizaciones,
+    required this.onCerrarSesion,
+  });
 
+  final VoidCallback onMiPerfil;
+  final VoidCallback onActualizaciones;
   final VoidCallback onCerrarSesion;
 
   @override
   Widget build(BuildContext context) {
-    void proximamente() =>
-        NexusToast.show(context, 'Disponible próximamente.');
-
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -261,13 +284,13 @@ class _MenuCuenta extends StatelessWidget {
           _CuentaTile(
             icon: Symbols.person_rounded,
             label: 'Mi perfil',
-            onTap: proximamente,
+            onTap: onMiPerfil,
           ),
           const Divider(height: 1, indent: 56, color: AppColors.divider),
           _CuentaTile(
-            icon: Symbols.settings_rounded,
-            label: 'Configuraciones',
-            onTap: proximamente,
+            icon: Symbols.system_update_rounded,
+            label: 'Actualizaciones',
+            onTap: onActualizaciones,
           ),
           const Divider(height: 1, indent: 56, color: AppColors.divider),
           _CuentaTile(

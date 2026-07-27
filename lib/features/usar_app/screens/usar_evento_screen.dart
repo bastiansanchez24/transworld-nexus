@@ -16,6 +16,7 @@ import '../../../data/models/evento.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
+import '../widgets/evento_operativo_sheets.dart';
 
 /// Menú operativo de un evento: equivalente a `usar-app.tsx` / `UsarApp.tsx`
 /// del proyecto legado, rediseñado con hero navy + acciones Nexus.
@@ -32,7 +33,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
   @override
   Widget build(BuildContext context) {
     final eventoAsync = ref.watch(eventoByIdProvider(widget.eventoId));
-    final esAdmin = ref.watch(isAdminProvider);
+    final puedeEditar = ref.watch(canCreateContentProvider);
     final registradosAsync = ref.watch(
       registradosPorEventoProvider(widget.eventoId),
     );
@@ -52,9 +53,10 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
                 data: (evento) {
                   final registrados = registradosAsync.valueOrNull;
                   final totalReg = registrados?.length;
-                  final totalAcred = registrados
-                      ?.where((r) => r.acreditado)
-                      .length;
+                  final totalAcred =
+                      registrados?.where((r) => r.acreditado).length;
+                  final noAcred =
+                      registrados?.where((r) => !r.acreditado).length;
 
                   return Column(
                     children: [
@@ -74,7 +76,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
                                 icon: Symbols.arrow_back_ios_new_rounded,
                                 onTap: () => context.pop(),
                               ),
-                              trailing: esAdmin
+                              trailing: puedeEditar
                                   ? _HeroNavButton(
                                       icon: Symbols.edit_rounded,
                                       onTap: () => context.push(
@@ -109,13 +111,6 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
                                       children: [
                                         Expanded(
                                           child: _MiniStat(
-                                            value: totalReg?.toString() ?? '—',
-                                            label: 'Registrados',
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: _MiniStat(
                                             value:
                                                 totalAcred?.toString() ?? '—',
                                             label: 'Acreditados',
@@ -123,13 +118,52 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
                                           ),
                                         ),
                                         const SizedBox(width: 10),
-                                        const Expanded(
+                                        Expanded(
                                           child: _MiniStat(
-                                            value: '—',
-                                            label: 'Leads',
+                                            value: noAcred?.toString() ?? '—',
+                                            label: 'Pendientes',
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: _MiniStat(
+                                            value: totalReg?.toString() ?? '—',
+                                            label: 'Registrados',
                                           ),
                                         ),
                                       ],
+                                    ),
+                                    const SizedBox(height: 18),
+                                    StaggeredListItem(
+                                      index: 0,
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: _PrimaryActionCard(
+                                              icon: Symbols.qr_code_scanner_rounded,
+                                              title: 'Escanear QR',
+                                              onTap: () => context.push(
+                                                RoutePaths.acreditarQr(
+                                                  widget.eventoId,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: _PrimaryActionCard(
+                                              icon: Symbols.person_add_rounded,
+                                              title: 'Registrar Asistente',
+                                              onTap: () =>
+                                                  EventoOperativoSheets
+                                                      .mostrarOpcionesRegistrarAsistente(
+                                                    context,
+                                                    widget.eventoId,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                     const SizedBox(height: 18),
                                     const SectionLabel('Acciones del evento'),
@@ -140,7 +174,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
                                           bottom: 10,
                                         ),
                                         child: StaggeredListItem(
-                                          index: entry.key,
+                                          index: entry.key + 1,
                                           child: entry.value,
                                         ),
                                       ),
@@ -170,29 +204,8 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
     final id = widget.eventoId;
     return [
       NexusActionRow(
-        icon: Symbols.person_add_rounded,
-        title: 'Registrar asistente',
-        onTap: () => context.push(RoutePaths.registrar(id)),
-      ),
-      NexusActionRow(
-        icon: Symbols.link_rounded,
-        title: 'Registro por cliente',
-        subtitle: 'Compartir enlace público / cargar Excel',
-        onTap: () => context.push(RoutePaths.registroPorCliente(id)),
-      ),
-      NexusActionRow(
-        icon: Symbols.how_to_reg_rounded,
-        title: 'Acreditar (manual)',
-        onTap: () => context.push(RoutePaths.acreditarConfirmado(id)),
-      ),
-      NexusActionRow(
-        icon: Symbols.qr_code_scanner_rounded,
-        title: 'Acreditar por QR',
-        onTap: () => context.push(RoutePaths.acreditarQr(id)),
-      ),
-      NexusActionRow(
         icon: Symbols.list_alt_rounded,
-        title: 'Ver registrados',
+        title: 'Lista de asistentes registrados',
         onTap: () => context.push(RoutePaths.verRegistrados(id)),
       ),
       NexusActionRow(
@@ -320,6 +333,53 @@ class _EventoHero extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _PrimaryActionCard extends StatelessWidget {
+  const _PrimaryActionCard({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      scale: 0.97,
+      onTap: onTap,
+      child: Container(
+        height: 104,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: AppColors.headerGradient,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          boxShadow: AppColors.shadowFab,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(icon, color: Colors.white, size: 28),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,0 +1,217 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createAdminClient } from "../_shared/admin_client.ts";
+import { corsHeaders, json } from "../_shared/cors.ts";
+import { enviarCredenciales } from "../_shared/enviar_credenciales.ts";
+import { findAuthUserByEmail } from "../_shared/find_user.ts";
+
+const ROLES_VALIDOS = new Set(["admin", "organizador", "user", "externo"]);
+
+function parseEventoIds(body: Record<string, unknown>): string[] {
+  const rawIds = body.evento_ids;
+  if (Array.isArray(rawIds)) {
+    return rawIds
+      .map((v) => String(v ?? "").trim())
+      .filter((id) => id.length > 0);
+  }
+  const single = String(body.evento_id ?? "").trim();
+  return single ? [single] : [];
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return json({ error: "No autorizado" }, 401);
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    // Evita que el runtime reenvíe el JWT del usuario al Admin API.
+    const adminClient = createAdminClient(supabaseUrl, serviceRoleKey);
+
+    const { data: callerData, error: callerError } =
+      await callerClient.auth.getUser();
+    if (callerError || !callerData.user) {
+      return json({ error: "Sesión inválida" }, 401);
+    }
+
+    const { data: isAdmin, error: adminError } = await callerClient.rpc(
+      "rpe_is_admin",
+    );
+    if (adminError || !isAdmin) {
+      return json({ error: "Solo un administrador puede crear usuarios" }, 403);
+    }
+
+    const body = await req.json();
+    const nombreCompleto = (body.nombre_completo ?? "").trim();
+    const email = (body.email ?? "").trim().toLowerCase();
+    const password = body.password ?? "";
+    const rol = (body.rol ?? "").trim();
+    const eventoIds = [...new Set(parseEventoIds(body))];
+
+    if (!nombreCompleto || !email || !password || !rol) {
+      return json({ error: "Faltan campos obligatorios" }, 400);
+    }
+    if (!ROLES_VALIDOS.has(rol)) {
+      return json({ error: "Rol inválido" }, 400);
+    }
+    if (password.length < 8) {
+      return json(
+        { error: "La contraseña debe tener al menos 8 caracteres" },
+        400,
+      );
+    }
+
+    let eventoNombres: string[] = [];
+    let primerEventoId: string | null = null;
+
+    if (rol === "externo") {
+      if (eventoIds.length < 1) {
+        return json(
+          { error: "Selecciona al menos un evento para el usuario externo" },
+          400,
+        );
+      }
+
+      const { data: eventos, error: eventosError } = await adminClient
+        .from("eventos")
+        .select("id, nombre, activo, fecha")
+        .in("id", eventoIds);
+
+      if (eventosError || !eventos || eventos.length !== eventoIds.length) {
+        return json({ error: "Uno o más eventos no fueron encontrados" }, 404);
+      }
+
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      for (const evento of eventos) {
+        if (!evento.activo) {
+          return json(
+            { error: `El evento "${evento.nombre}" no está activo` },
+            400,
+          );
+        }
+        const fechaEvento = new Date(`${evento.fecha}T00:00:00`);
+        if (fechaEvento < hoy) {
+          return json(
+            { error: `El evento "${evento.nombre}" ya finalizó` },
+            400,
+          );
+        }
+      }
+
+      // Preservar orden solicitado.
+      const porId = new Map(eventos.map((e) => [e.id as string, e]));
+      eventoNombres = eventoIds.map((id) => porId.get(id)?.nombre ?? id);
+      primerEventoId = eventoIds[0];
+    }
+
+    let existing;
+    try {
+      existing = await findAuthUserByEmail(adminClient, email);
+    } catch (findErr) {
+      return json({ error: String(findErr) }, 500);
+    }
+    if (existing) {
+      return json({ error: "El email ya está registrado" }, 409);
+    }
+
+    const userMetadata: Record<string, string> = {
+      nombre_completo: nombreCompleto,
+    };
+    if (rol === "externo" && primerEventoId) {
+      userMetadata.rol = "externo";
+      userMetadata.evento_id = primerEventoId;
+    }
+
+    const { data: created, error: createError } =
+      await adminClient.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: userMetadata,
+      });
+
+    if (createError || !created.user) {
+      return json(
+        { error: createError?.message ?? "No se pudo crear el usuario" },
+        500,
+      );
+    }
+
+    const userId = created.user.id;
+
+    if (rol === "externo" && eventoIds.length > 0) {
+      const rows = eventoIds.map((eventoId) => ({
+        usuario_id: userId,
+        evento_id: eventoId,
+        rol_evento: "externo",
+      }));
+      const { error: ueError } = await adminClient
+        .from("usuarios_eventos")
+        .upsert(rows, { onConflict: "usuario_id,evento_id" });
+      if (ueError) {
+        await adminClient.auth.admin.deleteUser(userId);
+        return json(
+          { error: ueError.message ?? "No se pudieron asignar los eventos" },
+          500,
+        );
+      }
+    }
+
+    if (rol === "admin" || rol === "organizador") {
+      const { error: rolError } = await callerClient.rpc(
+        "rpe_actualizar_rol_usuario",
+        { usuario_id: userId, nuevo_rol: rol },
+      );
+      if (rolError) {
+        await adminClient.auth.admin.deleteUser(userId);
+        return json(
+          { error: rolError.message ?? "No se pudo asignar el rol" },
+          500,
+        );
+      }
+    }
+
+    try {
+      await enviarCredenciales({
+        to: email,
+        nombre: nombreCompleto,
+        email,
+        password,
+      });
+    } catch (mailErr) {
+      await adminClient.auth.admin.deleteUser(userId);
+      return json(
+        {
+          error:
+            mailErr instanceof Error
+              ? mailErr.message
+              : "No se pudo enviar el correo de credenciales",
+        },
+        500,
+      );
+    }
+
+    return json({
+      user_id: userId,
+      email,
+      password,
+      rol,
+      evento_nombre: eventoNombres[0] ?? null,
+      evento_nombres: eventoNombres,
+    });
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+});

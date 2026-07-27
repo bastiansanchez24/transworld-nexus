@@ -33,6 +33,18 @@ class Env {
   static String get appPublicBaseUrl =>
       dotenv.env['APP_PUBLIC_BASE_URL'] ?? 'https://intranet.transworld.cl/';
 
+  /// Owner del repo GitHub usado como fuente OTA (`/releases/latest`).
+  static String get githubOwner =>
+      dotenv.env['GITHUB_OWNER'] ?? 'bastiansanchez24';
+
+  /// Nombre del repo GitHub usado como fuente OTA.
+  static String get githubRepo =>
+      dotenv.env['GITHUB_REPO'] ?? 'transworld_project_nexus';
+
+  /// Canal de actualizaciones (reservado; v1 solo usa `stable`).
+  static String get updateChannel =>
+      dotenv.env['UPDATE_CHANNEL'] ?? 'stable';
+
   static String _require(String key) {
     final value = dotenv.env[key];
     if (value == null || value.isEmpty || value.startsWith('TU_')) {

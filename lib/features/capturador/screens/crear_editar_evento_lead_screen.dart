@@ -3,13 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/require_admin.dart';
+import '../../../core/widgets/require_permission.dart';
 import '../../../data/models/evento_lead.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../providers/capturador_providers.dart';
 
 class CrearEditarEventoLeadScreen extends StatelessWidget {
@@ -19,7 +21,10 @@ class CrearEditarEventoLeadScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RequireAdmin(
+    return RequirePermission(
+      allowed: (p) => p.canCreateContent,
+      deniedMessage:
+          'Solo administradores y organizadores pueden crear o editar campañas.',
       builder: (context) => _CrearEditarEventoLeadForm(eventoId: eventoId),
     );
   }
@@ -139,7 +144,8 @@ class _CrearEditarEventoLeadFormState
           .read(eventosLeadsRepositoryProvider)
           .eliminar(widget.eventoId!);
       ref.invalidate(eventosLeadsListProvider);
-      if (mounted) context.pop();
+      ref.invalidate(eventoLeadByIdProvider(widget.eventoId!));
+      if (mounted) context.go(RoutePaths.capturador);
     } catch (e) {
       if (mounted) {
         showAppSnackBar(
@@ -153,6 +159,7 @@ class _CrearEditarEventoLeadFormState
 
   @override
   Widget build(BuildContext context) {
+    final esAdmin = ref.watch(isAdminProvider);
     final eventoAsync = widget.eventoId == null
         ? null
         : ref.watch(eventoLeadByIdProvider(widget.eventoId!));
@@ -162,9 +169,9 @@ class _CrearEditarEventoLeadFormState
     }
 
     return AppScaffold(
-      title: _esEdicion ? 'Editar evento' : 'Nuevo evento',
+      title: _esEdicion ? 'Editar campaña' : 'Nueva campaña',
       actions: [
-        if (_esEdicion)
+        if (_esEdicion && esAdmin)
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: _guardando ? null : _eliminar,
@@ -179,7 +186,7 @@ class _CrearEditarEventoLeadFormState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const _FieldLabel('Nombre del evento'),
+                    const _FieldLabel('Nombre de la campaña'),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _nombreController,
@@ -250,7 +257,7 @@ class _CrearEditarEventoLeadFormState
                     ),
                     const SizedBox(height: 24),
                     PrimaryGradientButton(
-                      label: _esEdicion ? 'Guardar cambios' : 'Crear evento',
+                      label: _esEdicion ? 'Guardar cambios' : 'Crear campaña',
                       loading: _guardando,
                       onPressed: _guardando ? null : _guardar,
                     ),

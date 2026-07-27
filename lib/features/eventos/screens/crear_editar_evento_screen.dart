@@ -7,21 +7,20 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/nexus_toast.dart';
-import '../../../core/widgets/require_admin.dart';
+import '../../../core/widgets/require_permission.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/repositories/eventos_repository.dart';
 import '../../../data/repositories/storage_repository.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../providers/eventos_providers.dart';
 
-/// Crear o editar un evento. Restringido a administradores: la política
-/// `rpe_eventos_insert` / `_update` de `supabase/schema.sql` ya lo exige a
-/// nivel de base de datos (ver Sección 8.2/17.6 de la auditoría); acá se
-/// refuerza con [RequireAdmin] para dar feedback inmediato en la UI.
+/// Crear o editar un evento. Disponible para cualquier usuario autenticado.
 class CrearEditarEventoScreen extends StatelessWidget {
   const CrearEditarEventoScreen({super.key, this.eventoId});
 
@@ -29,7 +28,10 @@ class CrearEditarEventoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RequireAdmin(
+    return RequirePermission(
+      allowed: (p) => p.canCreateContent,
+      deniedMessage:
+          'Solo administradores y organizadores pueden crear o editar eventos.',
       builder: (context) => _CrearEditarEventoForm(eventoId: eventoId),
     );
   }
@@ -178,7 +180,8 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
     try {
       await ref.read(eventosRepositoryProvider).eliminar(widget.eventoId!);
       ref.invalidate(eventosListProvider);
-      if (mounted) context.pop();
+      ref.invalidate(eventoByIdProvider(widget.eventoId!));
+      if (mounted) context.go(RoutePaths.eventos);
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, 'No se pudo eliminar el evento.', isError: true);
@@ -188,6 +191,7 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
 
   @override
   Widget build(BuildContext context) {
+    final esAdmin = ref.watch(isAdminProvider);
     final eventoAsync = widget.eventoId == null
         ? null
         : ref.watch(eventoByIdProvider(widget.eventoId!));
@@ -199,7 +203,7 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
     return AppScaffold(
       title: _esEdicion ? 'Editar evento' : 'Nuevo evento',
       actions: [
-        if (_esEdicion)
+        if (_esEdicion && esAdmin)
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: _guardando ? null : _eliminar,
