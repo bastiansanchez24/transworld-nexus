@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
@@ -245,7 +246,8 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen> {
         Text(
           total == null
               ? 'Asistentes del evento'
-              : '$total registrados · $acreditados acreditados',
+              : '$total ${total == 1 ? 'registrado' : 'registrados'} · '
+                    '$acreditados acreditados',
           style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
         ),
       ],
@@ -266,15 +268,12 @@ class _RegistradoTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final puedeEditar = !registrado.pendienteDeSincronizar;
-
+    // Siempre se puede abrir: la pantalla de edición lee de esta misma lista
+    // y sabe encolar los cambios de una fila que aún no llegó al servidor.
     return Pressable(
-      onTap: puedeEditar
-          ? () => context.push(
-              RoutePaths.editarRegistrado(eventoId, registrado.id),
-            )
-          : null,
-      enabled: puedeEditar,
+      onTap: () => context.push(
+        RoutePaths.editarRegistrado(eventoId, registrado.id),
+      ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
@@ -411,9 +410,13 @@ class _RegistradoTile extends ConsumerWidget {
 
     final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
     final isOnline = ref.read(isOnlineProvider);
+    // Lo que decide si se puede acreditar directo es que la fila exista en el
+    // servidor, no la insignia de pendiente: un registrado ya sincronizado
+    // que solo tiene una edición en cola sí acepta el UPDATE inmediato.
+    final soloEnLaCola = esIdSoloLocal(registrado.id);
 
     try {
-      if (isOnline && !registrado.pendienteDeSincronizar) {
+      if (isOnline && !soloEnLaCola) {
         await ref
             .read(registradosRepositoryProvider)
             .acreditar(registrado.id, acreditadoPorId: userId ?? '');
@@ -421,7 +424,7 @@ class _RegistradoTile extends ConsumerWidget {
         await ref
             .read(syncQueueServiceProvider.notifier)
             .enqueueUpdate(
-              table: 'registrados',
+              table: SupabaseTables.registrados,
               entityId: registrado.id,
               changes: {'acreditado': true},
             );
@@ -501,8 +504,11 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
     final isOnline = ref.watch(isOnlineProvider);
     final r = widget.registrado;
     // Un registro que solo existe en la cola local todavía no tiene id real
-    // en el servidor: su QR no serviría para acreditar ni para el email.
-    final puedeEnviar = isOnline && !r.pendienteDeSincronizar;
+    // en el servidor: su QR no serviría para acreditar ni para el email. Se
+    // mira el id y no la insignia de pendiente, porque una fila ya
+    // sincronizada que solo tiene una edición en cola sí tiene QR válido.
+    final soloEnLaCola = esIdSoloLocal(r.id);
+    final puedeEnviar = isOnline && !soloEnLaCola;
 
     return SafeArea(
       child: Padding(
@@ -524,7 +530,7 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
               style: const TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
-            if (r.pendienteDeSincronizar)
+            if (soloEnLaCola)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),

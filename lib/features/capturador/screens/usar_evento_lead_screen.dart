@@ -235,7 +235,10 @@ class _EventoLeadHero extends StatelessWidget {
       ),
       padding: EdgeInsets.fromLTRB(
         20,
-        topPad + CollapsingNavMetrics.titleZone + 8,
+        topPad +
+            CollapsingNavMetrics.gapDetail * 2 +
+            CollapsingNavMetrics.titleZone +
+            8,
         20,
         24,
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
@@ -172,9 +173,11 @@ class _CrearEditarEventoLeadFormState
       title: _esEdicion ? 'Editar campaña' : 'Nueva campaña',
       actions: [
         if (_esEdicion && esAdmin)
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _guardando ? null : _eliminar,
+          NexusHeaderAction(
+            icon: Symbols.delete_outline_rounded,
+            tooltip: 'Eliminar campaña',
+            danger: true,
+            onTap: _guardando ? null : _eliminar,
           ),
       ],
       body: eventoAsync != null && eventoAsync.isLoading && !_cargado

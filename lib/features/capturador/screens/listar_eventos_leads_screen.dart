@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
@@ -239,9 +238,26 @@ class _ListarEventosLeadsScreenState
                     final evento = filtrados[index];
                     return StaggeredListItem(
                       index: index,
-                      child: _LeadCampaignCard(
-                        evento: evento,
-                        puedeEditar: puedeCrear,
+                      child: EventRow(
+                        date: evento.fecha,
+                        title: evento.nombre,
+                        place: evento.pais ?? '',
+                        finalizado: evento.yaOcurrio,
+                        onTap: () =>
+                            context.push(RoutePaths.usarEventoLead(evento.id)),
+                        trailing: puedeCrear
+                            ? Pressable(
+                                scale: 0.9,
+                                onTap: () => context.push(
+                                  RoutePaths.editarEventoLead(evento.id),
+                                ),
+                                child: const Icon(
+                                  Symbols.edit_rounded,
+                                  color: AppColors.chevronMuted,
+                                  size: 20,
+                                ),
+                              )
+                            : null,
                       ),
                     );
                   },
@@ -251,110 +267,6 @@ class _ListarEventosLeadsScreenState
           },
         ),
       ],
-    );
-  }
-}
-
-class _LeadCampaignCard extends StatelessWidget {
-  const _LeadCampaignCard({
-    required this.evento,
-    required this.puedeEditar,
-  });
-
-  final EventoLead evento;
-  final bool puedeEditar;
-
-  @override
-  Widget build(BuildContext context) {
-    final fecha = DateFormat('dd/MM/yyyy').format(evento.fecha);
-    final meta = [
-      fecha,
-      if (evento.pais != null && evento.pais!.isNotEmpty) evento.pais,
-      if (evento.tematica != null && evento.tematica!.isNotEmpty)
-        evento.tematica,
-    ].join(' · ');
-    final finalizado = evento.yaOcurrio;
-
-    return Pressable(
-      onTap: () => context.push(RoutePaths.usarEventoLead(evento.id)),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.border),
-          boxShadow: AppColors.shadowRest,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: finalizado ? AppColors.background : AppColors.tintNavy,
-                borderRadius: BorderRadius.circular(AppRadius.tile),
-              ),
-              child: Icon(
-                Symbols.person_search_rounded,
-                color: finalizado ? AppColors.textTertiary : AppColors.primary,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    evento.nombre,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      height: 1.3,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    meta,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  StatusChip(
-                    label: finalizado ? 'Evento finalizado' : 'Activo',
-                    variant: finalizado
-                        ? StatusChipVariant.danger
-                        : StatusChipVariant.success,
-                  ),
-                ],
-              ),
-            ),
-            if (puedeEditar)
-              Pressable(
-                scale: 0.9,
-                onTap: () =>
-                    context.push(RoutePaths.editarEventoLead(evento.id)),
-                child: const Icon(
-                  Symbols.edit_rounded,
-                  color: AppColors.chevronMuted,
-                  size: 20,
-                ),
-              )
-            else
-              const Icon(
-                Symbols.chevron_right_rounded,
-                color: AppColors.chevronMuted,
-              ),
-          ],
-        ),
-      ),
     );
   }
 }

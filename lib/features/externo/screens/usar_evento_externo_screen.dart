@@ -242,20 +242,9 @@ class _UsarEventoExternoScreenState
                               title: evento.nombre,
                               style: CollapsingNavStyle.detail,
                               alwaysShowActions: true,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (puedeCambiar)
-                                    _HeroNavButton(
-                                      icon: Symbols.swap_horiz_rounded,
-                                      onTap: _mostrarSelectorEventos,
-                                    ),
-                                  if (puedeCambiar) const SizedBox(width: 8),
-                                  _HeroNavButton(
-                                    icon: Symbols.logout_rounded,
-                                    onTap: _cerrarSesion,
-                                  ),
-                                ],
+                              trailing: _HeroNavButton(
+                                icon: Symbols.logout_rounded,
+                                onTap: _cerrarSesion,
                               ),
                             ),
                           ),
@@ -450,7 +439,10 @@ class _EventoExternoHero extends StatelessWidget {
       ),
       padding: EdgeInsets.fromLTRB(
         20,
-        topPad + CollapsingNavMetrics.titleZone + 8,
+        topPad +
+            CollapsingNavMetrics.gapDetail * 2 +
+            CollapsingNavMetrics.titleZone +
+            8,
         20,
         24,
       ),

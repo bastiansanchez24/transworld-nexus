@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -105,7 +106,7 @@ class _RegistrarConfirmadoScreenState
         }
       } else {
         await ref.read(syncQueueServiceProvider.notifier).enqueueInsert(
-              table: 'registrados',
+              table: SupabaseTables.registrados,
               payload: registrado.toInsertMap(),
             );
       }

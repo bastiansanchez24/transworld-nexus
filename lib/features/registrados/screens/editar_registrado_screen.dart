@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -41,6 +42,10 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
   bool _cargado = false;
   bool _guardando = false;
 
+  /// Un insert todavía en la cola no tiene fila en el servidor: su id es el
+  /// temporal que generó [SyncQueueService], no un uuid real.
+  bool get _esPendiente => esIdSoloLocal(widget.registradoId);
+
   void _precargar(Registrado r) {
     if (_cargado) return;
     _cargado = true;
@@ -69,13 +74,12 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
 
     try {
       final isOnline = ref.read(isOnlineProvider);
-      final esPendiente = widget.registradoId.startsWith('local_');
 
-      if (isOnline && !esPendiente) {
+      if (isOnline && !_esPendiente) {
         await ref.read(registradosRepositoryProvider).actualizar(widget.registradoId, cambios);
       } else {
         await ref.read(syncQueueServiceProvider.notifier).enqueueUpdate(
-              table: 'registrados',
+              table: SupabaseTables.registrados,
               entityId: widget.registradoId,
               changes: cambios,
             );
@@ -117,10 +121,14 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
     return AppScaffold(
       title: 'Editar registrado',
       actions: [
-        if (esAdmin)
-          IconButton(
-            icon: const Icon(Symbols.delete_outline_rounded),
-            onPressed: _eliminar,
+        // Borrar un insert encolado no lo saca de la cola: reaparecería al
+        // sincronizar, así que ni se ofrece.
+        if (esAdmin && !_esPendiente)
+          NexusHeaderAction(
+            icon: Symbols.delete_outline_rounded,
+            tooltip: 'Eliminar registrado',
+            danger: true,
+            onTap: _guardando ? null : _eliminar,
           ),
       ],
       body: registradosAsync.when(

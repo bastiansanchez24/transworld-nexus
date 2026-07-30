@@ -297,15 +297,12 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
       title: 'Editar usuario',
       actions: [
         if (!esCuentaPropia)
-          IconButton(
-            icon: _eliminando
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Symbols.delete_outline_rounded),
-            onPressed: ocupado
+          NexusHeaderAction(
+            icon: Symbols.delete_outline_rounded,
+            tooltip: 'Eliminar usuario',
+            danger: true,
+            loading: _eliminando,
+            onTap: ocupado
                 ? null
                 : () {
                     final nombre = _nombreController.text.trim().isEmpty

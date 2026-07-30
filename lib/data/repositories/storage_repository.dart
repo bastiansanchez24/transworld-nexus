@@ -13,18 +13,14 @@ class StorageRepository {
   final SupabaseClient _client;
   final _uuid = const Uuid();
 
-  Future<String> subirImagenEvento(Uint8List bytes, String extension) async {
-    final fileName = 'eventos/${_uuid.v4()}.$extension';
-    await _client.storage.from(Env.bucketImagenes).uploadBinary(
-          fileName,
-          bytes,
-          fileOptions: const FileOptions(upsert: true),
-        );
-    return _client.storage.from(Env.bucketImagenes).getPublicUrl(fileName);
+  /// Imagen de portada de un evento. Siempre llega ya comprimida a JPEG por
+  /// `comprimirParaSubida`, de ahí que el content-type sea fijo.
+  Future<String> subirImagenEvento(Uint8List bytes, String extension) {
+    return _subir('eventos/${_uuid.v4()}.$extension', bytes, 'image/jpeg');
   }
 
   /// Foto adjunta a un lead capturado (`leads.fotos_urls`).
-  Future<String> subirFotoLead(Uint8List bytes, String extension) async {
+  Future<String> subirFotoLead(Uint8List bytes, String extension) {
     final ext = extension.toLowerCase().replaceAll('.', '');
     final contentType = switch (ext) {
       'png' => 'image/png',
@@ -32,16 +28,46 @@ class StorageRepository {
       'heic' || 'heif' => 'image/heic',
       _ => 'image/jpeg',
     };
-    final fileName = 'leads/${_uuid.v4()}.$ext';
-    await _client.storage.from(Env.bucketImagenes).uploadBinary(
-          fileName,
-          bytes,
-          fileOptions: FileOptions(
-            upsert: true,
-            contentType: contentType,
-          ),
-        );
-    return _client.storage.from(Env.bucketImagenes).getPublicUrl(fileName);
+    return _subir('leads/${_uuid.v4()}.$ext', bytes, contentType);
+  }
+
+  Future<String> _subir(
+    String fileName,
+    Uint8List bytes,
+    String contentType,
+  ) async {
+    final bucket = _client.storage.from(Env.bucketImagenes);
+    try {
+      await bucket.uploadBinary(
+        fileName,
+        bytes,
+        fileOptions: FileOptions(upsert: true, contentType: contentType),
+      );
+    } on StorageException catch (e) {
+      throw Exception(_mensajeDeError(e));
+    }
+    return bucket.getPublicUrl(fileName);
+  }
+
+  /// Sin esto la UI muestra el volcado crudo de `StorageException`, que no le
+  /// dice a nadie qué hay que arreglar.
+  String _mensajeDeError(StorageException e) {
+    if (e.statusCode == '403' || e.statusCode == '401') {
+      // Falta la política de INSERT sobre storage.objects para este bucket
+      // (sección 6 de supabase/schema.sql). No es algo que la app pueda
+      // resolver: hay que crearla en la base.
+      return 'Storage rechazó la subida (${e.statusCode}): el bucket '
+          '"${Env.bucketImagenes}" no tiene política de escritura para este '
+          'usuario. Hay que crearla en storage.objects.';
+    }
+    if (e.statusCode == '404') {
+      return 'El bucket "${Env.bucketImagenes}" no existe en este proyecto '
+          'de Supabase.';
+    }
+    if (e.statusCode == '413') {
+      return 'La imagen supera el tamaño máximo permitido por Storage.';
+    }
+    return 'No se pudo subir la imagen: ${e.message}';
   }
 
   String urlPlantillaRegistro() {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -42,7 +43,7 @@ class _AcreditarConfirmadoScreenState
     final isOnline = ref.read(isOnlineProvider);
 
     try {
-      if (isOnline && !registrado.pendienteDeSincronizar) {
+      if (isOnline && !esIdSoloLocal(registrado.id)) {
         await ref
             .read(registradosRepositoryProvider)
             .acreditar(registrado.id, acreditadoPorId: userId ?? '');
@@ -50,7 +51,7 @@ class _AcreditarConfirmadoScreenState
         await ref
             .read(syncQueueServiceProvider.notifier)
             .enqueueUpdate(
-              table: 'registrados',
+              table: SupabaseTables.registrados,
               entityId: registrado.id,
               changes: {'acreditado': true},
             );

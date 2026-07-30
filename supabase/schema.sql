@@ -1019,3 +1019,32 @@ CREATE POLICY rpe_storage_imagenes_update ON storage.objects
 DROP POLICY IF EXISTS rpe_storage_plantillas_read ON storage.objects;
 CREATE POLICY rpe_storage_plantillas_read ON storage.objects
   FOR SELECT USING (bucket_id = 'plantillas');
+
+-- storage.prefixes: las versiones nuevas de Storage guardan acá una fila por
+-- carpeta del path, con RLS propio. La app sube SIEMPRE dentro de una carpeta
+-- (`imagenes/eventos/...`, `imagenes/leads/...`), así que sin estas políticas
+-- toda subida falla con "new row violates row-level security policy" aunque
+-- las de storage.objects estén bien — cuesta de diagnosticar porque el error
+-- señala a objects.
+--
+-- Va dentro de un DO porque la tabla no existe en instalaciones de Storage
+-- anteriores, y ahí este bloque simplemente no hace nada.
+DO $$
+BEGIN
+  IF to_regclass('storage.prefixes') IS NULL THEN
+    RAISE NOTICE 'storage.prefixes no existe: no hace falta crear políticas.';
+    RETURN;
+  END IF;
+
+  DROP POLICY IF EXISTS rpe_storage_prefixes_read ON storage.prefixes;
+  CREATE POLICY rpe_storage_prefixes_read ON storage.prefixes
+    FOR SELECT USING (bucket_id IN ('imagenes', 'plantillas'));
+
+  DROP POLICY IF EXISTS rpe_storage_prefixes_write ON storage.prefixes;
+  CREATE POLICY rpe_storage_prefixes_write ON storage.prefixes
+    FOR INSERT TO authenticated WITH CHECK (bucket_id = 'imagenes');
+
+  DROP POLICY IF EXISTS rpe_storage_prefixes_update ON storage.prefixes;
+  CREATE POLICY rpe_storage_prefixes_update ON storage.prefixes
+    FOR UPDATE TO authenticated USING (bucket_id = 'imagenes');
+END $$;

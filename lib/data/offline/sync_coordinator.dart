@@ -18,16 +18,38 @@ import 'sync_queue_service.dart';
 /// Acá hay un solo listener de conectividad para toda la app.
 class SyncCoordinator {
   SyncCoordinator(this._ref) {
-    _ref.listen<AsyncValue<bool>>(connectivityStreamProvider, (previous, next) {
-      final wasOffline = previous?.valueOrNull == false;
-      final isOnlineNow = next.valueOrNull == true;
-      if (wasOffline && isOnlineNow) {
-        sincronizarAhora();
-      }
+    _ref.listen<AsyncValue<bool>>(connectivityStreamProvider, (_, next) {
+      final online = next.valueOrNull;
+      if (online != null) _observarConexion(online);
     });
+
+    // Si al construirse el estado de red ya estaba resuelto, el listener no
+    // volvería a dispararse hasta el próximo cambio.
+    final actual = _ref.read(connectivityStreamProvider).valueOrNull;
+    if (actual != null) _observarConexion(actual);
   }
 
   final Ref _ref;
+
+  bool? _ultimoEstadoOnline;
+
+  /// Vacía la cola al recuperar la conexión y también la primera vez que se
+  /// conoce el estado de red.
+  ///
+  /// Ese segundo caso importa: la cola sobrevive al cierre de la app en
+  /// `SharedPreferences`, y si el usuario la reabre ya con señal nunca ocurre
+  /// la transición offline→online. Sin esto, lo capturado sin conexión se
+  /// quedaba esperando indefinidamente — el mismo síntoma que este módulo
+  /// existe para evitar (Sección 17.3).
+  void _observarConexion(bool online) {
+    final esPrimeraLectura = _ultimoEstadoOnline == null;
+    final recuperoConexion = _ultimoEstadoOnline == false;
+    _ultimoEstadoOnline = online;
+
+    if (online && (esPrimeraLectura || recuperoConexion)) {
+      sincronizarAhora();
+    }
+  }
 
   Map<String, SyncExecutor> get _executors => {
         SupabaseTables.registrados: _ref.read(registradosRepositoryProvider),

@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -13,6 +12,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/nexus_toast.dart';
+import '../../../core/widgets/selector_imagen.dart';
 import '../../../core/widgets/require_permission.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/repositories/eventos_repository.dart';
@@ -92,15 +92,16 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
   }
 
   Future<void> _elegirImagen() async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1200,
-      imageQuality: 85,
-    );
-    if (file == null) return;
-    final bytes = await file.readAsBytes();
+    final bytes = await elegirImagenComprimida(context);
+    if (bytes == null || !mounted) return;
     setState(() => _imagenBytes = bytes);
+  }
+
+  void _quitarImagen() {
+    setState(() {
+      _imagenBytes = null;
+      _imagenUrlExistente = null;
+    });
   }
 
   Future<void> _elegirFecha() async {
@@ -161,7 +162,11 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
       }
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(context, 'No se pudo guardar el evento.', isError: true);
+        showAppSnackBar(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -204,9 +209,11 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
       title: _esEdicion ? 'Editar evento' : 'Nuevo evento',
       actions: [
         if (_esEdicion && esAdmin)
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _guardando ? null : _eliminar,
+          NexusHeaderAction(
+            icon: Symbols.delete_outline_rounded,
+            tooltip: 'Eliminar evento',
+            danger: true,
+            onTap: _guardando ? null : _eliminar,
           ),
       ],
       body: eventoAsync != null && eventoAsync.isLoading && !_cargado
@@ -218,10 +225,20 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _ImagenDropZone(
-                      imagenBytes: _imagenBytes,
-                      imagenUrl: _imagenUrlExistente,
-                      onTap: _elegirImagen,
+                    _FieldLabel('Foto'),
+                    const SizedBox(height: 6),
+                    SelectorImagen(
+                      bytes: _imagenBytes,
+                      urlExistente: _imagenUrlExistente,
+                      enabled: !_guardando,
+                      aspectRatio: 16 / 9,
+                      anchoMaximo: kAnchoSelectorImagenEvento,
+                      etiquetaVacio: 'Agregar imagen del evento',
+                      onElegir: _elegirImagen,
+                      onQuitar:
+                          _imagenBytes == null && _imagenUrlExistente == null
+                              ? null
+                              : _quitarImagen,
                     ),
                     const SizedBox(height: 14),
                     _FieldLabel('Nombre'),
@@ -359,64 +376,6 @@ class _FieldLabel extends StatelessWidget {
         fontSize: 12,
         fontWeight: FontWeight.w700,
         color: AppColors.textSecondary,
-      ),
-    );
-  }
-}
-
-class _ImagenDropZone extends StatelessWidget {
-  const _ImagenDropZone({
-    required this.imagenBytes,
-    required this.imagenUrl,
-    required this.onTap,
-  });
-
-  final Uint8List? imagenBytes;
-  final String? imagenUrl;
-  final VoidCallback onTap;
-
-  bool get _tieneImagen => imagenBytes != null || imagenUrl != null;
-
-  @override
-  Widget build(BuildContext context) {
-    if (_tieneImagen) {
-      return GestureDetector(
-        onTap: onTap,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: SizedBox(
-            height: 150,
-            width: double.infinity,
-            child: imagenBytes != null
-                ? Image.memory(imagenBytes!, fit: BoxFit.cover)
-                : Image.network(imagenUrl!, fit: BoxFit.cover),
-          ),
-        ),
-      );
-    }
-
-    return DashedBorderBox(
-      height: 150,
-      onTap: onTap,
-      child: const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Symbols.add_photo_alternate_rounded,
-            size: 30,
-            color: AppColors.primary,
-            fill: 1,
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Agregar imagen del evento',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
       ),
     );
   }

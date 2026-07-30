@@ -260,6 +260,7 @@ class EventRow extends StatelessWidget {
     required this.place,
     required this.onTap,
     this.finalizado = false,
+    this.trailing,
   });
 
   final DateTime date;
@@ -267,6 +268,7 @@ class EventRow extends StatelessWidget {
   final String place;
   final VoidCallback onTap;
   final bool finalizado;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -335,10 +337,11 @@ class EventRow extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(
-              Symbols.chevron_right_rounded,
-              color: AppColors.chevronMuted,
-            ),
+            trailing ??
+                const Icon(
+                  Symbols.chevron_right_rounded,
+                  color: AppColors.chevronMuted,
+                ),
           ],
         ),
       ),
@@ -586,7 +589,9 @@ class DashedBorderBox extends StatelessWidget {
   });
 
   final Widget child;
-  final double height;
+
+  /// `null` deja que lo dimensione el padre (p. ej. un [AspectRatio]).
+  final double? height;
   final VoidCallback? onTap;
 
   @override

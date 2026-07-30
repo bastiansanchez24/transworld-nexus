@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,14 +12,17 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/models/lead_prefill.dart';
+import '../../../data/offline/pending_photo_store.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/leads_repository.dart';
+import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capturador_providers.dart';
 
-enum _CampoVoz { nombre, empresa, cargo, email }
+enum _CampoVoz { nombre, empresa, cargo, email, descripcion }
 
 class CrearLeadScreen extends ConsumerStatefulWidget {
   const CrearLeadScreen({
@@ -45,10 +50,15 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
   final _cargoController = TextEditingController();
   final _telefonoController = TextEditingController();
   final _emailController = TextEditingController();
+  final _descripcionController = TextEditingController();
 
   final _speech = stt.SpeechToText();
   bool _speechDisponible = false;
   _CampoVoz? _escuchandoCampo;
+
+  /// Foto ya comprimida, todavía en memoria. Se sube (o se deja en disco, si
+  /// no hay red) recién al guardar el lead.
+  Uint8List? _fotoBytes;
 
   bool _guardando = false;
   bool _accesoValidado = false;
@@ -141,6 +151,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     _cargoController.dispose();
     _telefonoController.dispose();
     _emailController.dispose();
+    _descripcionController.dispose();
     super.dispose();
   }
 
@@ -150,6 +161,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
       _CampoVoz.empresa => _empresaController,
       _CampoVoz.cargo => _cargoController,
       _CampoVoz.email => _emailController,
+      _CampoVoz.descripcion => _descripcionController,
     };
   }
 
@@ -194,6 +206,36 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     _cargoController.clear();
     _telefonoController.clear();
     _emailController.clear();
+    _descripcionController.clear();
+    // Tras guardar se sigue capturando en cadena: si la foto no se limpia,
+    // el siguiente lead se llevaría la del anterior.
+    _fotoBytes = null;
+  }
+
+  Future<void> _elegirFoto() async {
+    final bytes = await elegirImagenComprimida(
+      context,
+      recorteProporcion: kProporcionFotoLead,
+    );
+    if (bytes == null || !mounted) return;
+    setState(() => _fotoBytes = bytes);
+  }
+
+  /// Resuelve la foto a lo que va en `fotos_urls`: una URL pública si hay
+  /// red, o un marcador `local_foto://` que la cola subirá al reconectar.
+  Future<List<String>> _resolverFotos({required bool isOnline}) async {
+    final bytes = _fotoBytes;
+    if (bytes == null) return const [];
+
+    if (isOnline) {
+      return [
+        await ref.read(storageRepositoryProvider).subirFotoLead(bytes, 'jpg'),
+      ];
+    }
+
+    final store = ref.read(pendingPhotoStoreProvider);
+    if (!store.disponible) return const [];
+    return [await store.guardar(bytes)];
   }
 
   Future<void> _guardar() async {
@@ -224,6 +266,13 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
         }
       }
 
+      // En web no hay dónde dejar la foto esperando a que vuelva la red, así
+      // que el lead se guarda sin ella y hay que decirlo.
+      final fotoDescartada = _fotoBytes != null &&
+          !isOnline &&
+          !ref.read(pendingPhotoStoreProvider).disponible;
+      final fotos = await _resolverFotos(isOnline: isOnline);
+
       final lead = Lead(
         id: '',
         eventoId: widget.eventoId,
@@ -238,7 +287,10 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
         email: _emailController.text.trim().isEmpty
             ? null
             : _emailController.text.trim().toLowerCase(),
-        fotosUrls: const [],
+        descripcion: _descripcionController.text.trim().isEmpty
+            ? null
+            : _descripcionController.text.trim(),
+        fotosUrls: fotos,
         perfilId: userId,
       );
 
@@ -256,9 +308,14 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
       if (mounted) {
         showAppSnackBar(
           context,
-          isOnline
-              ? 'Lead guardado.'
-              : 'Guardado en modo local. Se subirá solo.',
+          switch ((isOnline, fotoDescartada)) {
+            (true, _) => 'Lead guardado.',
+            (false, true) =>
+              'Guardado en modo local, pero sin la foto: se necesita '
+                  'conexión para adjuntarla.',
+            (false, false) => 'Guardado en modo local. Se subirá solo.',
+          },
+          isError: fotoDescartada,
         );
         // Volver al escáner con pop (no go): go reemplaza el stack y deja
         // el QR sin historial → la X no cierra y el atrás sale de la app.
@@ -293,6 +350,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     _CampoVoz? campoVoz,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
+    int maxLines = 1,
   }) {
     final escuchando = campoVoz != null && _escuchandoCampo == campoVoz;
     return Column(
@@ -304,8 +362,10 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
           controller: controller,
           enabled: !escuchando && !_guardando,
           keyboardType: keyboardType,
+          maxLines: maxLines,
           decoration: InputDecoration(
             hintText: hintText,
+            alignLabelWithHint: maxLines > 1,
             suffixIcon: campoVoz != null && _speechDisponible
                 ? IconButton(
                     tooltip: escuchando ? 'Detener dictado' : 'Dictar',
@@ -340,13 +400,6 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
         loading: () => const Text('Capturar lead'),
         error: (_, _) => const Text('Capturar lead'),
       ),
-      actions: [
-        IconButton(
-          tooltip: 'Ver leads',
-          icon: const Icon(Icons.list_alt_rounded),
-          onPressed: () => context.push(RoutePaths.verLeads(widget.eventoId)),
-        ),
-      ],
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
         child: Form(
@@ -354,6 +407,20 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              _FieldLabel('Foto'),
+              const SizedBox(height: 6),
+              SelectorImagen(
+                bytes: _fotoBytes,
+                enabled: !_guardando,
+                aspectRatio: kProporcionFotoLead,
+                anchoMaximo: kAnchoSelectorFotoLead,
+                etiquetaVacio: 'Agregar foto del lead',
+                onElegir: _elegirFoto,
+                onQuitar: _fotoBytes == null
+                    ? null
+                    : () => setState(() => _fotoBytes = null),
+              ),
+              const SizedBox(height: 14),
               _campoTexto(
                 label: 'Nombre completo',
                 controller: _nombreController,
@@ -392,6 +459,15 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                 hintText: 'correo@empresa.com',
                 campoVoz: _CampoVoz.email,
                 keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 14),
+              _campoTexto(
+                label: 'Descripción',
+                controller: _descripcionController,
+                hintText: 'Notas u observaciones del lead',
+                campoVoz: _CampoVoz.descripcion,
+                keyboardType: TextInputType.multiline,
+                maxLines: 4,
               ),
               const SizedBox(height: 24),
               PrimaryGradientButton(

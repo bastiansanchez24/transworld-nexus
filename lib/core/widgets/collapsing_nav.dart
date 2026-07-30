@@ -18,6 +18,12 @@ class CollapsingNavMetrics {
 
   static const double titleZone = 44;
 
+  /// Aire arriba y abajo de los botones en las cabeceras de detalle
+  /// ([CollapsingNavStyle.detail]), que van sobre el hero del evento: sin
+  /// esto el "atrás" y el lápiz quedan pegados al borde superior y al
+  /// contenido del hero.
+  static const double gapDetail = 12;
+
   double get barHeight => topInset + titleZone;
 
   double get barWithSearch => barHeight + 56;
@@ -65,9 +71,10 @@ class CollapsingNavOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final metrics = CollapsingNavMetrics(context);
-    final height = extendedHeight ?? metrics.barHeight;
     final isHome = style == CollapsingNavStyle.home;
     final isDetail = style == CollapsingNavStyle.detail;
+    final gap = isDetail ? CollapsingNavMetrics.gapDetail : 0.0;
+    final height = extendedHeight ?? (metrics.barHeight + gap * 2);
 
     final SystemUiOverlayStyle overlayStyle;
     if (isHome) {
@@ -145,7 +152,7 @@ class CollapsingNavOverlay extends StatelessWidget {
                 ),
               ),
             Positioned(
-              top: metrics.topInset,
+              top: metrics.topInset + gap,
               left: 0,
               right: 0,
               height: CollapsingNavMetrics.titleZone,

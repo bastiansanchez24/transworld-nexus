@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../data/models/registrado.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/sync_queue_item.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
@@ -15,7 +16,14 @@ import '../../../data/repositories/registrados_repository.dart';
 final registradosPorEventoProvider = FutureProvider.autoDispose
     .family<List<Registrado>, String>((ref, eventoId) async {
   final repo = ref.watch(registradosRepositoryProvider);
-  final servidor = await repo.listarPorEvento(eventoId);
+
+  final servidor = await ref.watch(offlineReadCacheProvider).leerConRespaldo(
+        tabla: SupabaseTables.registrados,
+        eventoId: eventoId,
+        desdeServidor: () => repo.listarPorEvento(eventoId),
+        aFila: (registrado) => registrado.toCacheMap(),
+        desdeFila: Registrado.fromMap,
+      );
 
   final colaCompleta = ref.watch(syncQueueServiceProvider);
   final colaDeEsteEvento = colaCompleta.where(
@@ -39,17 +47,7 @@ final registradosPorEventoProvider = FutureProvider.autoDispose
 
   final servidorConCambios = servidor.map((r) {
     final changes = updatesPorId[r.id];
-    if (changes == null) return r;
-    return r.copyWith(
-      acreditado: changes['acreditado'] as bool?,
-      nombreCompleto: changes['nombre_completo'] as String?,
-      empresa: changes['empresa'] as String?,
-      cargo: changes['cargo'] as String?,
-      telefono: changes['telefono'] as String?,
-      rut: changes['rut'] as String?,
-      patente: changes['patente'] as String?,
-      pendienteDeSincronizar: true,
-    );
+    return changes == null ? r : r.conCambiosPendientes(changes);
   }).toList();
 
   return [...inserts, ...servidorConCambios];

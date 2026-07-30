@@ -48,8 +48,13 @@ class Registrado {
   final bool emailConfirmacionEnviado;
   final DateTime? createdAt;
 
-  /// true cuando esta fila todavía vive solo en la cola offline local y aún
-  /// no fue confirmada por el servidor (ver data/offline/sync_queue_service.dart).
+  /// true cuando esta fila tiene algo sin subir: o vive solo en la cola local
+  /// y el servidor aún no la confirma, o ya está en el servidor pero con una
+  /// edición esperando en la cola.
+  ///
+  /// Sirve para la insignia de la UI. Para decidir si se puede hacer UPDATE o
+  /// DELETE contra el servidor —o si su QR ya es válido— hay que preguntar por
+  /// el id, con `esIdSoloLocal` (ver data/offline/sync_queue_service.dart).
   final bool pendienteDeSincronizar;
 
   factory Registrado.fromMap(Map<String, dynamic> map) {
@@ -87,6 +92,66 @@ class Registrado {
       'telefono': telefono,
       'ingresado_por': ingresadoPor,
     };
+  }
+
+  /// Serializa la fila completa para la caché offline, de modo que
+  /// [Registrado.fromMap] la reconstruya sin pérdidas. No sirve `toInsertMap`:
+  /// ese omite `id`, `origen`, `created_at` y `email_confirmacion_enviado`
+  /// porque los pone la base de datos al insertar.
+  Map<String, dynamic> toCacheMap() {
+    return {
+      'id': id,
+      'evento_id': eventoId,
+      'nombre_completo': nombreCompleto,
+      'email': email,
+      'acreditado': acreditado,
+      'rut': rut,
+      'patente': patente,
+      'empresa': empresa,
+      'cargo': cargo,
+      'telefono': telefono,
+      'origen': origen.name,
+      'ingresado_por': ingresadoPor,
+      'email_confirmacion_enviado': emailConfirmacionEnviado,
+      'created_at': createdAt?.toIso8601String(),
+    };
+  }
+
+  /// Devuelve la fila con los [cambios] de una operación de la cola aplicados
+  /// encima, para mostrar una edición hecha sin conexión antes de que llegue
+  /// al servidor.
+  ///
+  /// Consulta `containsKey` en vez de usar `??`: vaciar un campo se guarda
+  /// como `null` entre los cambios, y con `??` ese borrado se perdería y la
+  /// UI seguiría mostrando el valor viejo.
+  Registrado conCambiosPendientes(Map<String, dynamic> cambios) {
+    String? texto(String columna, String? actual) =>
+        cambios.containsKey(columna) ? cambios[columna] as String? : actual;
+
+    bool booleano(String columna, bool actual) => cambios.containsKey(columna)
+        ? (cambios[columna] as bool? ?? actual)
+        : actual;
+
+    return Registrado(
+      id: id,
+      eventoId: eventoId,
+      nombreCompleto: texto('nombre_completo', nombreCompleto) ?? nombreCompleto,
+      email: texto('email', email) ?? email,
+      acreditado: booleano('acreditado', acreditado),
+      rut: texto('rut', rut),
+      patente: texto('patente', patente),
+      empresa: texto('empresa', empresa),
+      cargo: texto('cargo', cargo),
+      telefono: texto('telefono', telefono),
+      origen: origen,
+      ingresadoPor: ingresadoPor,
+      emailConfirmacionEnviado: booleano(
+        'email_confirmacion_enviado',
+        emailConfirmacionEnviado,
+      ),
+      createdAt: createdAt,
+      pendienteDeSincronizar: true,
+    );
   }
 
   Registrado copyWith({

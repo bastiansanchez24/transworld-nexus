@@ -22,6 +22,18 @@ abstract class SyncExecutor {
 const _prefsKey = 'sync_queue_v1';
 const _uuid = Uuid();
 
+/// Prefijo de los ids temporales que [SyncQueueService.enqueueInsert] asigna
+/// a las filas que todavía no existen en el servidor.
+const syncLocalIdPrefix = 'local_';
+
+/// true si [id] es uno de esos ids temporales, es decir, si la fila vive solo
+/// en la cola local.
+///
+/// Es la pregunta correcta antes de un UPDATE, un DELETE o de generar un QR:
+/// distinta de `pendienteDeSincronizar`, que también vale `true` para una fila
+/// ya sincronizada que solo tiene una edición esperando en la cola.
+bool esIdSoloLocal(String id) => id.startsWith(syncLocalIdPrefix);
+
 /// Única cola de sincronización offline de toda la app.
 ///
 /// Corrige el bug crítico documentado en `documentacion_zips_registro_pro.md`
@@ -75,7 +87,7 @@ class SyncQueueService extends StateNotifier<List<SyncQueueItem>> {
     required String table,
     required Map<String, dynamic> payload,
   }) async {
-    final id = 'local_${_uuid.v4()}';
+    final id = '$syncLocalIdPrefix${_uuid.v4()}';
     final now = DateTime.now();
     final item = SyncQueueItem(
       id: id,

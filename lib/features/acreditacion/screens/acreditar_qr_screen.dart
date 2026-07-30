@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -100,13 +101,13 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
   Future<void> _acreditar(Registrado registrado) async {
     final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
     final isOnline = ref.read(isOnlineProvider);
-    if (isOnline && !registrado.pendienteDeSincronizar) {
+    if (isOnline && !esIdSoloLocal(registrado.id)) {
       await ref
           .read(registradosRepositoryProvider)
           .acreditar(registrado.id, acreditadoPorId: userId ?? '');
     } else {
       await ref.read(syncQueueServiceProvider.notifier).enqueueUpdate(
-            table: 'registrados',
+            table: SupabaseTables.registrados,
             entityId: registrado.id,
             changes: {'acreditado': true},
           );

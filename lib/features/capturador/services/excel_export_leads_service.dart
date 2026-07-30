@@ -4,10 +4,22 @@ import 'package:excel/excel.dart' as xls;
 import 'package:intl/intl.dart';
 
 import '../../../data/models/lead.dart';
+import '../../../data/offline/pending_photo_store.dart';
 
 /// Genera el `.xlsx` de leads capturados en un evento.
 class ExcelExportLeadsService {
   const ExcelExportLeadsService();
+
+  /// Una foto capturada sin conexión todavía no tiene URL pública: en la
+  /// celda iría una ruta del dispositivo que no le sirve a nadie.
+  String _celdaFotos(Lead lead) {
+    final subidas = lead.fotosUrls.where((u) => !esFotoLocal(u));
+    final pendientes = lead.fotosUrls.where(esFotoLocal).length;
+    return [
+      ...subidas,
+      if (pendientes > 0) '($pendientes pendiente(s) de subir)',
+    ].join(' | ');
+  }
 
   Uint8List generar(List<Lead> leads, {String tituloHoja = 'Leads'}) {
     final excel = xls.Excel.createExcel();
@@ -21,6 +33,7 @@ class ExcelExportLeadsService {
       xls.TextCellValue('Cargo'),
       xls.TextCellValue('Teléfono'),
       xls.TextCellValue('Email'),
+      xls.TextCellValue('Descripción'),
       xls.TextCellValue('Capturado por'),
       xls.TextCellValue('Fotos (URLs)'),
       xls.TextCellValue('Fecha de captura'),
@@ -34,8 +47,9 @@ class ExcelExportLeadsService {
         xls.TextCellValue(lead.cargo ?? ''),
         xls.TextCellValue(lead.telefono ?? ''),
         xls.TextCellValue(lead.email ?? ''),
+        xls.TextCellValue(lead.descripcion ?? ''),
         xls.TextCellValue(lead.vendedorNombre ?? ''),
-        xls.TextCellValue(lead.fotosUrls.join(' | ')),
+        xls.TextCellValue(_celdaFotos(lead)),
         xls.TextCellValue(
           lead.createdAt != null ? formatoFecha.format(lead.createdAt!) : '',
         ),

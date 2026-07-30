@@ -69,6 +69,69 @@ class AppScaffold extends StatelessWidget {
   }
 }
 
+/// Chip cuadrado de la cabecera push.
+///
+/// Lo usan tanto el botón "atrás" como las acciones de la derecha (eliminar),
+/// para que no queden asimétricos: antes el atrás era un chip con borde y la
+/// acción un `IconButton` desnudo, que además imponía su `minHeight` de 48 y
+/// hacía que la barra midiera distinto según hubiera o no botón eliminar.
+class NexusHeaderAction extends StatelessWidget {
+  const NexusHeaderAction({
+    super.key,
+    required this.icon,
+    this.onTap,
+    this.tooltip,
+    this.loading = false,
+    this.danger = false,
+  });
+
+  /// Lado del chip. También es el ancho de los huecos que deja la cabecera
+  /// cuando no hay botón, para que el título siga centrado.
+  static const double size = 40;
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final String? tooltip;
+  final bool loading;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final habilitado = onTap != null && !loading;
+    final color = !habilitado
+        ? AppColors.textTertiary
+        : (danger ? AppColors.danger : AppColors.ink);
+
+    Widget chip = Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: loading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(icon, size: 18, color: color),
+    );
+
+    if (habilitado) {
+      chip = Pressable(scale: 0.92, onTap: onTap, child: chip);
+    }
+
+    if (tooltip != null) {
+      chip = Tooltip(message: tooltip!, child: chip);
+    }
+
+    return Semantics(button: true, label: tooltip, child: chip);
+  }
+}
+
 class _PushHeader extends StatelessWidget {
   const _PushHeader({this.title, this.titleWidget, this.actions});
 
@@ -85,7 +148,7 @@ class _PushHeader extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Container(
-          padding: EdgeInsets.fromLTRB(12, top + 6, 12, 10),
+          padding: EdgeInsets.fromLTRB(12, top + 14, 12, 14),
           decoration: BoxDecoration(
             color: AppColors.background.withValues(alpha: 0.92),
             border: const Border(
@@ -95,30 +158,17 @@ class _PushHeader extends StatelessWidget {
           child: Row(
             children: [
               if (puedeVolver)
-                Pressable(
-                  scale: 0.92,
+                NexusHeaderAction(
+                  icon: Symbols.arrow_back_ios_new_rounded,
+                  tooltip: 'Volver',
                   onTap: () => context.pop(),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: const Icon(
-                      Symbols.arrow_back_ios_new_rounded,
-                      size: 16,
-                      color: AppColors.ink,
-                    ),
-                  ),
                 )
               else
-                const SizedBox(width: 36),
+                const SizedBox(width: NexusHeaderAction.size),
               Expanded(
                 child: DefaultTextStyle(
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.2,
                     color: AppColors.ink,
@@ -133,20 +183,12 @@ class _PushHeader extends StatelessWidget {
                 ),
               ),
               if (actions != null && actions!.isNotEmpty)
-                SizedBox(
-                  width: 36,
-                  child: IconTheme(
-                    data: const IconThemeData(color: AppColors.ink, size: 22),
-                    child: actions!.length == 1
-                        ? actions!.first
-                        : Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: actions!,
-                          ),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: actions!,
                 )
               else
-                const SizedBox(width: 36),
+                const SizedBox(width: NexusHeaderAction.size),
             ],
           ),
         ),
