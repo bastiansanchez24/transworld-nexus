@@ -121,6 +121,7 @@ class SelectorImagen extends StatelessWidget {
     this.anchoMaximo,
     this.etiquetaVacio = 'Agregar imagen',
     this.pieDeFoto,
+    this.circular = false,
   });
 
   /// Imagen elegida en esta sesión y todavía sin subir. Tiene prioridad
@@ -149,6 +150,9 @@ class SelectorImagen extends StatelessWidget {
 
   /// Aviso opcional bajo la imagen (p. ej. "pendiente de subir").
   final Widget? pieDeFoto;
+
+  /// Recorte circular (p. ej. foto de perfil de un lead).
+  final bool circular;
 
   bool get _tieneImagen => bytes != null || (urlExistente?.isNotEmpty ?? false);
 
@@ -183,6 +187,7 @@ class SelectorImagen extends StatelessWidget {
   Widget _vacio() {
     return DashedBorderBox(
       height: null,
+      circular: circular,
       onTap: enabled ? onElegir : null,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -215,10 +220,12 @@ class SelectorImagen extends StatelessWidget {
         Pressable(
           enabled: enabled,
           onTap: enabled ? onElegir : null,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            child: _imagen(),
-          ),
+          child: circular
+              ? ClipOval(child: _imagen())
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: _imagen(),
+                ),
         ),
         if (onQuitar != null && enabled)
           Positioned(

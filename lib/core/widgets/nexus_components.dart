@@ -586,6 +586,7 @@ class DashedBorderBox extends StatelessWidget {
     required this.child,
     this.height = 150,
     this.onTap,
+    this.circular = false,
   });
 
   final Widget child;
@@ -593,23 +594,28 @@ class DashedBorderBox extends StatelessWidget {
   /// `null` deja que lo dimensione el padre (p. ej. un [AspectRatio]).
   final double? height;
   final VoidCallback? onTap;
+  final bool circular;
 
   @override
   Widget build(BuildContext context) {
     return Pressable(
       onTap: onTap,
       child: CustomPaint(
-        painter: _DashedRRectPainter(
-          color: AppColors.dashedBorder,
-          radius: AppRadius.lg,
-        ),
+        painter: circular
+            ? _DashedCirclePainter(color: AppColors.dashedBorder)
+            : _DashedRRectPainter(
+                color: AppColors.dashedBorder,
+                radius: AppRadius.lg,
+              ),
         child: Container(
           height: height,
           width: double.infinity,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: AppColors.tintNavy,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
+            shape: circular ? BoxShape.circle : BoxShape.rectangle,
+            borderRadius:
+                circular ? null : BorderRadius.circular(AppRadius.lg),
           ),
           child: child,
         ),
@@ -655,6 +661,43 @@ class _DashedRRectPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DashedRRectPainter oldDelegate) =>
       oldDelegate.color != color || oldDelegate.radius != radius;
+}
+
+class _DashedCirclePainter extends CustomPainter {
+  _DashedCirclePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final radius = (size.shortestSide - 1.5) / 2;
+    final center = Offset(size.width / 2, size.height / 2);
+    final path = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: radius));
+    final dashPath = Path();
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        const dash = 6.0;
+        const gap = 4.0;
+        final next = distance + dash;
+        dashPath.addPath(
+          metric.extractPath(distance, next.clamp(0, metric.length)),
+          Offset.zero,
+        );
+        distance = next + gap;
+      }
+    }
+    canvas.drawPath(dashPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedCirclePainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class StaggeredListItem extends StatelessWidget {

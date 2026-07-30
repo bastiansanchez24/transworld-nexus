@@ -414,6 +414,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                 enabled: !_guardando,
                 aspectRatio: kProporcionFotoLead,
                 anchoMaximo: kAnchoSelectorFotoLead,
+                circular: true,
                 etiquetaVacio: 'Agregar foto del lead',
                 onElegir: _elegirFoto,
                 onQuitar: _fotoBytes == null
