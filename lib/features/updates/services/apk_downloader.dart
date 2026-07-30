@@ -68,7 +68,8 @@ class ApkDownloader {
           'Espacio insuficiente para descargar la actualización.',
         );
       }
-      throw ApkDownloadException('Error al descargar el APK: $msg');
+      // Mensaje neutro: el mismo downloader sirve APK (Android) y ZIP (Windows).
+      throw ApkDownloadException('Error al descargar la actualización: $msg');
     } finally {
       _cancelToken = null;
     }

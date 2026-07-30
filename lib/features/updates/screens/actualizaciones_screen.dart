@@ -39,7 +39,6 @@ class _ActualizacionesBody extends ConsumerStatefulWidget {
 }
 
 class _ActualizacionesBodyState extends ConsumerState<_ActualizacionesBody> {
-  bool _dialogOpen = false;
   bool _loadingVersion = true;
   bool _loadingNotes = true;
   bool _loadingHistory = true;
@@ -190,67 +189,7 @@ class _ActualizacionesBodyState extends ConsumerState<_ActualizacionesBody> {
     }
     if (state.status == UpdateStatus.available ||
         state.status == UpdateStatus.failed) {
-      await _showUpdateDialog();
-    }
-  }
-
-  Future<void> _showUpdateDialog() async {
-    if (_dialogOpen) return;
-    _dialogOpen = true;
-    final controller = ref.read(updateControllerProvider.notifier);
-    controller.markDialogVisible(true);
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible:
-          !(ref.read(updateControllerProvider).info?.isForced ?? false),
-      builder: (dialogContext) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final state = ref.watch(updateControllerProvider);
-            final forced = state.info?.isForced ?? false;
-            return PopScope(
-              canPop: !forced,
-              child: UpdateDialog(
-                state: state,
-                onUpdate: () {
-                  ref
-                      .read(updateControllerProvider.notifier)
-                      .downloadAndInstall();
-                },
-                onLater: () {
-                  ref.read(updateControllerProvider.notifier).dismiss();
-                  Navigator.of(dialogContext).pop();
-                },
-                onCancelDownload: () {
-                  ref.read(updateControllerProvider.notifier).cancelDownload();
-                },
-                onRetry: () {
-                  final s = ref.read(updateControllerProvider);
-                  if (s.needsInstallPermission ||
-                      s.downloadedApkPath != null) {
-                    ref.read(updateControllerProvider.notifier).retryInstall();
-                  } else {
-                    ref
-                        .read(updateControllerProvider.notifier)
-                        .downloadAndInstall();
-                  }
-                },
-                onOpenSettings: () {
-                  ref
-                      .read(updateControllerProvider.notifier)
-                      .openInstallSettings();
-                },
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (mounted) {
-      controller.markDialogVisible(false);
-      _dialogOpen = false;
+      await showAppUpdateDialog(context, ref);
     }
   }
 

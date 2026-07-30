@@ -18,7 +18,7 @@ class TransworldNexusApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'Transworld Nexus',
+      title: 'Nexus',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       locale: const Locale('es'),

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/connectivity_service.dart';
@@ -8,7 +7,9 @@ import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/github_release_repository.dart';
 import '../services/apk_downloader.dart';
 import '../services/apk_installer.dart';
+import '../services/update_platform.dart';
 import '../services/update_service.dart';
+import '../services/windows_installer.dart';
 
 final apkDownloaderProvider = Provider<ApkDownloader>((ref) {
   return ApkDownloader();
@@ -18,12 +19,17 @@ final apkInstallerProvider = Provider<ApkInstaller>((ref) {
   return ApkInstaller();
 });
 
+final windowsInstallerProvider = Provider<WindowsInstaller>((ref) {
+  return WindowsInstaller();
+});
+
 final updateServiceProvider = Provider<UpdateService>((ref) {
   return UpdateService(
     source: ref.watch(updateSourceProvider),
     prefs: ref.watch(sharedPreferencesProvider),
     downloader: ref.watch(apkDownloaderProvider),
-    installer: ref.watch(apkInstallerProvider),
+    apkInstaller: ref.watch(apkInstallerProvider),
+    windowsInstaller: ref.watch(windowsInstallerProvider),
   );
 });
 
@@ -39,9 +45,9 @@ class UpdateController extends StateNotifier<UpdateState> {
 
   UpdateService get _service => _ref.read(updateServiceProvider);
 
-  /// Check automático post-login (Android + online + debounce).
+  /// Check automático post-login (Android/Windows + online + debounce).
   Future<void> checkOnLaunch() async {
-    if (kIsWeb || !Platform.isAndroid) return;
+    if (!otaUpdatesSupported) return;
     if (!(_ref.read(isOnlineProvider))) return;
     if (state.isBusy) return;
     if (_dialogVisible) return;
@@ -71,13 +77,12 @@ class UpdateController extends StateNotifier<UpdateState> {
     }
   }
 
-  /// Check manual desde Perfil (siempre consulta; muestra feedback).
+  /// Check manual desde Actualizaciones (siempre consulta; muestra feedback).
   Future<void> checkManual() async {
-    if (kIsWeb || !Platform.isAndroid) {
+    if (!otaUpdatesSupported) {
       state = state.copyWith(
         status: UpdateStatus.failed,
-        errorMessage:
-            'Las actualizaciones OTA solo están disponibles en Android.',
+        errorMessage: otaUnsupportedMessage,
       );
       return;
     }
@@ -154,32 +159,13 @@ class UpdateController extends StateNotifier<UpdateState> {
 
       state = state.copyWith(
         status: UpdateStatus.installing,
-        downloadedApkPath: file.path,
+        downloadedFilePath: file.path,
       );
 
       final result = await _service.install(file);
       if (!mounted) return;
 
-      switch (result.outcome) {
-        case ApkInstallOutcome.launched:
-          // El instalador del sistema toma el control; dejamos estado installing.
-          state = state.copyWith(status: UpdateStatus.installing);
-        case ApkInstallOutcome.permissionRequired:
-          state = state.copyWith(
-            status: UpdateStatus.failed,
-            needsInstallPermission: true,
-            errorMessage: result.message ??
-                'Se requiere permiso para instalar aplicaciones.',
-            downloadedApkPath: file.path,
-          );
-        case ApkInstallOutcome.unsupportedPlatform:
-        case ApkInstallOutcome.failed:
-          state = state.copyWith(
-            status: UpdateStatus.failed,
-            errorMessage: result.message ?? 'No se pudo iniciar la instalación.',
-            downloadedApkPath: file.path,
-          );
-      }
+      _applyInstallResult(result, file.path);
     } on ApkDownloadCancelled {
       if (!mounted) return;
       state = state.copyWith(
@@ -202,9 +188,9 @@ class UpdateController extends StateNotifier<UpdateState> {
     }
   }
 
-  /// Reintenta instalar un APK ya verificado (tras conceder permiso).
+  /// Reintenta instalar un paquete ya verificado (Android: tras conceder permiso).
   Future<void> retryInstall() async {
-    final path = state.downloadedApkPath;
+    final path = state.downloadedFilePath;
     if (path == null) {
       await downloadAndInstall();
       return;
@@ -224,20 +210,36 @@ class UpdateController extends StateNotifier<UpdateState> {
     final result = await _service.install(file);
     if (!mounted) return;
 
+    _applyInstallResult(result, path);
+  }
+
+  void _applyInstallResult(UpdateInstallResult result, String filePath) {
     switch (result.outcome) {
-      case ApkInstallOutcome.launched:
+      case UpdateInstallOutcome.launched:
         state = state.copyWith(status: UpdateStatus.installing);
-      case ApkInstallOutcome.permissionRequired:
+        if (Platform.isWindows) {
+          // El actualizador espera a que este proceso libere el .exe. Damos un
+          // margen mínimo para que el usuario vea "Aplicando actualización…"
+          // antes de que la ventana desaparezca y la app se reinicie sola.
+          Future.delayed(
+            const Duration(milliseconds: 1200),
+            () => exit(0),
+          );
+        }
+      case UpdateInstallOutcome.permissionRequired:
         state = state.copyWith(
           status: UpdateStatus.failed,
           needsInstallPermission: true,
-          errorMessage: result.message,
+          errorMessage: result.message ??
+              'Se requiere permiso para instalar aplicaciones.',
+          downloadedFilePath: filePath,
         );
-      case ApkInstallOutcome.unsupportedPlatform:
-      case ApkInstallOutcome.failed:
+      case UpdateInstallOutcome.unsupportedPlatform:
+      case UpdateInstallOutcome.failed:
         state = state.copyWith(
           status: UpdateStatus.failed,
-          errorMessage: result.message ?? 'Error al instalar.',
+          errorMessage: result.message ?? 'No se pudo iniciar la instalación.',
+          downloadedFilePath: filePath,
         );
     }
   }
@@ -249,7 +251,6 @@ class UpdateController extends StateNotifier<UpdateState> {
   void dismiss() {
     if (state.info?.isForced == true) return;
     state = state.copyWith(status: UpdateStatus.dismissed);
-    _dialogVisible = false;
   }
 
   Future<void> openInstallSettings() => _service.openInstallSettings();

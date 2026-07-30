@@ -10,6 +10,8 @@ import '../../../data/models/github_release.dart';
 import '../../../data/repositories/github_release_repository.dart';
 import 'apk_downloader.dart';
 import 'apk_installer.dart';
+import 'update_platform.dart';
+import 'windows_installer.dart';
 
 /// Información de una actualización disponible.
 class AppUpdateInfo {
@@ -19,7 +21,7 @@ class AppUpdateInfo {
     required this.releaseName,
     required this.notes,
     required this.isForced,
-    required this.apk,
+    required this.asset,
     required this.tagName,
   });
 
@@ -28,10 +30,10 @@ class AppUpdateInfo {
   final String releaseName;
   final String notes;
   final bool isForced;
-  final GitHubReleaseAsset apk;
+  final GitHubReleaseAsset asset;
   final String tagName;
 
-  String get formattedSize => formatBytes(apk.size);
+  String get formattedSize => formatBytes(asset.size);
 }
 
 enum UpdateStatus {
@@ -53,7 +55,7 @@ class UpdateState {
     this.progress = 0,
     this.errorMessage,
     this.needsInstallPermission = false,
-    this.downloadedApkPath,
+    this.downloadedFilePath,
   });
 
   final UpdateStatus status;
@@ -61,7 +63,7 @@ class UpdateState {
   final double progress;
   final String? errorMessage;
   final bool needsInstallPermission;
-  final String? downloadedApkPath;
+  final String? downloadedFilePath;
 
   bool get isBusy =>
       status == UpdateStatus.checking ||
@@ -75,7 +77,7 @@ class UpdateState {
     double? progress,
     String? errorMessage,
     bool? needsInstallPermission,
-    String? downloadedApkPath,
+    String? downloadedFilePath,
     bool clearError = false,
     bool clearInfo = false,
     bool clearDownloaded = false,
@@ -87,11 +89,25 @@ class UpdateState {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       needsInstallPermission:
           needsInstallPermission ?? this.needsInstallPermission,
-      downloadedApkPath: clearDownloaded
+      downloadedFilePath: clearDownloaded
           ? null
-          : (downloadedApkPath ?? this.downloadedApkPath),
+          : (downloadedFilePath ?? this.downloadedFilePath),
     );
   }
+}
+
+enum UpdateInstallOutcome {
+  launched,
+  permissionRequired,
+  unsupportedPlatform,
+  failed,
+}
+
+class UpdateInstallResult {
+  const UpdateInstallResult(this.outcome, {this.message});
+
+  final UpdateInstallOutcome outcome;
+  final String? message;
 }
 
 const _prefsLastCheckMs = 'ota_last_check_ms';
@@ -105,14 +121,17 @@ class UpdateService {
     required this._source,
     required this._prefs,
     ApkDownloader? downloader,
-    ApkInstaller? installer,
+    ApkInstaller? apkInstaller,
+    WindowsInstaller? windowsInstaller,
   })  : _downloader = downloader ?? ApkDownloader(),
-        _installer = installer ?? ApkInstaller();
+        _apkInstaller = apkInstaller ?? ApkInstaller(),
+        _windowsInstaller = windowsInstaller ?? WindowsInstaller();
 
   final UpdateSource _source;
   final SharedPreferences _prefs;
   final ApkDownloader _downloader;
-  final ApkInstaller _installer;
+  final ApkInstaller _apkInstaller;
+  final WindowsInstaller _windowsInstaller;
 
   bool _checkedThisSession = false;
 
@@ -124,6 +143,8 @@ class UpdateService {
     bool force = false,
     bool manual = false,
   }) async {
+    if (!otaUpdatesSupported) return null;
+
     if (!force) {
       if (_checkedThisSession) {
         developer.log('OTA: ya se consultó en esta sesión.', name: 'UpdateService');
@@ -183,12 +204,18 @@ class UpdateService {
         return null;
       }
 
-      final apk = release.resolveNexusApk();
-      if (apk == null || apk.browserDownloadUrl.isEmpty) {
-        developer.log('OTA: Release sin APK Nexus.', name: 'UpdateService');
+      final forWindows = otaResolvesWindowsAsset;
+      final asset = release.resolveNexusAsset(forWindows: forWindows);
+      if (asset == null || asset.browserDownloadUrl.isEmpty) {
+        developer.log(
+          'OTA: Release sin asset Nexus (${forWindows ? 'Windows' : 'Android'}).',
+          name: 'UpdateService',
+        );
         if (manual) {
-          throw const GitHubReleaseException(
-            'La última Release no incluye un APK de Nexus.',
+          throw GitHubReleaseException(
+            forWindows
+                ? 'La última Release no incluye un paquete Windows de Nexus.'
+                : 'La última Release no incluye un APK de Nexus.',
           );
         }
         return null;
@@ -202,7 +229,7 @@ class UpdateService {
             : 'Nexus v${remote.toString()}',
         notes: release.notesForDisplay,
         isForced: release.isForced,
-        apk: apk,
+        asset: asset,
         tagName: release.tagName,
       );
     } on GitHubReleaseException catch (e) {
@@ -231,8 +258,8 @@ class UpdateService {
     void Function(double progress)? onProgress,
   }) {
     return _downloader.download(
-      url: info.apk.browserDownloadUrl,
-      fileName: info.apk.name,
+      url: info.asset.browserDownloadUrl,
+      fileName: info.asset.name,
       onProgress: onProgress,
     );
   }
@@ -240,7 +267,7 @@ class UpdateService {
   void cancelDownload() => _downloader.cancel();
 
   Future<bool> verifyDownload(File file, AppUpdateInfo info) async {
-    final expected = info.apk.sha256Hex;
+    final expected = info.asset.sha256Hex;
     if (expected == null) {
       developer.log(
         'OTA: Release sin digest SHA-256; se permite instalar (política v1).',
@@ -257,9 +284,52 @@ class UpdateService {
     return ok;
   }
 
-  Future<ApkInstallResult> install(File file) => _installer.install(file);
+  Future<UpdateInstallResult> install(File file) async {
+    if (Platform.isAndroid) {
+      final result = await _apkInstaller.install(file);
+      return UpdateInstallResult(
+        _mapApkOutcome(result.outcome),
+        message: result.message,
+      );
+    }
+    if (Platform.isWindows) {
+      final result = await _windowsInstaller.install(file);
+      return UpdateInstallResult(
+        _mapWindowsOutcome(result.outcome),
+        message: result.message,
+      );
+    }
+    return UpdateInstallResult(
+      UpdateInstallOutcome.unsupportedPlatform,
+      message: otaUnsupportedMessage,
+    );
+  }
 
-  Future<bool> openInstallSettings() => _installer.openInstallSettings();
+  Future<bool> openInstallSettings() => _apkInstaller.openInstallSettings();
+
+  UpdateInstallOutcome _mapApkOutcome(ApkInstallOutcome outcome) {
+    switch (outcome) {
+      case ApkInstallOutcome.launched:
+        return UpdateInstallOutcome.launched;
+      case ApkInstallOutcome.permissionRequired:
+        return UpdateInstallOutcome.permissionRequired;
+      case ApkInstallOutcome.unsupportedPlatform:
+        return UpdateInstallOutcome.unsupportedPlatform;
+      case ApkInstallOutcome.failed:
+        return UpdateInstallOutcome.failed;
+    }
+  }
+
+  UpdateInstallOutcome _mapWindowsOutcome(WindowsInstallOutcome outcome) {
+    switch (outcome) {
+      case WindowsInstallOutcome.launched:
+        return UpdateInstallOutcome.launched;
+      case WindowsInstallOutcome.unsupportedPlatform:
+        return UpdateInstallOutcome.unsupportedPlatform;
+      case WindowsInstallOutcome.failed:
+        return UpdateInstallOutcome.failed;
+    }
+  }
 
   bool _shouldCheckNow() {
     final last = _prefs.getInt(_prefsLastCheckMs);

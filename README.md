@@ -153,15 +153,15 @@ lib/
   `--no-verify-jwt` (se invoca sin sesión). El esquema completo (tablas,
   RLS, RPCs) vive en `supabase/schema.sql`.
 
-## Actualizaciones OTA (Android / GitHub Releases)
+## Actualizaciones OTA (Android / Windows / GitHub Releases)
 
 Nexus se distribuye de forma privada vía **GitHub Releases** (sin Play Store
-ni Supabase Storage). En Android, tras el login la app consulta:
+ni Supabase Storage). En **Android** y **Windows**, tras el login la app consulta:
 
 `GET https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest`
 
-y ofrece instalar el APK si el `tag_name` (SemVer) es mayor que la versión
-instalada (`package_info_plus` ↔ `pubspec.yaml`).
+y ofrece instalar la actualización si el `tag_name` (SemVer) es mayor que la
+versión instalada (`package_info_plus` ↔ `pubspec.yaml`).
 
 ### Convención de Release
 
@@ -169,11 +169,84 @@ instalada (`package_info_plus` ↔ `pubspec.yaml`).
 |----------|----------|
 | Tag | `vMAJOR.MINOR.PATCH` (ej. `v1.2.0`) |
 | `pubspec.yaml` | `version: MAJOR.MINOR.PATCH+BUILD` **debe coincidir** con el tag (sin `v`) |
-| Asset APK | `android-NEXUS-vMAJOR.MINOR.PATCH.apk` |
+| Asset Android | `android-NEXUS-vMAJOR.MINOR.PATCH.apk` |
+| Asset Windows | `windows-NEXUS-vMAJOR.MINOR.PATCH.zip` (contenido de `build/windows/x64/runner/Release/`) |
 | Force update | Incluir la línea `[FORCE_UPDATE]` en el body de la Release |
 
 Si el body contiene `[FORCE_UPDATE]`, el diálogo no se puede cerrar ni
 posponer hasta instalar.
+
+### Cómo se aplica la actualización
+
+| | Android | Windows |
+|---|---|---|
+| Asset | `.apk` | `.zip` |
+| Mecanismo | Instalador del sistema (`OpenFilex` + permiso *instalar apps desconocidas*) | Script PowerShell *out-of-process* que reemplaza la carpeta de instalación |
+| Reinicio | Manual (lo hace el instalador) | Automático (el script relanza Nexus) |
+
+En **Windows** el flujo es: descarga → verificación SHA-256 → la app lanza un
+actualizador desacoplado y se cierra (`exit(0)`) → el actualizador espera a que
+el proceso libere el `.exe`, extrae el ZIP sobre la carpeta de instalación y
+vuelve a abrir Nexus.
+
+Garantías del actualizador (`lib/features/updates/services/windows_installer.dart`):
+
+- **Pre-flight de escritura**: si la carpeta de instalación no es escribible, la
+  app **no se cierra** y muestra el error. Nexus debe vivir en una carpeta de
+  usuario (ej. `%LOCALAPPDATA%\Nexus`); en `C:\Program Files` haría falta
+  elevación y la OTA no se aplicará.
+- **Validación del paquete**: si el ZIP no contiene el `.exe`, se aborta sin
+  tocar la instalación.
+- **Backup + rollback**: se respalda la instalación antes de sobrescribir y se
+  restaura si la copia falla.
+- **Reintentos**: la copia reintenta ante archivos bloqueados (antivirus,
+  indexador) antes de darse por vencida.
+- **Nunca deja al usuario sin app**: pase lo que pase, se relanza Nexus.
+- **Traza**: cada intento queda registrado en `%TEMP%\nexus-update.log`.
+
+Los archivos ajenos al paquete (config local del usuario) se conservan: la
+actualización copia encima, no borra la carpeta.
+
+### Instalador bootstrap (Windows — primera instalación)
+
+En lugar de un `.exe` grande por versión, Nexus usa un **instalador ligero**
+que consulta GitHub Releases en runtime e instala siempre la última versión.
+
+| Archivo | Uso |
+|---------|-----|
+| `scripts/install-nexus.ps1` | Script principal (API → descarga ZIP → extrae) |
+| `scripts/install-nexus.bat` | Launcher de doble clic |
+| `scripts/uninstall-nexus.ps1` | Desinstalación (binarios, datos en `%APPDATA%`, accesos directos) |
+| `installer_script.iss` | Wrapper Inno Setup → genera `NexusSetup.exe` |
+
+**Instalación rápida** (desde el repo clonado):
+
+```powershell
+.\scripts\install-nexus.bat
+# o con acceso directo en el escritorio:
+.\scripts\install-nexus.ps1 -DesktopShortcut
+```
+
+**Compilar `NexusSetup.exe`** (requiere [Inno Setup 6+](https://jrsoftware.org/isinfo.php)):
+
+```powershell
+.\scripts\build-installer.ps1
+# Salida: build\windows\installer\NexusSetup.exe
+```
+
+Flujo del bootstrap:
+
+1. `GET /repos/{owner}/{repo}/releases/latest`
+2. Descarga `windows-NEXUS-vX.Y.Z.zip`
+3. Verifica SHA-256 si GitHub expone `digest` en el asset
+4. Extrae en `%LOCALAPPDATA%\Nexus` (compatible con OTA posterior)
+5. Crea accesos en el menú Inicio (y escritorio si se pide)
+6. Registra desinstalación en *Agregar o quitar programas* (salvo vía Inno Setup)
+
+Traza de instalación: `%TEMP%\nexus-install.log`.
+
+El bootstrap **no se recompila por release**; solo hay que volver a publicarlo
+si cambia la lógica de instalación. Los binarios vienen siempre del ZIP en GitHub.
 
 ### Firma release (obligatoria para upgrades reales)
 
@@ -189,8 +262,8 @@ Sin keystore, Gradle firma con debug (útil en local; **no** para distribución)
 1. Sube `pubspec.yaml` (`version: X.Y.Z+N`) y haz merge a `main`.
 2. Crea y pushea el tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 3. El workflow [`.github/workflows/release-android.yml`](.github/workflows/release-android.yml)
-   valida que pubspec == tag, construye el APK y crea/actualiza el Release
-   con el asset `android-NEXUS-vX.Y.Z.apk`.
+   valida que pubspec == tag, construye el APK y el ZIP de Windows, y crea/actualiza
+   el Release con los assets `android-NEXUS-vX.Y.Z.apk` y `windows-NEXUS-vX.Y.Z.zip`.
 4. (Opcional) Edita las notas del Release y agrega `[FORCE_UPDATE]` si aplica.
 
 ### Variables `.env`

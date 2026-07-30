@@ -572,6 +572,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_usuario_id uuid := usuario_id;
 BEGIN
   IF NOT public.rpe_is_admin() THEN
     RAISE EXCEPTION 'Solo un administrador puede cambiar roles';
@@ -581,12 +583,13 @@ BEGIN
     RAISE EXCEPTION 'Rol inválido: %', nuevo_rol;
   END IF;
 
-  DELETE FROM public.usuarios_eventos WHERE usuario_id = rpe_actualizar_rol_usuario.usuario_id;
+  DELETE FROM public.usuarios_eventos ue
+  WHERE ue.usuario_id = v_usuario_id;
 
-  UPDATE public.perfiles
+  UPDATE public.perfiles p
   SET rol = nuevo_rol,
       evento_asignado_id = NULL
-  WHERE id = rpe_actualizar_rol_usuario.usuario_id;
+  WHERE p.id = v_usuario_id;
 END;
 $$;
 
@@ -629,9 +632,9 @@ BEGIN
     RAISE EXCEPTION 'Uno o más eventos no existen';
   END IF;
 
-  DELETE FROM public.usuarios_eventos
-  WHERE usuario_id = p_usuario_id
-    AND evento_id <> ALL (p_evento_ids);
+  DELETE FROM public.usuarios_eventos ue
+  WHERE ue.usuario_id = p_usuario_id
+    AND ue.evento_id <> ALL (p_evento_ids);
 
   INSERT INTO public.usuarios_eventos (usuario_id, evento_id, rol_evento)
   SELECT p_usuario_id, eid, 'externo'
@@ -714,6 +717,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_sentinel constant uuid := '00000000-0000-0000-0000-000000000001';
+  v_usuario_id uuid := usuario_id;
 BEGIN
   IF usuario_id = v_sentinel THEN
     RAISE EXCEPTION 'No se puede eliminar el perfil sistema';
@@ -759,7 +763,7 @@ BEGIN
 
   IF to_regclass('public.usuarios_eventos') IS NOT NULL THEN
     DELETE FROM public.usuarios_eventos ue
-      WHERE ue.usuario_id = rpe_eliminar_usuario.usuario_id;
+      WHERE ue.usuario_id = v_usuario_id;
   END IF;
 
   IF to_regclass('public.eventos_leads') IS NOT NULL THEN

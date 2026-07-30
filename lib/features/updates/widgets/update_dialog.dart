@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../providers/update_providers.dart';
+import '../services/update_platform.dart';
 import '../services/update_service.dart';
 
 /// Barra de progreso + porcentaje para la descarga OTA.
@@ -72,6 +75,7 @@ class UpdateDialog extends StatelessWidget {
     final installing = state.status == UpdateStatus.installing;
     final failed = state.status == UpdateStatus.failed;
     final busy = downloading || verifying || installing;
+    final installingLabel = otaInstallingLabel;
 
     return AlertDialog(
       backgroundColor: AppColors.surface,
@@ -165,7 +169,7 @@ class UpdateDialog extends StatelessWidget {
                 label: verifying
                     ? 'Verificando integridad…'
                     : installing
-                        ? 'Abriendo instalador…'
+                        ? installingLabel
                         : null,
               ),
             ],
@@ -220,6 +224,76 @@ class UpdateDialog extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+/// Muestra el diálogo OTA compartido (UpdateChecker, Actualizaciones, etc.).
+///
+/// Centraliza el cierre para evitar rutas duplicadas: el flag
+/// [UpdateController.isDialogVisible] solo se limpia al terminar [showDialog],
+/// y [UpdateController.dismiss] se llama una sola vez al cerrar sin instalar.
+Future<void> showAppUpdateDialog(BuildContext context, WidgetRef ref) async {
+  final controller = ref.read(updateControllerProvider.notifier);
+  if (controller.isDialogVisible) return;
+  controller.markDialogVisible(true);
+
+  await showDialog<void>(
+    context: context,
+    barrierDismissible:
+        !(ref.read(updateControllerProvider).info?.isForced ?? false),
+    builder: (dialogContext) {
+      return Consumer(
+        builder: (context, ref, _) {
+          final state = ref.watch(updateControllerProvider);
+          final forced = state.info?.isForced ?? false;
+          return PopScope(
+            canPop: !forced,
+            child: UpdateDialog(
+              state: state,
+              onUpdate: () {
+                ref.read(updateControllerProvider.notifier).downloadAndInstall();
+              },
+              onLater: () => Navigator.of(dialogContext).pop(),
+              onCancelDownload: () {
+                ref.read(updateControllerProvider.notifier).cancelDownload();
+              },
+              onRetry: () {
+                final s = ref.read(updateControllerProvider);
+                if (s.needsInstallPermission || s.downloadedFilePath != null) {
+                  ref.read(updateControllerProvider.notifier).retryInstall();
+                } else {
+                  ref
+                      .read(updateControllerProvider.notifier)
+                      .downloadAndInstall();
+                }
+              },
+              onOpenSettings: () {
+                ref
+                    .read(updateControllerProvider.notifier)
+                    .openInstallSettings();
+              },
+            ),
+          );
+        },
+      );
+    },
+  );
+
+  if (!context.mounted) return;
+
+  final current = ref.read(updateControllerProvider);
+  controller.markDialogVisible(false);
+
+  if (current.info?.isForced == true &&
+      current.status != UpdateStatus.installing) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) showAppUpdateDialog(context, ref);
+    });
+    return;
+  }
+
+  if (current.info != null && current.status != UpdateStatus.installing) {
+    controller.dismiss();
   }
 }
 

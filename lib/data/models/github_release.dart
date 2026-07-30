@@ -25,6 +25,13 @@ class GitHubReleaseAsset {
     return lower.endsWith('.apk') && lower.contains('nexus');
   }
 
+  bool get isZip => name.toLowerCase().endsWith('.zip');
+
+  bool get isNexusWindowsZip {
+    final lower = name.toLowerCase();
+    return lower.endsWith('.zip') && lower.contains('nexus');
+  }
+
   factory GitHubReleaseAsset.fromJson(Map<String, dynamic> json) {
     return GitHubReleaseAsset(
       name: json['name'] as String? ?? '',
@@ -83,6 +90,35 @@ class GitHubRelease {
 
     candidates.sort((a, b) => b.size.compareTo(a.size));
     return candidates.first;
+  }
+
+  /// Resuelve el ZIP de Windows según el contrato OTA.
+  ///
+  /// 1. Assets `.zip` cuyo nombre contiene `NEXUS`.
+  /// 2. Preferir el que coincide con el tag (`windows-NEXUS-vX.Y.Z.zip`).
+  /// 3. Si hay varios, el de mayor [GitHubReleaseAsset.size].
+  GitHubReleaseAsset? resolveNexusWindowsZip() {
+    final candidates = assets.where((a) => a.isNexusWindowsZip).toList();
+    if (candidates.isEmpty) {
+      final fallback = assets.where((a) => a.isZip).toList();
+      if (fallback.isEmpty) return null;
+      fallback.sort((a, b) => b.size.compareTo(a.size));
+      return fallback.first;
+    }
+
+    final tag = stripVersionPrefix(tagName);
+    final exactName = 'windows-NEXUS-v$tag.zip';
+    for (final c in candidates) {
+      if (c.name == exactName) return c;
+    }
+
+    candidates.sort((a, b) => b.size.compareTo(a.size));
+    return candidates.first;
+  }
+
+  /// Asset OTA para la plataforma actual (`android` | `windows`).
+  GitHubReleaseAsset? resolveNexusAsset({required bool forWindows}) {
+    return forWindows ? resolveNexusWindowsZip() : resolveNexusApk();
   }
 
   factory GitHubRelease.fromJson(Map<String, dynamic> json) {

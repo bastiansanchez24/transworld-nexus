@@ -1,4 +1,4 @@
-name: Release Android APK
+name: Release Android APK + Windows ZIP
 
 on:
   push:
@@ -103,11 +103,102 @@ jobs:
           body: |
             Actualización de Nexus `${{ github.ref_name }}`.
 
-            Asset: `android-NEXUS-${{ github.ref_name }}.apk`
+            Assets:
+            - `android-NEXUS-${{ github.ref_name }}.apk`
+            - `windows-NEXUS-${{ github.ref_name }}.zip` (subido por el job Windows)
+            - `NexusSetup.exe` — instalador bootstrap (descarga la última versión)
+            - `NexusBootstrap.zip` — scripts PS1/BAT del instalador bootstrap
 
             Para marcar la actualización como **obligatoria**, edita las notas
             de esta Release y agrega la línea:
 
             `[FORCE_UPDATE]`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    needs: build-and-release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Write .env for build
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          {
+            echo "SUPABASE_URL=${SUPABASE_URL:-https://placeholder.supabase.co}"
+            echo "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-placeholder}"
+            echo "GITHUB_OWNER=bastiansanchez24"
+            echo "GITHUB_REPO=transworld_project_nexus"
+            echo "UPDATE_CHANNEL=stable"
+            echo "APP_PUBLIC_BASE_URL=https://intranet.transworld.cl"
+          } > .env
+
+      - name: Build Windows (release)
+        run: flutter build windows --release
+
+      - name: Package Windows ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = "${{ github.ref_name }}"
+          $src = "build/windows/x64/runner/Release"
+          $destDir = "build/windows/dist"
+          $zipName = "windows-NEXUS-$tag.zip"
+          New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+          $zipPath = Join-Path $destDir $zipName
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Compress-Archive -Path (Join-Path $src '*') -DestinationPath $zipPath
+          "ASSET_PATH=$zipPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "ASSET_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Package bootstrap installer scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $destDir = "build/windows/dist"
+          $bootstrapZip = Join-Path $destDir "NexusBootstrap.zip"
+          if (Test-Path $bootstrapZip) { Remove-Item $bootstrapZip -Force }
+          Compress-Archive -Path @(
+            "scripts/install-nexus.ps1",
+            "scripts/install-nexus.bat",
+            "scripts/uninstall-nexus.ps1"
+          ) -DestinationPath $bootstrapZip
+          "BOOTSTRAP_PATH=$bootstrapZip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build NexusSetup.exe (Inno Setup)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install innosetup -y --no-progress
+          $env:INNO_SETUP_COMPILER = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $env:INNO_SETUP_COMPILER)) {
+            $env:INNO_SETUP_COMPILER = "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          }
+          & "$env:GITHUB_WORKSPACE\scripts\build-installer.ps1"
+          "SETUP_PATH=build/windows/installer/NexusSetup.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload Windows assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ${{ env.ASSET_PATH }}
+            ${{ env.BOOTSTRAP_PATH }}
+            ${{ env.SETUP_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
