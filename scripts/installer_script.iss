@@ -1,4 +1,4 @@
-; Instalador bootstrap de Transworld NEXUS.
+; Instalador bootstrap de Nexus.
 ; No empaqueta binarios: descarga la última versión desde GitHub Releases.
 ; Compilar: .\scripts\build-installer.ps1  (requiere Inno Setup 6+)
 
@@ -131,7 +131,7 @@ end;
 
 function GetInstallParameters(Param: String): String;
 begin
-  Result := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\install-nexus.ps1') + '" -Launch -SkipUninstallRegistry';
+  Result := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\install-nexus.ps1') + '" -InstallDir "' + ExpandConstant('{localappdata}\Nexus') + '" -Launch -SkipUninstallRegistry';
   if WizardIsTaskSelected('desktopicon') then
     Result := Result + ' -DesktopShortcut';
 end;

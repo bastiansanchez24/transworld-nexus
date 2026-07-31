@@ -326,9 +326,9 @@ function Register-UninstallEntry {
     [string]$InstallLocation
   )
 
-  $uninstallScript = Join-Path $PSScriptRoot 'uninstall-nexus.ps1'
+  $uninstallScript = Join-Path $InstallLocation 'uninstall-nexus.ps1'
   if (-not (Test-Path -LiteralPath $uninstallScript)) {
-    $uninstallScript = Join-Path $InstallLocation 'uninstall-nexus.ps1'
+    $uninstallScript = Join-Path $PSScriptRoot 'uninstall-nexus.ps1'
   }
 
   $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -361,6 +361,61 @@ function Write-InstalledVersionFile {
   $versionFile = Join-Path $InstallLocation '.nexus-version'
   Set-Content -LiteralPath $versionFile -Value $Version.Trim() -Encoding ASCII -NoNewline
   Write-Log ('Version persistida en ' + $versionFile)
+}
+
+function Stop-NexusIfRunning {
+  $proc = Get-Process -Name 'transworld_nexus' -ErrorAction SilentlyContinue
+  if (-not $proc) { return }
+  Write-Log ('Cerrando Nexus (PID ' + $proc.Id + ') antes de limpiar legacy...')
+  $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 2
+}
+
+function Remove-LegacyInstallArtifacts {
+  param([string]$CurrentInstallDir)
+
+  $legacyInstallDir = Join-Path $env:LOCALAPPDATA 'Transworld NEXUS'
+  if ($legacyInstallDir -eq $CurrentInstallDir) { return }
+
+  Stop-NexusIfRunning
+
+  $legacyStartMenuDir = Join-Path ([Environment]::GetFolderPath('Programs')) 'Transworld NEXUS'
+  $legacyUninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}_is1'
+  $desktop = [Environment]::GetFolderPath('Desktop')
+
+  foreach ($name in @('Transworld NEXUS.lnk')) {
+    $shortcut = Join-Path $desktop $name
+    if (Test-Path -LiteralPath $shortcut) {
+      Remove-Item -LiteralPath $shortcut -Force
+      Write-Log ('Acceso directo legacy eliminado: ' + $shortcut)
+    }
+  }
+
+  foreach ($name in @('Transworld NEXUS.lnk', "$AppDisplayName.lnk")) {
+    $shortcut = Join-Path $legacyStartMenuDir $name
+    if (Test-Path -LiteralPath $shortcut) {
+      Remove-Item -LiteralPath $shortcut -Force
+      Write-Log ('Acceso directo legacy eliminado: ' + $shortcut)
+    }
+  }
+
+  if (Test-Path -LiteralPath $legacyStartMenuDir) {
+    Remove-Item -LiteralPath $legacyStartMenuDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Log ('Carpeta de menú Inicio legacy eliminada: ' + $legacyStartMenuDir)
+  }
+
+  if (Test-Path -LiteralPath $legacyInstallDir) {
+    Write-Log ('Eliminando instalación legacy: ' + $legacyInstallDir)
+    Remove-Item -LiteralPath $legacyInstallDir -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $legacyInstallDir) {
+      Write-Log ('Aviso: no se pudo eliminar por completo ' + $legacyInstallDir)
+    }
+  }
+
+  if (Test-Path -LiteralPath $legacyUninstallKey) {
+    Remove-Item -LiteralPath $legacyUninstallKey -Recurse -Force
+    Write-Log 'Entrada de desinstalación legacy (Inno) eliminada.'
+  }
 }
 
 # --- Main ---
@@ -459,6 +514,8 @@ try {
   Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
   Write-UiOk -Message ('Archivos instalados en {0}' -f $InstallDir)
 
+  Remove-LegacyInstallArtifacts -CurrentInstallDir $InstallDir
+
   Write-UiStep -Message 'Configurando accesos directos y registro'
   Install-UninstallScript -Destination $InstallDir
 
@@ -487,13 +544,13 @@ try {
   Write-UiOk -Message 'Acceso directo en el menú Inicio creado'
 
   if ($SkipUninstallRegistry) {
-    Write-InstalledVersionFile -Version $version -InstallLocation $InstallDir
     Write-UiOk -Message ('Version v{0} registrada para el instalador' -f $version)
   } else {
     Register-UninstallEntry -Version $version -InstallLocation $InstallDir
     Write-Log 'Entrada de desinstalación registrada.'
     Write-UiOk -Message ('Registro de desinstalación actualizado (v{0})' -f $version)
   }
+  Write-InstalledVersionFile -Version $version -InstallLocation $InstallDir
 
   Write-Host ''
   Write-Host '  ===============================================' -ForegroundColor Green

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -252,6 +253,10 @@ class _EventoHero extends StatelessWidget {
 
   final Evento evento;
 
+  static const _borderRadius = BorderRadius.vertical(
+    bottom: Radius.circular(AppRadius.header),
+  );
+
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
@@ -264,79 +269,149 @@ class _EventoHero extends StatelessWidget {
       if (evento.lugar != null && evento.lugar!.isNotEmpty) evento.lugar,
       if (evento.pais != null && evento.pais!.isNotEmpty) evento.pais,
     ].join(' · ');
+    final imagenUrl = evento.imagenUrl;
+    final tieneImagen = imagenUrl != null && imagenUrl.isNotEmpty;
 
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(AppRadius.header),
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        20,
-        topPad +
-            CollapsingNavMetrics.gapDetail * 2 +
-            CollapsingNavMetrics.titleZone +
-            8,
-        20,
-        24,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-            ),
-            child: Text(
-              fechaChip,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
-              ),
-            ),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
           ),
-          const SizedBox(height: 8),
-          Text(
-            evento.nombre,
+          child: Text(
+            fechaChip,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-              height: 1.3,
-              letterSpacing: -0.3,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
             ),
           ),
-          if (lugar.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(
-                  Symbols.location_on_rounded,
-                  size: 16,
-                  color: Color(0xBFFFFFFF),
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    lugar,
-                    style: const TextStyle(
-                      color: Color(0xBFFFFFFF),
-                      fontSize: 13,
-                    ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          evento.nombre,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 21,
+            fontWeight: FontWeight.w800,
+            height: 1.3,
+            letterSpacing: -0.3,
+          ),
+        ),
+        if (lugar.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(
+                Symbols.location_on_rounded,
+                size: 16,
+                color: Color(0xBFFFFFFF),
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  lugar,
+                  style: const TextStyle(
+                    color: Color(0xBFFFFFFF),
+                    fontSize: 13,
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+
+    final padding = EdgeInsets.fromLTRB(
+      20,
+      topPad +
+          CollapsingNavMetrics.gapDetail * 2 +
+          CollapsingNavMetrics.titleZone +
+          8,
+      20,
+      24,
+    );
+
+    if (!tieneImagen) {
+      return Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: AppColors.headerGradient,
+          borderRadius: _borderRadius,
+        ),
+        padding: padding,
+        child: content,
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: _borderRadius,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: _EventoHeroFoto(imagenUrl: imagenUrl),
+          ),
+          Padding(
+            padding: padding,
+            child: content,
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _EventoHeroFoto extends StatefulWidget {
+  const _EventoHeroFoto({required this.imagenUrl});
+
+  final String imagenUrl;
+
+  @override
+  State<_EventoHeroFoto> createState() => _EventoHeroFotoState();
+}
+
+class _EventoHeroFotoState extends State<_EventoHeroFoto> {
+  bool _imagenLista = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CachedNetworkImage(
+          imageUrl: widget.imagenUrl,
+          fit: BoxFit.cover,
+          placeholder: (_, _) => const _EventoHeroGradiente(),
+          errorWidget: (_, _, _) => const _EventoHeroGradiente(),
+          imageBuilder: (context, imageProvider) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && !_imagenLista) {
+                setState(() => _imagenLista = true);
+              }
+            });
+            return Image(image: imageProvider, fit: BoxFit.cover);
+          },
+        ),
+        if (_imagenLista)
+          ColoredBox(color: Colors.black.withValues(alpha: 0.40)),
+      ],
+    );
+  }
+}
+
+class _EventoHeroGradiente extends StatelessWidget {
+  const _EventoHeroGradiente();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(gradient: AppColors.headerGradient),
     );
   }
 }
