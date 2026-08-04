@@ -8,14 +8,18 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/notificaciones_header_button.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
-import '../../../data/models/evento.dart';
 import '../../../data/models/perfil.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../fijados/providers/fijados_providers.dart';
+import '../../notificaciones/providers/notificaciones_providers.dart';
 import '../../updates/widgets/update_checker.dart';
+import '../models/home_featured_item.dart';
 import '../providers/home_dashboard_providers.dart';
+import '../providers/home_featured_providers.dart';
 import '../widgets/home_dashboard_section.dart';
 import '../widgets/proximo_evento_card.dart';
 
@@ -33,8 +37,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final perfilAsync = ref.watch(currentPerfilProvider);
     final perfil = perfilAsync.valueOrNull;
-    final proximo =
-        ref.watch(homeDashboardProvider).valueOrNull?.proximoEvento;
+    final featuredItems =
+        ref.watch(homeFeaturedItemsProvider).valueOrNull ?? const [];
+    final noLeidas = ref.watch(notificacionesNoLeidasProvider);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -47,10 +52,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _HeaderPerfil(
                 perfil: perfil,
                 menuAbierto: _menuCuentaAbierto,
-                proximoEvento: proximo,
-                onToggleMenu: () => setState(
-                  () => _menuCuentaAbierto = !_menuCuentaAbierto,
-                ),
+                featuredItems: featuredItems,
+                noLeidas: noLeidas,
+                onNotificaciones: () => context.push(RoutePaths.notificaciones),
+                onToggleMenu: () =>
+                    setState(() => _menuCuentaAbierto = !_menuCuentaAbierto),
                 onMiPerfil: () {
                   setState(() => _menuCuentaAbierto = false);
                   context.push(RoutePaths.perfil);
@@ -67,6 +73,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   color: AppColors.primary,
                   onRefresh: () async {
                     ref.invalidate(homeDashboardProvider);
+                    ref.invalidate(homeFeaturedItemsProvider);
+                    ref.invalidate(eventosFijadosProvider);
+                    ref.invalidate(campanasFijadasProvider);
                     ref.invalidate(currentPerfilProvider);
                   },
                   child: ListView(
@@ -108,7 +117,9 @@ class _HeaderPerfil extends StatelessWidget {
   const _HeaderPerfil({
     required this.perfil,
     required this.menuAbierto,
-    required this.proximoEvento,
+    required this.featuredItems,
+    required this.noLeidas,
+    required this.onNotificaciones,
     required this.onToggleMenu,
     required this.onMiPerfil,
     required this.onActualizaciones,
@@ -117,7 +128,9 @@ class _HeaderPerfil extends StatelessWidget {
 
   final Perfil? perfil;
   final bool menuAbierto;
-  final Evento? proximoEvento;
+  final List<HomeFeaturedItem> featuredItems;
+  final int noLeidas;
+  final VoidCallback onNotificaciones;
   final VoidCallback onToggleMenu;
   final VoidCallback onMiPerfil;
   final VoidCallback onActualizaciones;
@@ -154,10 +167,22 @@ class _HeaderPerfil extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    AvatarInitials(
-                      name: perfil?.nombreCompleto ?? '?',
-                      size: 44,
-                      index: 0,
+                    Pressable(
+                      scale: 0.94,
+                      onTap: onMiPerfil,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: AvatarPerfil(
+                          nombre: perfil?.nombreCompleto ?? '?',
+                          fotoUrl: perfil?.fotoUrl,
+                          size: 44,
+                          index: 0,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -181,6 +206,11 @@ class _HeaderPerfil extends StatelessWidget {
                         ],
                       ),
                     ),
+                    NotificacionesHeaderButton(
+                      noLeidas: noLeidas,
+                      onTap: onNotificaciones,
+                    ),
+                    const SizedBox(width: 8),
                     Pressable(
                       scale: 0.92,
                       onTap: onToggleMenu,
@@ -202,9 +232,9 @@ class _HeaderPerfil extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (proximoEvento != null) ...[
+                if (featuredItems.isNotEmpty) ...[
                   const SizedBox(height: 16),
-                  ProximoEventoCard(evento: proximoEvento!),
+                  ProximoEventoCard(items: featuredItems),
                 ],
                 AnimatedSize(
                   duration: AppMotion.toggle,
@@ -213,7 +243,7 @@ class _HeaderPerfil extends StatelessWidget {
                   child: menuAbierto
                       ? Padding(
                           padding: EdgeInsets.only(
-                            top: proximoEvento != null ? 12 : 16,
+                            top: featuredItems.isNotEmpty ? 12 : 16,
                           ),
                           child: _MenuCuenta(
                             onMiPerfil: onMiPerfil,

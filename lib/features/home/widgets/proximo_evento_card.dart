@@ -3,27 +3,147 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/pressable.dart';
-import '../../../data/models/evento.dart';
+import '../models/home_featured_item.dart';
 
-class ProximoEventoCard extends StatelessWidget {
-  const ProximoEventoCard({super.key, required this.evento});
+/// Card del header del home: próximo evento, o slider de fijados.
+class ProximoEventoCard extends StatefulWidget {
+  const ProximoEventoCard({super.key, required this.items});
 
-  final Evento evento;
+  final List<HomeFeaturedItem> items;
+
+  @override
+  State<ProximoEventoCard> createState() => _ProximoEventoCardState();
+}
+
+class _ProximoEventoCardState extends State<ProximoEventoCard> {
+  late final PageController _pageController;
+  int _page = 0;
+
+  bool get _esSlider =>
+      widget.items.length > 1 ||
+      (widget.items.isNotEmpty && widget.items.first.esFijado);
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProximoEventoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.items.length != widget.items.length ||
+        !_mismaLista(oldWidget.items, widget.items)) {
+      _page = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageController.hasClients) {
+          _pageController.jumpToPage(0);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  bool _mismaLista(List<HomeFeaturedItem> a, List<HomeFeaturedItem> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id || a[i].kind != b[i].kind) return false;
+    }
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final fecha = DateFormat('EEEE d MMM', 'es').format(evento.fecha);
-    final lugar = evento.lugar ?? evento.pais ?? '';
+    if (widget.items.isEmpty) return const SizedBox.shrink();
+
+    if (!_esSlider) {
+      return _FeaturedSlide(item: widget.items.first, showPin: false);
+    }
+
+    final textScaler = MediaQuery.textScalerOf(context);
+    final dateScale = textScaler.scale(1).clamp(1.0, double.infinity);
+    final contentScale = (textScaler.scale(14) / 14).clamp(
+      1.0,
+      double.infinity,
+    );
+    final contentHeight = 76 * contentScale;
+    final dateHeight = 56 * dateScale;
+    final cardHeight =
+        32 + (contentHeight > dateHeight ? contentHeight : dateHeight);
+
+    return Column(
+      children: [
+        SizedBox(
+          height: cardHeight,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: widget.items.length,
+            onPageChanged: (page) => setState(() => _page = page),
+            itemBuilder: (context, index) {
+              final item = widget.items[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                child: _FeaturedSlide(
+                  key: ValueKey('${item.kind.name}-${item.id}'),
+                  item: item,
+                  showPin: item.esFijado,
+                ),
+              );
+            },
+          ),
+        ),
+        if (widget.items.length > 1) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < widget.items.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                AnimatedContainer(
+                  duration: AppMotion.toggle,
+                  curve: AppMotion.ease,
+                  width: i == _page ? 16 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(
+                      alpha: i == _page ? 0.95 : 0.45,
+                    ),
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FeaturedSlide extends StatelessWidget {
+  const _FeaturedSlide({super.key, required this.item, required this.showPin});
+
+  final HomeFeaturedItem item;
+  final bool showPin;
+
+  @override
+  Widget build(BuildContext context) {
+    final fecha = DateFormat('EEEE d MMM', 'es').format(item.fecha);
+    final etiquetaColor = item.esFijado ? AppColors.primary : AppColors.success;
 
     return Pressable(
-      onTap: () => context.push(RoutePaths.usarEvento(evento.id)),
+      onTap: () => context.push(item.routePath),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surface.withValues(alpha: 0.97),
           borderRadius: BorderRadius.circular(AppRadius.fab),
@@ -31,30 +151,42 @@ class ProximoEventoCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            DateTile(date: evento.fecha, hero: true),
-            const SizedBox(width: 13),
+            DateTile(date: item.fecha, hero: true),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Row(
                     children: [
-                      const _PulseDot(),
+                      if (showPin)
+                        Icon(
+                          Symbols.push_pin_rounded,
+                          size: 12,
+                          color: etiquetaColor,
+                        )
+                      else
+                        const _PulseDot(),
                       const SizedBox(width: 6),
-                      Text(
-                        'PRÓXIMO EVENTO',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
-                          color: AppColors.success,
+                      Flexible(
+                        child: Text(
+                          item.etiqueta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                            color: etiquetaColor,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    evento.nombre,
+                    item.nombre,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -66,7 +198,7 @@ class ProximoEventoCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    [fecha, if (lugar.isNotEmpty) lugar].join(' · '),
+                    [fecha, if (item.lugar.isNotEmpty) item.lugar].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -136,10 +268,7 @@ class _PulseDotState extends State<_PulseDot>
         final opacity = 1 - 0.5 * t;
         return Transform.scale(
           scale: scale,
-          child: Opacity(
-            opacity: opacity,
-            child: child,
-          ),
+          child: Opacity(opacity: opacity, child: child),
         );
       },
       child: Container(

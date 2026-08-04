@@ -50,9 +50,11 @@ class _GestionarUsuariosBodyState
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return usuarios;
     return usuarios
-        .where((u) =>
-            u.nombreCompleto.toLowerCase().contains(q) ||
-            u.rol.label.toLowerCase().contains(q))
+        .where(
+          (u) =>
+              u.nombreCompleto.toLowerCase().contains(q) ||
+              u.rol.label.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -81,8 +83,10 @@ class _GestionarUsuariosBodyState
           filled: true,
           fillColor: AppColors.surface,
           isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.input),
             borderSide: const BorderSide(color: AppColors.border),
@@ -93,8 +97,10 @@ class _GestionarUsuariosBodyState
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.input),
-            borderSide:
-                const BorderSide(color: AppColors.primaryLight, width: 1.5),
+            borderSide: const BorderSide(
+              color: AppColors.primaryLight,
+              width: 1.5,
+            ),
           ),
         ),
       ),
@@ -179,9 +185,7 @@ class _GestionarUsuariosBodyState
           ),
         ),
         ...usuariosAsync.when(
-          loading: () => [
-            const SliverFillRemaining(child: LoadingView()),
-          ],
+          loading: () => [const SliverFillRemaining(child: LoadingView())],
           error: (e, _) => [
             SliverFillRemaining(
               child: ErrorView(
@@ -209,8 +213,7 @@ class _GestionarUsuariosBodyState
                 const SliverFillRemaining(
                   child: EmptyStateView(
                     icon: Icons.search_off_rounded,
-                    message:
-                        'No hay usuarios que coincidan con la búsqueda.',
+                    message: 'No hay usuarios que coincidan con la búsqueda.',
                   ),
                 ),
               ];
@@ -226,10 +229,7 @@ class _GestionarUsuariosBodyState
                     final usuario = filtrados[index];
                     return StaggeredListItem(
                       index: index,
-                      child: _UsuarioRow(
-                        usuario: usuario,
-                        index: index,
-                      ),
+                      child: _UsuarioRow(usuario: usuario, index: index),
                     );
                   },
                 ),
@@ -262,8 +262,9 @@ class _UsuarioRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            AvatarInitials(
-              name: usuario.nombreCompleto,
+            AvatarPerfil(
+              nombre: usuario.nombreCompleto,
+              fotoUrl: usuario.fotoUrl,
               size: 44,
               index: index,
             ),

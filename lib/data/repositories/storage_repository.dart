@@ -19,6 +19,16 @@ class StorageRepository {
     return _subir('eventos/${_uuid.v4()}.$extension', bytes, 'image/jpeg');
   }
 
+  /// Foto de perfil. El path fijo evita archivos huérfanos, mientras que el
+  /// query versionado invalida la caché y se persiste junto con la URL.
+  Future<String> subirFotoPerfil(Uint8List bytes, String userId) async {
+    final url = await _subir('perfiles/$userId.jpg', bytes, 'image/jpeg');
+    return agregarVersionCacheImagen(
+      url,
+      DateTime.now().microsecondsSinceEpoch,
+    );
+  }
+
   /// Foto adjunta a un lead capturado (`leads.fotos_urls`).
   Future<String> subirFotoLead(Uint8List bytes, String extension) {
     final ext = extension.toLowerCase().replaceAll('.', '');
@@ -80,3 +90,8 @@ class StorageRepository {
 final storageRepositoryProvider = Provider<StorageRepository>((ref) {
   return StorageRepository(ref.watch(supabaseClientProvider));
 });
+
+String agregarVersionCacheImagen(String url, int version) {
+  final separador = url.contains('?') ? '&' : '?';
+  return '$url${separador}v=$version';
+}

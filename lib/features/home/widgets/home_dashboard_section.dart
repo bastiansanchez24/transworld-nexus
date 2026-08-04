@@ -239,11 +239,16 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
             ],
           ),
           const SizedBox(height: 4),
-          _CalendarioGrid(
-            mes: _mesVisible,
-            eventosPorDia: eventosPorDia,
-            diaSeleccionado: _diaSeleccionado,
-            onDiaTap: (dia) => setState(() => _diaSeleccionado = dia),
+          AnimatedSize(
+            duration: AppMotion.toggle,
+            curve: AppMotion.ease,
+            alignment: Alignment.topCenter,
+            child: _CalendarioGrid(
+              mes: _mesVisible,
+              eventosPorDia: eventosPorDia,
+              diaSeleccionado: _diaSeleccionado,
+              onDiaTap: (dia) => setState(() => _diaSeleccionado = dia),
+            ),
           ),
           const Divider(height: AppSpacing.xxl, color: AppColors.divider),
           Text(
@@ -323,13 +328,14 @@ class _CalendarioGrid extends StatelessWidget {
 
     final celdas = <Widget>[];
     for (var i = 0; i < offset; i++) {
-      celdas.add(const SizedBox());
+      celdas.add(const _CeldaCalendarioVacia());
     }
     for (var dia = 1; dia <= diasEnMes; dia++) {
       final fecha = DateTime(mes.year, mes.month, dia);
       final tieneEventos = eventosPorDia.containsKey(dia);
       final esHoy = fecha == hoySolo;
-      final seleccionado = diaSeleccionado != null &&
+      final seleccionado =
+          diaSeleccionado != null &&
           diaSeleccionado!.year == fecha.year &&
           diaSeleccionado!.month == fecha.month &&
           diaSeleccionado!.day == fecha.day;
@@ -338,61 +344,82 @@ class _CalendarioGrid extends StatelessWidget {
       celdas.add(
         GestureDetector(
           onTap: () => onDiaTap(fecha),
-          child: Container(
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: esHoy ? AppColors.headerGradient : null,
-              color: !esHoy && seleccionado ? AppColors.tintNavy : null,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Stack(
+          child: AspectRatio(
+            aspectRatio: 1.15,
+            child: Container(
               alignment: Alignment.center,
-              children: [
-                Text(
-                  '$dia',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: esHoy || seleccionado
-                        ? FontWeight.w800
-                        : FontWeight.w500,
-                    color: esHoy
-                        ? Colors.white
-                        : esPasado
-                            ? AppColors.textTertiary
-                            : AppColors.ink,
-                  ),
-                ),
-                if (tieneEventos && !esHoy)
-                  Positioned(
-                    bottom: 4,
-                    child: Container(
-                      width: 4,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: seleccionado
-                            ? AppColors.primary
-                            : AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
+              decoration: BoxDecoration(
+                gradient: esHoy ? AppColors.headerGradient : null,
+                color: !esHoy && seleccionado ? AppColors.tintNavy : null,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Text(
+                    '$dia',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: esHoy || seleccionado
+                          ? FontWeight.w800
+                          : FontWeight.w500,
+                      color: esHoy
+                          ? Colors.white
+                          : esPasado
+                          ? AppColors.textTertiary
+                          : AppColors.ink,
                     ),
                   ),
-              ],
+                  if (tieneEventos && !esHoy)
+                    Positioned(
+                      bottom: 4,
+                      child: Container(
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
       );
     }
 
-    return GridView.count(
-      crossAxisCount: 7,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 2,
-      crossAxisSpacing: 2,
-      childAspectRatio: 1.15,
-      children: celdas,
+    while (celdas.length % 7 != 0) {
+      celdas.add(const _CeldaCalendarioVacia());
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var inicio = 0; inicio < celdas.length; inicio += 7) ...[
+          if (inicio > 0) const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = inicio; i < inicio + 7; i++) ...[
+                if (i > inicio) const SizedBox(width: 2),
+                Expanded(child: celdas[i]),
+              ],
+            ],
+          ),
+        ],
+      ],
     );
+  }
+}
+
+class _CeldaCalendarioVacia extends StatelessWidget {
+  const _CeldaCalendarioVacia();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AspectRatio(aspectRatio: 1.15);
   }
 }
 

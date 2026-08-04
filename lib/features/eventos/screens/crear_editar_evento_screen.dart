@@ -92,7 +92,11 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
   }
 
   Future<void> _elegirImagen() async {
-    final bytes = await elegirImagenComprimida(context);
+    final bytes = await elegirImagenComprimida(
+      context,
+      recorteProporcion: kProporcionImagenEvento,
+      tituloRecorte: 'Recortar portada',
+    );
     if (bytes == null || !mounted) return;
     setState(() => _imagenBytes = bytes);
   }

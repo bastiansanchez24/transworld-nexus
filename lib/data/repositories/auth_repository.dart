@@ -60,7 +60,8 @@ class AuthRepository {
     if (userId == null) return;
     await _client
         .from(SupabaseTables.perfiles)
-        .update({'cambiar_pass': false}).eq('id', userId);
+        .update({'cambiar_pass': false})
+        .eq('id', userId);
   }
 
   Future<Perfil?> obtenerPerfilActual() async {
@@ -77,7 +78,8 @@ class AuthRepository {
   Future<void> actualizarNombre(String id, String nuevoNombre) async {
     await _client
         .from(SupabaseTables.perfiles)
-        .update({'nombre_completo': nuevoNombre}).eq('id', id);
+        .update({'nombre_completo': nuevoNombre})
+        .eq('id', id);
   }
 
   /// Actualiza solo el nombre del usuario autenticado (nunca de terceros).
@@ -89,8 +91,28 @@ class AuthRepository {
     await actualizarNombre(userId, nuevoNombre);
   }
 
+  /// Actualiza la URL de la foto de perfil del usuario autenticado.
+  Future<void> actualizarFotoPropia(String? fotoUrl) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      throw Exception('No hay sesión activa.');
+    }
+    await actualizarFotoUsuario(userId, fotoUrl);
+  }
+
+  /// Actualiza la foto de un perfil. RLS limita terceros a administradores.
+  Future<void> actualizarFotoUsuario(String id, String? fotoUrl) async {
+    await _client
+        .from(SupabaseTables.perfiles)
+        .update({'foto_url': fotoUrl})
+        .eq('id', id);
+  }
+
   /// Email de la sesión actual (`auth.users`), no de la tabla `perfiles`.
   String? get emailSesionActual => _client.auth.currentUser?.email;
+
+  /// ID del usuario autenticado (`auth.users.id`).
+  String? get currentUserId => _client.auth.currentUser?.id;
 
   /// Cambia el rol de otro usuario. Usa el RPC `rpe_actualizar_rol_usuario`
   /// (`SECURITY DEFINER`) en vez de un `UPDATE` directo sobre `perfiles.rol`.
@@ -148,7 +170,8 @@ class AuthRepository {
   Future<void> establecerActivo(String id, bool activo) async {
     await _client
         .from(SupabaseTables.perfiles)
-        .update({'activo': activo}).eq('id', id);
+        .update({'activo': activo})
+        .eq('id', id);
   }
 
   /// Crea un usuario (cualquier rol) y envía credenciales por correo.
@@ -229,10 +252,7 @@ class AuthRepository {
   ) async {
     await _client.rpc(
       SupabaseRpc.sincronizarEventosExterno,
-      params: {
-        'p_usuario_id': usuarioId,
-        'p_evento_ids': eventoIds,
-      },
+      params: {'p_usuario_id': usuarioId, 'p_evento_ids': eventoIds},
     );
   }
 
@@ -242,7 +262,8 @@ class AuthRepository {
     if (userId == null) return;
     await _client
         .from(SupabaseTables.perfiles)
-        .update({'evento_asignado_id': eventoId}).eq('id', userId);
+        .update({'evento_asignado_id': eventoId})
+        .eq('id', userId);
   }
 
   /// Genera nueva contraseña, la aplica y la envía por correo (solo admin).

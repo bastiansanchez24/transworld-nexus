@@ -6,6 +6,7 @@ class Perfil {
     required this.nombreCompleto,
     required this.rol,
     this.eventoAsignadoId,
+    this.fotoUrl,
     this.cambiarPass = false,
     this.activo = true,
     this.createdAt,
@@ -15,6 +16,7 @@ class Perfil {
   final String nombreCompleto;
   final AppRole rol;
   final String? eventoAsignadoId;
+  final String? fotoUrl;
   final bool cambiarPass;
   final bool activo;
   final DateTime? createdAt;
@@ -31,6 +33,7 @@ class Perfil {
       nombreCompleto: (map['nombre_completo'] as String?) ?? 'Sin nombre',
       rol: AppRole.fromString(map['rol'] as String?),
       eventoAsignadoId: map['evento_asignado_id'] as String?,
+      fotoUrl: map['foto_url'] as String?,
       cambiarPass: (map['cambiar_pass'] as bool?) ?? false,
       activo: (map['activo'] as bool?) ?? true,
       createdAt: map['created_at'] != null
@@ -43,6 +46,7 @@ class Perfil {
     String? nombreCompleto,
     AppRole? rol,
     String? eventoAsignadoId,
+    String? fotoUrl,
     bool? cambiarPass,
     bool? activo,
   }) {
@@ -51,6 +55,7 @@ class Perfil {
       nombreCompleto: nombreCompleto ?? this.nombreCompleto,
       rol: rol ?? this.rol,
       eventoAsignadoId: eventoAsignadoId ?? this.eventoAsignadoId,
+      fotoUrl: fotoUrl ?? this.fotoUrl,
       cambiarPass: cambiarPass ?? this.cambiarPass,
       activo: activo ?? this.activo,
       createdAt: createdAt,

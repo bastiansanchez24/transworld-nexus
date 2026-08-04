@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- OTA: instalar APK descargado desde GitHub Releases (Android 8+). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- Push FCM (Android 13+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
     <application

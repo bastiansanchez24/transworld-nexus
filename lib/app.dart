@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'data/offline/sync_coordinator.dart';
+import 'features/notificaciones/providers/notificaciones_providers.dart';
+import 'features/notificaciones/services/push_notification_service.dart';
 
 class TransworldNexusApp extends ConsumerWidget {
   const TransworldNexusApp({super.key});
@@ -14,8 +16,11 @@ class TransworldNexusApp extends ConsumerWidget {
     // Mantiene vivo el listener de conectividad -> sincronización offline
     // durante toda la vida de la app (ver data/offline/sync_coordinator.dart).
     ref.watch(syncCoordinatorInitializerProvider);
+    ref.watch(notificacionesRealtimeSubscriptionProvider);
+    ref.watch(pushNotificationsBootstrapProvider);
 
     final router = ref.watch(appRouterProvider);
+    ref.read(pushNotificationServiceProvider).attachRouter(router);
 
     return MaterialApp.router(
       title: 'Nexus',

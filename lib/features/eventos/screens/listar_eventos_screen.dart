@@ -3,13 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/constants/fijados_limits.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/evento_list_sort.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
+import '../../../core/widgets/evento_list_context_menu.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/evento.dart';
+import '../../../data/repositories/eventos_repository.dart';
+import '../../../data/repositories/fijados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../fijados/providers/fijados_providers.dart';
+import '../../home/providers/home_featured_providers.dart';
 import '../providers/eventos_providers.dart';
 
 class ListarEventosScreen extends ConsumerStatefulWidget {
@@ -31,19 +38,97 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
     super.dispose();
   }
 
-  List<Evento> _filtrar(List<Evento> eventos) {
+  List<Evento> _filtrar(List<Evento> eventos, Set<String> fijados) {
     final porEstado = switch (_filtro) {
       'Activos' => eventos.where((e) => !e.yaOcurrio).toList(),
       'Finalizados' => eventos.where((e) => e.yaOcurrio).toList(),
-      _ => eventos,
+      _ => List<Evento>.from(eventos),
     };
 
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return porEstado;
-    return porEstado.where((e) {
-      final lugar = (e.lugar ?? e.pais ?? '').toLowerCase();
-      return e.nombre.toLowerCase().contains(q) || lugar.contains(q);
-    }).toList();
+    final filtrados = q.isEmpty
+        ? porEstado
+        : porEstado.where((e) {
+            final lugar = (e.lugar ?? e.pais ?? '').toLowerCase();
+            return e.nombre.toLowerCase().contains(q) || lugar.contains(q);
+          }).toList();
+
+    ordenarEventoListItems(
+      items: filtrados,
+      fijados: fijados,
+      id: (e) => e.id,
+      fecha: (e) => e.fecha,
+      finalizado: (e) => e.yaOcurrio,
+    );
+    return filtrados;
+  }
+
+  Future<void> _mostrarMenuEvento(Evento evento, Set<String> fijados) async {
+    final puedeEditar = ref.read(canCreateContentProvider);
+    final puedeEliminar = ref.read(isAdminProvider);
+    final fijado = fijados.contains(evento.id);
+
+    final accion = await showEventoListContextMenu(
+      context,
+      titulo: evento.nombre,
+      fijado: fijado,
+      puedeEditar: puedeEditar,
+      puedeEliminar: puedeEliminar,
+    );
+    if (!mounted || accion == null) return;
+
+    final repoFijados = ref.read(fijadosRepositoryProvider);
+    switch (accion) {
+      case EventoListMenuAction.fijar:
+        try {
+          await repoFijados.fijarEvento(evento.id);
+          ref.invalidate(eventosFijadosProvider);
+          ref.invalidate(homeFeaturedItemsProvider);
+        } on FijadosLimitException catch (e) {
+          if (mounted) showAppSnackBar(context, e.toString(), isError: true);
+        } catch (_) {
+          if (mounted) {
+            showAppSnackBar(
+              context,
+              'No se pudo fijar el evento.',
+              isError: true,
+            );
+          }
+        }
+      case EventoListMenuAction.desfijar:
+        await repoFijados.desfijarEvento(evento.id);
+        ref.invalidate(eventosFijadosProvider);
+        ref.invalidate(homeFeaturedItemsProvider);
+      case EventoListMenuAction.editar:
+        if (!mounted) return;
+        context.push(RoutePaths.editarEvento(evento.id));
+      case EventoListMenuAction.eliminar:
+        await _eliminarEvento(evento);
+    }
+  }
+
+  Future<void> _eliminarEvento(Evento evento) async {
+    final confirmado = await confirmDialog(
+      context,
+      title: 'Eliminar evento',
+      message:
+          'Esta acción no se puede deshacer. ¿Eliminar el evento y sus registrados?',
+      confirmLabel: 'Eliminar',
+    );
+    if (!confirmado || !mounted) return;
+
+    try {
+      await ref.read(eventosRepositoryProvider).eliminar(evento.id);
+      await ref.read(fijadosRepositoryProvider).desfijarEvento(evento.id);
+      ref.invalidate(eventosListProvider);
+      ref.invalidate(eventosFijadosProvider);
+      ref.invalidate(homeFeaturedItemsProvider);
+      ref.invalidate(eventoByIdProvider(evento.id));
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(context, 'No se pudo eliminar el evento.', isError: true);
+      }
+    }
   }
 
   Widget _buildSearchField() {
@@ -158,15 +243,19 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
   @override
   Widget build(BuildContext context) {
     final eventosAsync = ref.watch(eventosListProvider);
-
+    final fijadosAsync = ref.watch(eventosFijadosProvider);
     final puedeCrear = ref.watch(canCreateContentProvider);
+    final fijados = fijadosAsync.valueOrNull ?? const <String>{};
 
     return CollapsingScrollScaffold(
       title: 'Eventos',
-      onRefresh: () async => ref.invalidate(eventosListProvider),
+      onRefresh: () async {
+        ref.invalidate(eventosListProvider);
+        ref.invalidate(eventosFijadosProvider);
+      },
       pinnedContent: _buildPinnedControls(puedeCrear: puedeCrear),
       pinnedContentHeight: 112,
-      scrollResetToken: '$_query|$_filtro',
+      scrollResetToken: '$_query|$_filtro|${fijados.length}',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -198,7 +287,7 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
             ),
           ],
           data: (eventos) {
-            final filtrados = _filtrar(eventos);
+            final filtrados = _filtrar(eventos, fijados);
             if (eventos.isEmpty) {
               return [
                 const SliverFillRemaining(
@@ -232,6 +321,7 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
                   separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final evento = filtrados[index];
+                    final fijado = fijados.contains(evento.id);
                     return StaggeredListItem(
                       index: index,
                       child: EventRow(
@@ -239,8 +329,10 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
                         title: evento.nombre,
                         place: evento.lugar ?? evento.pais ?? '',
                         finalizado: evento.yaOcurrio,
+                        fijado: fijado,
                         onTap: () =>
                             context.push(RoutePaths.usarEvento(evento.id)),
+                        onLongPress: () => _mostrarMenuEvento(evento, fijados),
                       ),
                     );
                   },

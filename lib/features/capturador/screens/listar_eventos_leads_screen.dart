@@ -3,14 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/constants/fijados_limits.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/evento_list_sort.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
+import '../../../core/widgets/evento_list_context_menu.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/pressable.dart';
 import '../../../data/models/evento_lead.dart';
+import '../../../data/repositories/eventos_leads_repository.dart';
+import '../../../data/repositories/fijados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../fijados/providers/fijados_providers.dart';
+import '../../home/providers/home_featured_providers.dart';
 import '../providers/capturador_providers.dart';
 
 class ListarEventosLeadsScreen extends ConsumerStatefulWidget {
@@ -33,22 +39,107 @@ class _ListarEventosLeadsScreenState
     super.dispose();
   }
 
-  List<EventoLead> _filtrar(List<EventoLead> eventos) {
+  List<EventoLead> _filtrar(List<EventoLead> eventos, Set<String> fijados) {
     final porEstado = switch (_filtro) {
       'Activos' => eventos.where((e) => !e.yaOcurrio).toList(),
       'Finalizados' => eventos.where((e) => e.yaOcurrio).toList(),
-      _ => eventos,
+      _ => List<EventoLead>.from(eventos),
     };
 
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return porEstado;
-    return porEstado.where((e) {
-      final pais = (e.pais ?? '').toLowerCase();
-      final tematica = (e.tematica ?? '').toLowerCase();
-      return e.nombre.toLowerCase().contains(q) ||
-          pais.contains(q) ||
-          tematica.contains(q);
-    }).toList();
+    final filtrados = q.isEmpty
+        ? porEstado
+        : porEstado.where((e) {
+            final pais = (e.pais ?? '').toLowerCase();
+            final tematica = (e.tematica ?? '').toLowerCase();
+            return e.nombre.toLowerCase().contains(q) ||
+                pais.contains(q) ||
+                tematica.contains(q);
+          }).toList();
+
+    ordenarEventoListItems(
+      items: filtrados,
+      fijados: fijados,
+      id: (e) => e.id,
+      fecha: (e) => e.fecha,
+      finalizado: (e) => e.yaOcurrio,
+    );
+    return filtrados;
+  }
+
+  Future<void> _mostrarMenuCampana(
+    EventoLead evento,
+    Set<String> fijados,
+  ) async {
+    final puedeEditar = ref.read(canCreateContentProvider);
+    final puedeEliminar = ref.read(isAdminProvider);
+    final fijado = fijados.contains(evento.id);
+
+    final accion = await showEventoListContextMenu(
+      context,
+      titulo: evento.nombre,
+      fijado: fijado,
+      puedeEditar: puedeEditar,
+      puedeEliminar: puedeEliminar,
+    );
+    if (!mounted || accion == null) return;
+
+    final repoFijados = ref.read(fijadosRepositoryProvider);
+    switch (accion) {
+      case EventoListMenuAction.fijar:
+        try {
+          await repoFijados.fijarCampana(evento.id);
+          ref.invalidate(campanasFijadasProvider);
+          ref.invalidate(homeFeaturedItemsProvider);
+        } on FijadosLimitException catch (e) {
+          if (mounted) showAppSnackBar(context, e.toString(), isError: true);
+        } catch (_) {
+          if (mounted) {
+            showAppSnackBar(
+              context,
+              'No se pudo fijar la campaña.',
+              isError: true,
+            );
+          }
+        }
+      case EventoListMenuAction.desfijar:
+        await repoFijados.desfijarCampana(evento.id);
+        ref.invalidate(campanasFijadasProvider);
+        ref.invalidate(homeFeaturedItemsProvider);
+      case EventoListMenuAction.editar:
+        if (!mounted) return;
+        context.push(RoutePaths.editarEventoLead(evento.id));
+      case EventoListMenuAction.eliminar:
+        await _eliminarCampana(evento);
+    }
+  }
+
+  Future<void> _eliminarCampana(EventoLead evento) async {
+    final confirmado = await confirmDialog(
+      context,
+      title: 'Eliminar campaña',
+      message:
+          'Esta acción no se puede deshacer. ¿Eliminar la campaña de captura?',
+      confirmLabel: 'Eliminar',
+    );
+    if (!confirmado || !mounted) return;
+
+    try {
+      await ref.read(eventosLeadsRepositoryProvider).eliminar(evento.id);
+      await ref.read(fijadosRepositoryProvider).desfijarCampana(evento.id);
+      ref.invalidate(eventosLeadsListProvider);
+      ref.invalidate(campanasFijadasProvider);
+      ref.invalidate(homeFeaturedItemsProvider);
+      ref.invalidate(eventoLeadByIdProvider(evento.id));
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'No se pudo eliminar la campaña.',
+          isError: true,
+        );
+      }
+    }
   }
 
   Widget _buildSearchField() {
@@ -166,14 +257,19 @@ class _ListarEventosLeadsScreenState
   @override
   Widget build(BuildContext context) {
     final eventosAsync = ref.watch(eventosLeadsListProvider);
+    final fijadosAsync = ref.watch(campanasFijadasProvider);
     final puedeCrear = ref.watch(canCreateContentProvider);
+    final fijados = fijadosAsync.valueOrNull ?? const <String>{};
 
     return CollapsingScrollScaffold(
       title: 'Captura de Leads',
-      onRefresh: () async => ref.invalidate(eventosLeadsListProvider),
+      onRefresh: () async {
+        ref.invalidate(eventosLeadsListProvider);
+        ref.invalidate(campanasFijadasProvider);
+      },
       pinnedContent: _buildPinnedControls(puedeCrear: puedeCrear),
       pinnedContentHeight: 112,
-      scrollResetToken: '$_query|$_filtro',
+      scrollResetToken: '$_query|$_filtro|${fijados.length}',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -202,7 +298,7 @@ class _ListarEventosLeadsScreenState
             ),
           ],
           data: (eventos) {
-            final filtrados = _filtrar(eventos);
+            final filtrados = _filtrar(eventos, fijados);
             if (eventos.isEmpty) {
               return [
                 const SliverFillRemaining(
@@ -236,6 +332,7 @@ class _ListarEventosLeadsScreenState
                   separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final evento = filtrados[index];
+                    final fijado = fijados.contains(evento.id);
                     return StaggeredListItem(
                       index: index,
                       child: EventRow(
@@ -243,21 +340,10 @@ class _ListarEventosLeadsScreenState
                         title: evento.nombre,
                         place: evento.pais ?? '',
                         finalizado: evento.yaOcurrio,
+                        fijado: fijado,
                         onTap: () =>
                             context.push(RoutePaths.usarEventoLead(evento.id)),
-                        trailing: puedeCrear
-                            ? Pressable(
-                                scale: 0.9,
-                                onTap: () => context.push(
-                                  RoutePaths.editarEventoLead(evento.id),
-                                ),
-                                child: const Icon(
-                                  Symbols.edit_rounded,
-                                  color: AppColors.chevronMuted,
-                                  size: 20,
-                                ),
-                              )
-                            : null,
+                        onLongPress: () => _mostrarMenuCampana(evento, fijados),
                       ),
                     );
                   },

@@ -21,6 +21,7 @@ import '../../features/eventos/screens/listar_eventos_screen.dart';
 import '../../features/exportacion/screens/exportar_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/kpi/screens/kpi_screen.dart';
+import '../../features/notificaciones/screens/notificaciones_screen.dart';
 import '../../features/perfil/screens/mi_perfil_screen.dart';
 import '../../features/updates/screens/actualizaciones_screen.dart';
 import '../../features/registrados/screens/editar_registrado_screen.dart';
@@ -200,7 +201,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             if (location == RoutePaths.externoEvento(preferidoCarga) ||
                 location == RoutePaths.acreditarQr(preferidoCarga) ||
                 location == RoutePaths.registrar(preferidoCarga) ||
-                location == RoutePaths.registroPorCliente(preferidoCarga)) {
+                location == RoutePaths.registroPorCliente(preferidoCarga) ||
+                location == RoutePaths.notificaciones) {
               return null;
             }
             if (_esRutaCapturarLead(location) &&
@@ -575,6 +577,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
           child: const ActualizacionesScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.notificaciones,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: const NotificacionesScreen(),
         ),
       ),
       GoRoute(

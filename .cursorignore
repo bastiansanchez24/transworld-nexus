@@ -1,0 +1,60 @@
+# Build / tooling - no indexar en Cursor
+**/build/
+.dart_tool/
+.pub/
+.pub-cache/
+**/doc/api/
+/coverage/
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.history/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Android / Gradle / Kotlin caches
+android/.gradle/
+android/.kotlin/
+android/.cxx/
+android/local.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/**/GeneratedPluginRegistrant.java
+
+# iOS / macOS / desktop ephemeral
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+ios/Flutter/Flutter.podspec
+macos/Pods/
+macos/Flutter/ephemeral/
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# Secrets y config local (nunca indexar)
+.env
+.env.*
+!.env.example
+android/key.properties
+*.jks
+*.keystore
+upload-keystore.jks
+
+# Firebase client config (local; ver docs/NOTIFICACIONES_PUSH.md)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+.firebase/
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+supabase/.env.keys
+supabase/.env.local

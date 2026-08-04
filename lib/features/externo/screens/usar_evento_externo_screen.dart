@@ -11,6 +11,7 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/nexus_toast.dart';
+import '../../../core/widgets/notificaciones_header_button.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/permissions_bootstrap.dart';
 import '../../../core/widgets/pressable.dart';
@@ -18,6 +19,7 @@ import '../../../data/models/evento.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
+import '../../notificaciones/providers/notificaciones_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
 import '../../usar_app/widgets/evento_operativo_sheets.dart';
 
@@ -167,6 +169,7 @@ class _UsarEventoExternoScreenState
     final autorizadosAsync = ref.watch(externoEventosAutorizadosProvider);
     final puedeCambiar =
         (autorizadosAsync.valueOrNull?.length ?? 0) > 1;
+    final noLeidas = ref.watch(notificacionesNoLeidasProvider);
 
     ref.listen(externoEventoBloqueadoProvider, (prev, next) {
       if (next == true) _manejarBloqueoTotal();
@@ -242,9 +245,21 @@ class _UsarEventoExternoScreenState
                               title: evento.nombre,
                               style: CollapsingNavStyle.detail,
                               alwaysShowActions: true,
-                              trailing: _HeroNavButton(
-                                icon: Symbols.logout_rounded,
-                                onTap: _cerrarSesion,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  NotificacionesHeaderButton(
+                                    noLeidas: noLeidas,
+                                    onTap: () => context.push(
+                                      RoutePaths.notificaciones,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _HeroNavButton(
+                                    icon: Symbols.logout_rounded,
+                                    onTap: _cerrarSesion,
+                                  ),
+                                ],
                               ),
                             ),
                           ),

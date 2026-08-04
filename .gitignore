@@ -44,6 +44,25 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Android / Gradle / Kotlin local caches (también en android/.gitignore)
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/**/GeneratedPluginRegistrant.java
+android/.cxx/
+
+# iOS / macOS local
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.podspec
+ios/Flutter/ephemeral/
+macos/Flutter/ephemeral/
+macos/Pods/
+
+# Desktop ephemeral
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+
 # Variables de entorno reales: NUNCA versionar (ver documentacion_zips_registro_pro.md
 # Sección 17.11 sobre el .env real filtrado en el proyecto legado). Solo .env.example
 # debe estar en el repositorio.
@@ -56,3 +75,11 @@ android/key.properties
 *.jks
 *.keystore
 upload-keystore.jks
+
+# Firebase client config (obtener vía Firebase Console / FlutterFire CLI;
+# ver docs/NOTIFICACIONES_PUSH.md). No versionar.
+# firebase.json (rutas FlutterFire) sí puede versionarse.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+.firebase/

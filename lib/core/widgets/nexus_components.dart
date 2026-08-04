@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -31,10 +32,7 @@ class AvatarInitials extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: pair.$1,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: pair.$1, shape: BoxShape.circle),
       child: Text(
         _initials,
         style: TextStyle(
@@ -43,6 +41,100 @@ class AvatarInitials extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
+    );
+  }
+}
+
+/// Avatar del usuario autenticado: foto de perfil o iniciales como fallback.
+class AvatarPerfil extends StatelessWidget {
+  const AvatarPerfil({
+    super.key,
+    required this.nombre,
+    this.fotoUrl,
+    this.size = 44,
+    this.index = 0,
+    this.mostrarLapiz = false,
+    this.onTap,
+  });
+
+  final String nombre;
+  final String? fotoUrl;
+  final double size;
+  final int index;
+  final bool mostrarLapiz;
+  final VoidCallback? onTap;
+
+  bool get _tieneFoto => fotoUrl != null && fotoUrl!.isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          _AvatarCirculo(
+            size: size,
+            child: _tieneFoto
+                ? CachedNetworkImage(
+                    imageUrl: fotoUrl!,
+                    fit: BoxFit.cover,
+                    memCacheWidth: (size * 3).round(),
+                    placeholder: (_, _) =>
+                        AvatarInitials(name: nombre, size: size, index: index),
+                    errorWidget: (_, _, _) =>
+                        AvatarInitials(name: nombre, size: size, index: index),
+                  )
+                : AvatarInitials(name: nombre, size: size, index: index),
+          ),
+          if (mostrarLapiz)
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                width: size * 0.38,
+                height: size * 0.38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Symbols.edit_rounded,
+                  size: size * 0.2,
+                  color: Colors.white,
+                  fill: 1,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (onTap == null) return avatar;
+    return Pressable(scale: 0.94, onTap: onTap, child: avatar);
+  }
+}
+
+class _AvatarCirculo extends StatelessWidget {
+  const _AvatarCirculo({required this.size, required this.child});
+
+  final double size;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: SizedBox(width: size, height: size, child: child),
     );
   }
 }
@@ -126,7 +218,9 @@ class FilterChipBar extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: selected == opt ? Colors.white : AppColors.textSecondary,
+                  color: selected == opt
+                      ? Colors.white
+                      : AppColors.textSecondary,
                 ),
               ),
             ),
@@ -154,9 +248,13 @@ class DateTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final day = DateFormat('d', 'es').format(date);
     final month = DateFormat('MMM', 'es').format(date).toUpperCase();
+    final escalaSolicitada = MediaQuery.textScalerOf(context).scale(1);
+    final textScale = escalaSolicitada < 1 ? 1.0 : escalaSolicitada;
+    final baseWidth = hero ? 52.0 : 48.0;
+    final baseHeight = hero ? 56.0 : 52.0;
     return Container(
-      width: hero ? 52 : 48,
-      height: hero ? 56 : 52,
+      width: baseWidth * textScale,
+      height: baseHeight * textScale,
       decoration: BoxDecoration(
         color: muted ? AppColors.background : AppColors.tintNavy,
         borderRadius: BorderRadius.circular(AppRadius.tile),
@@ -259,7 +357,9 @@ class EventRow extends StatelessWidget {
     required this.title,
     required this.place,
     required this.onTap,
+    this.onLongPress,
     this.finalizado = false,
+    this.fijado = false,
     this.trailing,
   });
 
@@ -267,19 +367,25 @@ class EventRow extends StatelessWidget {
   final String title;
   final String place;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool finalizado;
+  final bool fijado;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Pressable(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(
+            color: fijado ? AppColors.primaryLight : AppColors.border,
+            width: fijado ? 1.5 : 1,
+          ),
           boxShadow: AppColors.shadowRest,
         ),
         child: Row(
@@ -290,18 +396,32 @@ class EventRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      height: 1.35,
-                      color: finalizado
-                          ? AppColors.textSecondary
-                          : AppColors.ink,
-                    ),
+                  Row(
+                    children: [
+                      if (fijado) ...[
+                        const Icon(
+                          Symbols.push_pin_rounded,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            height: 1.35,
+                            color: finalizado
+                                ? AppColors.textSecondary
+                                : AppColors.ink,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   if (place.isNotEmpty) ...[
                     const SizedBox(height: 4),
@@ -444,11 +564,7 @@ class NexusExtendedFab extends StatelessWidget {
 }
 
 class NexusToggle extends StatelessWidget {
-  const NexusToggle({
-    super.key,
-    required this.value,
-    required this.onChanged,
-  });
+  const NexusToggle({super.key, required this.value, required this.onChanged});
 
   final bool value;
   final ValueChanged<bool> onChanged;
@@ -614,8 +730,7 @@ class DashedBorderBox extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.tintNavy,
             shape: circular ? BoxShape.circle : BoxShape.rectangle,
-            borderRadius:
-                circular ? null : BorderRadius.circular(AppRadius.lg),
+            borderRadius: circular ? null : BorderRadius.circular(AppRadius.lg),
           ),
           child: child,
         ),

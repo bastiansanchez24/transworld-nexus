@@ -9,9 +9,11 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/require_permission.dart';
+import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/models/perfil.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/perfil_providers.dart';
 import '../widgets/perfil_expandable_section.dart';
@@ -44,6 +46,7 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
   bool _datosExpandido = false;
   bool _nombreCargado = false;
   bool _guardando = false;
+  bool _subiendoFoto = false;
 
   @override
   void dispose() {
@@ -75,6 +78,49 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Future<void> _cambiarFoto() async {
+    if (_subiendoFoto) return;
+
+    final bytes = await elegirImagenComprimida(
+      context,
+      recorteProporcion: kProporcionFotoLead,
+      tituloRecorte: 'Recortar foto de perfil',
+    );
+    if (bytes == null || !mounted) return;
+
+    setState(() => _subiendoFoto = true);
+    try {
+      final auth = ref.read(authRepositoryProvider);
+      final userId = auth.currentUserId;
+      if (userId == null) {
+        throw Exception('No hay sesión activa.');
+      }
+
+      final url = await ref
+          .read(storageRepositoryProvider)
+          .subirFotoPerfil(bytes, userId);
+      await auth.actualizarFotoPropia(url);
+      ref.invalidate(currentPerfilProvider);
+      await ref.read(currentPerfilProvider.future);
+
+      if (mounted) {
+        showAppSnackBar(context, 'Foto de perfil actualizada.');
+      }
+    } on PostgrestException catch (e) {
+      if (mounted) showAppSnackBar(context, e.message, isError: true);
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _subiendoFoto = false);
     }
   }
 
@@ -125,7 +171,12 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
               ),
               padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
               children: [
-                _PerfilHeader(perfil: perfil, email: email),
+                _PerfilHeader(
+                  perfil: perfil,
+                  email: email,
+                  subiendoFoto: _subiendoFoto,
+                  onCambiarFoto: _cambiarFoto,
+                ),
                 const SizedBox(height: AppSpacing.sectionGap),
                 const SectionLabel('Resumen'),
                 const SizedBox(height: 12),
@@ -172,10 +223,17 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
 }
 
 class _PerfilHeader extends StatelessWidget {
-  const _PerfilHeader({required this.perfil, required this.email});
+  const _PerfilHeader({
+    required this.perfil,
+    required this.email,
+    required this.subiendoFoto,
+    required this.onCambiarFoto,
+  });
 
   final Perfil perfil;
   final String email;
+  final bool subiendoFoto;
+  final VoidCallback onCambiarFoto;
 
   @override
   Widget build(BuildContext context) {
@@ -191,7 +249,38 @@ class _PerfilHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            AvatarInitials(name: perfil.nombreCompleto, size: 52, index: 0),
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                AvatarPerfil(
+                  nombre: perfil.nombreCompleto,
+                  fotoUrl: perfil.fotoUrl,
+                  size: 52,
+                  index: 0,
+                  mostrarLapiz: !subiendoFoto,
+                  onTap: subiendoFoto ? null : onCambiarFoto,
+                ),
+                if (subiendoFoto)
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -367,8 +456,9 @@ class _LeadResumenTile extends StatelessWidget {
     final fecha = createdAt == null
         ? '—'
         : DateFormat('dd/MM/yyyy').format(createdAt);
-    final hora =
-        createdAt == null ? '—' : DateFormat('HH:mm').format(createdAt);
+    final hora = createdAt == null
+        ? '—'
+        : DateFormat('HH:mm').format(createdAt);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -379,11 +469,7 @@ class _LeadResumenTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          AvatarInitials(
-            name: lead.nombreCompleto,
-            size: 40,
-            index: index,
-          ),
+          AvatarInitials(name: lead.nombreCompleto, size: 40, index: index),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -455,9 +541,7 @@ class _DatosUsuarioForm extends StatelessWidget {
           TextFormField(
             controller: nombreController,
             enabled: !guardando,
-            decoration: const InputDecoration(
-              hintText: 'Tu nombre completo',
-            ),
+            decoration: const InputDecoration(hintText: 'Tu nombre completo'),
             textInputAction: TextInputAction.done,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Requerido' : null,
@@ -471,7 +555,8 @@ class _DatosUsuarioForm extends StatelessWidget {
             enableInteractiveSelection: true,
             decoration: const InputDecoration(
               hintText: 'Correo de la cuenta',
-              helperText: 'El correo pertenece a tu cuenta y no se puede cambiar.',
+              helperText:
+                  'El correo pertenece a tu cuenta y no se puede cambiar.',
             ),
           ),
           const SizedBox(height: 14),
@@ -480,9 +565,7 @@ class _DatosUsuarioForm extends StatelessWidget {
           TextFormField(
             initialValue: rolLabel,
             readOnly: true,
-            decoration: const InputDecoration(
-              hintText: 'Rol',
-            ),
+            decoration: const InputDecoration(hintText: 'Rol'),
           ),
           const SizedBox(height: 18),
           PrimaryGradientButton(

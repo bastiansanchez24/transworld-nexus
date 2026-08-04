@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,7 +14,9 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/require_admin.dart';
+import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../providers/usuarios_providers.dart';
@@ -57,6 +61,8 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   bool _regenerando = false;
   bool _intentoGuardar = false;
   String? _passwordGenerada;
+  Uint8List? _fotoBytes;
+  bool _quitarFoto = false;
   final Set<String> _eventoIds = {};
 
   /// Roles editables vía RPC (no incluye externo: solo al crear).
@@ -105,6 +111,19 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
       if (!mounted) return;
       setState(() => _eventosCargados = true);
     }
+  }
+
+  Future<void> _elegirFoto() async {
+    final bytes = await elegirImagenComprimida(
+      context,
+      recorteProporcion: kProporcionFotoLead,
+      tituloRecorte: 'Recortar foto de perfil',
+    );
+    if (bytes == null || !mounted) return;
+    setState(() {
+      _fotoBytes = bytes;
+      _quitarFoto = false;
+    });
   }
 
   String _textoCompartir({required String nombre}) {
@@ -183,10 +202,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
         ref.read(currentPerfilProvider).valueOrNull?.id == widget.usuarioId;
 
     if (esCuentaPropia && !_activo) {
-      NexusToast.show(
-        context,
-        'No puedes desactivar tu propia cuenta.',
-      );
+      NexusToast.show(context, 'No puedes desactivar tu propia cuenta.');
       setState(() => _activo = true);
       return;
     }
@@ -213,9 +229,20 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
           _eventoIds.toList(),
         );
       }
+      if (_fotoBytes != null) {
+        final fotoUrl = await ref
+            .read(storageRepositoryProvider)
+            .subirFotoPerfil(_fotoBytes!, widget.usuarioId);
+        await repo.actualizarFotoUsuario(widget.usuarioId, fotoUrl);
+      } else if (_quitarFoto) {
+        await repo.actualizarFotoUsuario(widget.usuarioId, null);
+      }
 
       ref.invalidate(usuariosListProvider);
       ref.invalidate(usuarioPorIdProvider(widget.usuarioId));
+      if (esCuentaPropia) {
+        ref.invalidate(currentPerfilProvider);
+      }
 
       if (mounted) {
         showAppSnackBar(context, 'Usuario actualizado.');
@@ -247,7 +274,8 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
     final confirmado = await confirmDialog(
       context,
       title: 'Eliminar usuario',
-      message: 'Se eliminará la cuenta de "$nombre" y su acceso a la app. '
+      message:
+          'Se eliminará la cuenta de "$nombre" y su acceso a la app. '
           'Todos sus registros quedarán como "Usuario eliminado". '
           'Esta acción no se puede deshacer.',
       confirmLabel: 'Eliminar',
@@ -266,7 +294,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
           eliminado
               ? 'Usuario eliminado.'
               : 'La cuenta quedó desactivada: otra aplicación de la base '
-                  'compartida aún referencia sus datos, pero perdió el acceso.',
+                    'compartida aún referencia sus datos, pero perdió el acceso.',
         );
         context.pop();
       }
@@ -331,7 +359,9 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
           }
 
           final esExterno = _rol == AppRole.externo;
-          final eventosAsync = esExterno ? ref.watch(eventosListProvider) : null;
+          final eventosAsync = esExterno
+              ? ref.watch(eventosListProvider)
+              : null;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
@@ -340,6 +370,28 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const _FieldLabel('Foto'),
+                  const SizedBox(height: 6),
+                  SelectorImagen(
+                    bytes: _fotoBytes,
+                    urlExistente: _quitarFoto ? null : usuario.fotoUrl,
+                    enabled: !ocupado,
+                    aspectRatio: kProporcionFotoLead,
+                    anchoMaximo: kAnchoSelectorFotoLead,
+                    circular: true,
+                    etiquetaVacio: 'Agregar foto del usuario',
+                    onElegir: _elegirFoto,
+                    onQuitar:
+                        (_fotoBytes != null ||
+                            (!_quitarFoto &&
+                                (usuario.fotoUrl?.isNotEmpty ?? false)))
+                        ? () => setState(() {
+                            _fotoBytes = null;
+                            _quitarFoto = true;
+                          })
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
                   const _FieldLabel('Nombre completo'),
                   const SizedBox(height: 6),
                   TextFormField(
@@ -359,9 +411,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                     controller: _emailController,
                     readOnly: true,
                     enableInteractiveSelection: true,
-                    decoration: const InputDecoration(
-                      hintText: 'Cargando…',
-                    ),
+                    decoration: const InputDecoration(hintText: 'Cargando…'),
                   ),
                   const SizedBox(height: 14),
                   const _FieldLabel('Contraseña'),
@@ -379,8 +429,9 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Symbols.refresh_rounded),
                       ),
@@ -397,10 +448,8 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                     ),
                     items: _rolesDisponibles
                         .map(
-                          (r) => DropdownMenuItem(
-                            value: r,
-                            child: Text(r.label),
-                          ),
+                          (r) =>
+                              DropdownMenuItem(value: r, child: Text(r.label)),
                         )
                         .toList(),
                     onChanged: (ocupado || esCuentaPropia)

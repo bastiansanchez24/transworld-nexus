@@ -15,6 +15,15 @@ class SupabaseTables {
   static const eventosLeads = 'eventos_leads';
   static const leads = 'leads';
 
+  static const notificaciones = 'notificaciones';
+  static const notificacionesLeidas = 'notificaciones_leidas';
+  static const notificacionesOcultas = 'notificaciones_ocultas';
+  static const deviceTokens = 'device_tokens';
+
+  /// Fijados personales por usuario (independientes entre eventos y campañas).
+  static const usuariosEventosFijados = 'usuarios_eventos_fijados';
+  static const usuariosEventosLeadsFijados = 'usuarios_eventos_leads_fijados';
+
   /// Perfil sistema al que se reasignan las FKs históricas
   /// (`acreditado_por`, `ingresado_por`, `creado_por`, `perfil_id` de
   /// leads) al eliminar un usuario. No debe listarse en la UI de gestión.
@@ -31,6 +40,7 @@ class SupabaseRpc {
   static const eliminarUsuario = 'rpe_eliminar_usuario';
   static const obtenerEmailUsuario = 'rpe_obtener_email_usuario';
   static const sincronizarEventosExterno = 'rpe_sincronizar_eventos_externo';
+  static const ocultarTodasNotificaciones = 'rpe_ocultar_todas_notificaciones';
 }
 
 class SupabaseFunctions {
@@ -40,4 +50,5 @@ class SupabaseFunctions {
   static const enviarQr = 'enviar-qr';
   static const crearUsuario = 'crear-usuario';
   static const regenerarPasswordUsuario = 'regenerar-password-usuario';
+  static const enviarPush = 'enviar-push';
 }

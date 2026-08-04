@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../data/images/image_compressor.dart';
 import '../theme/app_theme.dart';
 import 'app_widgets.dart';
+import 'modal_recorte_imagen.dart';
 import 'nexus_components.dart';
 import 'pressable.dart';
 
@@ -15,6 +16,9 @@ import 'pressable.dart';
 /// recortar el archivo que se sube y dimensionar el recuadro— para que no
 /// puedan quedar distintas.
 const double kProporcionFotoLead = 1;
+
+/// Proporción de la portada de un evento (16:9).
+const double kProporcionImagenEvento = 16 / 9;
 
 /// Ancho del recuadro 1:1 de la foto de un lead (220 × 220).
 const double kAnchoSelectorFotoLead = 220;
@@ -26,17 +30,17 @@ const double kAnchoSelectorFotoLead = 220;
 /// recuadro se alinea a la izquierda en vez de estirarse de lado a lado.
 const double kAnchoSelectorImagenEvento = 320;
 
-/// Abre una hoja para elegir cámara o galería, toma la imagen y la devuelve
-/// ya comprimida a JPEG y, si se pide [recorteProporcion], recortada a esa
-/// proporción (ver [comprimirParaSubida]). Devuelve `null` si el usuario
-/// cancela o si la imagen no se pudo leer.
+/// Abre una hoja para elegir cámara o galería, muestra el modal de recorte
+/// interactivo y devuelve la imagen ya recortada y comprimida a JPEG.
+/// Devuelve `null` si el usuario cancela o si la imagen no se pudo leer.
 ///
 /// Es el único camino por el que la app incorpora imágenes: así ninguna
 /// pantalla puede olvidarse de comprimir antes de subir.
 Future<Uint8List?> elegirImagenComprimida(
   BuildContext context, {
   bool permitirCamara = true,
-  double? recorteProporcion,
+  required double recorteProporcion,
+  String tituloRecorte = 'Recortar imagen',
 }) async {
   final fuente = permitirCamara
       ? await _preguntarFuente(context)
@@ -53,10 +57,19 @@ Future<Uint8List?> elegirImagenComprimida(
       imageQuality: 85,
     );
     if (archivo == null) return null;
-    return await comprimirParaSubida(
-      await archivo.readAsBytes(),
+
+    final original = await archivo.readAsBytes();
+    if (!context.mounted) return null;
+
+    final recortada = await mostrarModalRecorteImagen(
+      context,
+      imagenOriginal: original,
       recorteProporcion: recorteProporcion,
+      titulo: tituloRecorte,
     );
+    if (recortada == null) return null;
+
+    return await comprimirParaSubida(recortada);
   } catch (e) {
     if (context.mounted) {
       showAppSnackBar(

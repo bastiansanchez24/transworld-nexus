@@ -20,6 +20,7 @@ class AppPermissions {
           Permission.camera,
           Permission.microphone,
           Permission.photos,
+          Permission.notification,
         ];
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
@@ -28,6 +29,7 @@ class AppPermissions {
           Permission.microphone,
           Permission.photos,
           Permission.speech,
+          Permission.notification,
         ];
       default:
         return const [];

@@ -20,7 +20,7 @@ y 18) y corrige explícitamente los hallazgos críticos ahí identificados.
 | 3 | `eventos` y `registrados` con RLS `USING (true) WITH CHECK (true)` para cualquier autenticado: la única barrera era ocultar botones en la UI. | Políticas separadas por operación: cualquier autenticado puede leer/registrar, pero crear/editar/eliminar eventos y eliminar registrados requiere `rol = 'admin'` **a nivel de base de datos**. |
 | 4 | Sin constraint de duplicados en `registrados`: la deduplicación era solo a nivel de aplicación. | `UNIQUE (evento_id, email)` en la base de datos, reforzado (no reemplazado) por un chequeo previo en el cliente. |
 | 5 | Esquema inconsistente: código y `.env` apuntaban a `registro_eventos`, pero `schema.sql` creaba todo en `public`. | Todo vive explícitamente en `public`, sin variables de esquema configurables que puedan desalinearse. |
-| 6 | Base de datos compartida con la app hermana "capturador-leads" sin documentar el impacto. | Se mantiene compatible (mismo `auth.users`, trigger `rpe_handle_new_user` para altas), pero todas las políticas/funciones usan el prefijo `rpe_` para evitar colisiones, y queda documentado en `supabase/schema.sql`. |
+| 6 | Base de datos compartida con la app hermana "capturador-leads" sin documentar el impacto. | Captura de leads vive en esta misma app (`features/capturador/`), mismo `auth.users` y esquema `public`; políticas/funciones con prefijo `rpe_` para evitar colisiones (`supabase/schema.sql`). |
 | 7 | Formulario público de autoregistro vivía **fuera** de ambos repositorios (`intranet-transworld-dc.onrender.com`), como dependencia oculta e indocumentada. | El autoregistro público vive dentro de esta misma app (`/r/:eventoId`, sin sesión, rol `anon`), con su propia política RLS acotada (`rpe_registrados_insert_publico`). |
 | 8 | Integración con Electron oculta (`window.ipcRenderer`) sin las herramientas de build correspondientes en el ZIP. | Ya no aplica: el mismo Flutter Desktop nativo cubre exportación de archivos sin depender de un runtime externo. |
 | 9 | `.env` con credenciales reales incluido en el ZIP pese a `.gitignore`. | `.env` real nunca se versiona; `.env.example` documenta las variables sin valores reales. Ver `.gitignore`. |
@@ -34,23 +34,30 @@ y 18) y corrige explícitamente los hallazgos críticos ahí identificados.
 lib/
   core/           # Config, tema, router, constantes, widgets compartidos
   data/
-    models/       # Entidades inmutables (Perfil, Evento, Registrado)
+    models/       # Entidades inmutables (Perfil, Evento, Registrado, …)
     repositories/ # Un repositorio por tabla/dominio, hablan con Supabase
     offline/      # Motor de sincronización offline unificado
     supabase/     # Inicialización y provider del cliente Supabase
   features/       # Un folder por pantalla/flujo de negocio
     auth/
     home/
+    perfil/           # Mi perfil (nombre, foto)
     eventos/
     usar_app/
+    externo/          # Operación acotada a eventos asignados
+    capturador/       # Campañas y captura de leads
     registro/
     registro_publico/
     acreditacion/
     registrados/
+    fijados/          # Eventos/campañas fijados por usuario
+    notificaciones/   # Inbox in-app + bootstrap FCM
     kpi/
     exportacion/
     usuarios/
-    updates/      # OTA vía GitHub Releases (Android)
+    updates/          # OTA vía GitHub Releases (Android / Windows)
+docs/
+  NOTIFICACIONES_PUSH.md   # Setup Firebase + webhook Supabase
 ```
 
 - **Sistema de diseño**: `core/theme/app_theme.dart` define los tokens
@@ -62,7 +69,8 @@ lib/
   máximo de contenido para Web/escritorio. Las pantallas no usan colores
   ni paddings "sueltos": consumen los tokens. En el home, el perfil del
   usuario vive integrado en un encabezado a sangre completa con un menú
-  de cuenta colapsable (Mi perfil / Configuraciones / Cerrar sesión).
+  de cuenta colapsable (Mi perfil / Configuraciones / Cerrar sesión) y
+  acceso al inbox de notificaciones.
 - **Flujo de autenticación**: el login está descompuesto en componentes
   (`features/auth/widgets/login/`: header hero dibujado con CustomPaint,
   formulario, botón con estados y animación de presión, tokens propios en
@@ -70,7 +78,17 @@ lib/
   `SharedPreferences`), animaciones de entrada escalonadas (easeOutCubic,
   250–350 ms), colapso del hero al abrir el teclado, layout de dos paneles
   en pantallas ≥900 px y autoregistro de cuenta en `/registro` (el perfil
-  lo crea el trigger `rpe_handle_new_user` con rol `user`).
+  lo crea el trigger `rpe_handle_new_user` con rol `user`). Los permisos
+  runtime (cámara, mic, fotos, notificaciones) se piden una sola vez por
+  usuario en el dispositivo tras autenticarse (`PermissionsBootstrap`).
+- **Captura de leads**: `features/capturador/` unifica la app hermana
+  (campañas, captura, listado y exportación Excel) sobre el mismo backend
+  Supabase.
+- **Fijados y home**: cada usuario puede fijar eventos y campañas
+  (límite por dominio); el home destaca esos ítems junto al próximo evento.
+- **Notificaciones**: inbox in-app (`/notificaciones`) con Realtime
+  Supabase; push de sistema vía FCM en Android/iOS (ver
+  `docs/NOTIFICACIONES_PUSH.md`). En Web/escritorio solo aplica el inbox.
 - **Gestión de estado**: Riverpod (`flutter_riverpod` 2.x), con providers
   simples (`Provider`, `FutureProvider`, `StateNotifierProvider`) — sin
   generación de código, para mantener el build simple y predecible.
@@ -79,9 +97,11 @@ lib/
 - **Persistencia offline**: `shared_preferences` como almacenamiento del
   motor de sincronización (`SyncQueueService`), que funciona igual en
   Android, iOS, Web y escritorio.
-- **Backend**: Supabase (Postgres + Auth + Storage), esquema `public`. Ver
-  `supabase/schema.sql` para el modelo completo, políticas RLS, triggers y
-  funciones RPC.
+- **Backend**: Supabase (Postgres + Auth + Storage + Edge Functions),
+  esquema `public`. Ver `supabase/schema.sql` para el modelo completo,
+  políticas RLS, triggers y funciones RPC. Las migraciones incrementales
+  en `supabase/migracion_*.sql` documentan cambios aplicados sobre
+  entornos ya existentes; el schema es la fuente de verdad consolidada.
 
 ## Cómo correr el proyecto
 
@@ -92,7 +112,7 @@ lib/
    ```
 
 2. Copia `.env.example` a `.env` y completa con los datos de tu proyecto
-   Supabase:
+   Supabase (y, si usas OTA, las variables `GITHUB_*`):
 
    ```bash
    cp .env.example .env
@@ -100,9 +120,18 @@ lib/
 
 3. Aplica `supabase/schema.sql` en tu proyecto Supabase (SQL Editor o
    `supabase db push` si usas el CLI). Es idempotente: puede ejecutarse
-   varias veces sin duplicar objetos.
+   varias veces sin duplicar objetos. Si el proyecto ya tenía un schema
+   anterior, también puedes aplicar solo las migraciones pendientes en
+   `supabase/migracion_*.sql`.
 
-4. Corre la app:
+4. (Opcional — push FCM) Coloca localmente los archivos de Firebase
+   (`android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist`,
+   `lib/firebase_options.dart`; no se versionan) y completa el setup de
+   webhook/secret descrito en [`docs/NOTIFICACIONES_PUSH.md`](docs/NOTIFICACIONES_PUSH.md).
+   Sin eso, la app sigue funcionando: el inbox in-app opera solo con
+   Supabase; el push de sistema queda desactivado.
+
+5. Corre la app:
 
    ```bash
    flutter run                # dispositivo/emulador conectado
@@ -113,26 +142,36 @@ lib/
 ## Verificación realizada
 
 - `flutter analyze` → sin advertencias ni errores.
-- `flutter test` → pasa (ver `test/widget_test.dart`; las pruebas de pantallas
-  reales deberían mockear los repositorios de `data/repositories/`).
+- `flutter test` → suite en `test/` (modelos, offline, widgets de listas,
+  home, notificaciones, storage, etc.). Las pantallas que hablan con
+  Supabase deben mockear los repositorios de `data/repositories/`.
 - `flutter build web --release` → build exitoso.
 - Para build de macOS/iOS/Android nativo hace falta un entorno con
-  Xcode/Android SDK completos (fuera del sandbox de desarrollo usado para
-  crear este proyecto); el código Dart ya está validado por `analyze` +
-  `build web`.
+  Xcode/Android SDK completos; el código Dart se valida con `analyze` +
+  tests + `build web`.
+
+## Edge Functions (`supabase/functions/`)
+
+| Función | Rol |
+|---------|-----|
+| `crear-usuario` | Alta por admin + email de credenciales (Brevo) |
+| `regenerar-password-usuario` | Nueva password por admin + email |
+| `reset-password` | Olvido de contraseña (invocar con `--no-verify-jwt`) |
+| `enviar-qr` | QR de acreditación por email (Brevo) |
+| `enviar-push` | Envía FCM al insertar en `notificaciones` (secret `FIREBASE_SERVICE_ACCOUNT_JSON`) |
+
+Desplegar con `supabase functions deploy`. El secret `BREVO_API_KEY` lo
+comparten las funciones de correo. Detalle del webhook y Firebase:
+[`docs/NOTIFICACIONES_PUSH.md`](docs/NOTIFICACIONES_PUSH.md).
 
 ## Pendiente / próximos pasos
 
-- **Integración con "capturador-leads"**: el esquema ya es compatible
-  (mismo `auth.users`, mismo esquema `public`, prefijo `rpe_` para evitar
-  colisiones de nombres), pero todavía no se implementó ninguna pantalla
-  que consuma datos de esa app hermana. Cuando se defina el alcance exacto
-  de esa integración, agregar los repositorios/pantallas correspondientes
-  siguiendo el mismo patrón (`data/repositories/`, `features/<dominio>/`).
-- Tabla `usuarios_eventos` ya está creada en el schema (para asignar
-  vendedores/acreditadores a eventos específicos) pero **no se usa aún**
-  para restringir acceso: hoy cualquier usuario autenticado puede operar
-  cualquier evento. Es la base para una futura mejora de RLS más granular.
+- **Push en dashboards**: webhook Database → `enviar-push` y secret
+  Firebase (checklist en `docs/NOTIFICACIONES_PUSH.md`). El inbox in-app
+  ya funciona sin eso.
+- **RLS más granular por evento**: `usuarios_eventos` ya acota al rol
+  externo en la app; falta reforzar a nivel de políticas que un usuario
+  autenticado genérico no opere eventos ajenos solo vía API.
 - Tests de integración con mocks de Supabase (por ejemplo con
   `mocktail` + fakes de `SupabaseClient`) para los repositorios y el motor
   de sincronización offline.
@@ -142,16 +181,6 @@ lib/
 - Subir `Plantilla_Registro.xlsx` al bucket `plantillas` de Storage (lo
   referencia `StorageRepository.urlPlantillaRegistro`, pero el archivo en
   sí no se genera desde este repo).
-- Las Edge Functions de correo viven en `supabase/functions/`:
-  - `crear-usuario` — alta de usuario por admin + email de credenciales
-  - `regenerar-password-usuario` — nueva password por admin + email
-  - `reset-password` — olvido de contraseña: autogenera y envía por email
-  - `enviar-qr` — QR de acreditación (ya desplegada; usa Brevo)
-  El envío de credenciales reutiliza el secret existente `BREVO_API_KEY`
-  (mismo mailer que `enviar-qr` / `reset-password`).
-  Desplegar con `supabase functions deploy`. Para `reset-password` usar
-  `--no-verify-jwt` (se invoca sin sesión). El esquema completo (tablas,
-  RLS, RPCs) vive en `supabase/schema.sql`.
 
 ## Actualizaciones OTA (Android / Windows / GitHub Releases)
 

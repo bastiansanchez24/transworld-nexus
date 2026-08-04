@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/permissions/app_permissions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/offline/sync_queue_service.dart';
@@ -76,8 +75,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       } else {
         await prefs.remove(_rememberedEmailKey);
       }
-      // Permisos runtime (cámara / mic / fotos) justo tras autenticarse.
-      await AppPermissions.requestAll();
       // La navegación post-login la resuelve el redirect del router,
       // reaccionando a los cambios de sesión de Supabase.
     } on AuthException catch (e) {
