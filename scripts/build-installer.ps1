@@ -13,7 +13,8 @@
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$issPath = Join-Path $repoRoot 'installer_script.iss'
+# Script Inno vive en scripts/; las rutas relativas del .iss usan `..\` hacia la raíz.
+$issPath = Join-Path $PSScriptRoot 'installer_script.iss'
 $outDir = Join-Path $repoRoot 'build\windows\installer'
 
 function Find-Iscc {

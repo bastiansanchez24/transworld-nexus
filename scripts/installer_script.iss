@@ -16,9 +16,10 @@ DefaultDirName={localappdata}\Nexus
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableFinishedPage=yes
-OutputDir=.\build\windows\installer
+; Rutas relativas al directorio de este .iss (scripts/).
+OutputDir=..\build\windows\installer
 OutputBaseFilename=NexusSetup
-SetupIconFile=.\windows\runner\resources\app_icon.ico
+SetupIconFile=..\windows\runner\resources\app_icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -33,8 +34,8 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "scripts\install-nexus.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
-Source: "scripts\uninstall-nexus.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "install-nexus.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "uninstall-nexus.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "{code:GetInstallParameters}"; StatusMsg: "Descargando e instalando la última versión de Nexus..."; Flags: waituntilterminated

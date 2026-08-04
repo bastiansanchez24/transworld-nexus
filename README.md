@@ -124,12 +124,12 @@ docs/
    anterior, también puedes aplicar solo las migraciones pendientes en
    `supabase/migracion_*.sql`.
 
-4. (Opcional — push FCM) Coloca localmente los archivos de Firebase
-   (`android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist`,
-   `lib/firebase_options.dart`; no se versionan) y completa el setup de
-   webhook/secret descrito en [`docs/NOTIFICACIONES_PUSH.md`](docs/NOTIFICACIONES_PUSH.md).
-   Sin eso, la app sigue funcionando: el inbox in-app opera solo con
-   Supabase; el push de sistema queda desactivado.
+4. (Opcional — push FCM) Copia el stub y genera opciones reales:
+   `cp lib/firebase_options.stub.dart lib/firebase_options.dart` y luego
+   `flutterfire configure`. También coloca `google-services.json` /
+   `GoogleService-Info.plist` (gitignored). Sin eso, CI y clones usan el
+   stub: inbox in-app con Supabase; FCM desactivado. Para releases con
+   push, configura el secret `FIREBASE_OPTIONS_BASE64` en GitHub Actions.
 
 5. Corre la app:
 
@@ -246,7 +246,7 @@ que consulta GitHub Releases en runtime e instala siempre la última versión.
 | `scripts/install-nexus.ps1` | Script principal (API → descarga ZIP → extrae) |
 | `scripts/install-nexus.bat` | Launcher de doble clic |
 | `scripts/uninstall-nexus.ps1` | Desinstalación (binarios, datos en `%APPDATA%`, accesos directos) |
-| `installer_script.iss` | Wrapper Inno Setup → genera `NexusSetup.exe` |
+| `scripts/installer_script.iss` | Wrapper Inno Setup → genera `NexusSetup.exe` |
 
 **Instalación rápida** (desde el repo clonado):
 

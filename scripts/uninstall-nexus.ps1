@@ -2,10 +2,15 @@
 <#
 .SYNOPSIS
   Desinstala Nexus (instalación bootstrap en carpeta de usuario).
+
+.PARAMETER ParentPid
+  Si se indica (>0), espera a que ese proceso termine antes de borrar
+  (flujo "Desinstalar" desde la app). Sin ParentPid, aborta si Nexus sigue abierto.
 #>
 [CmdletBinding()]
 param(
-  [string]$InstallDir = ''
+  [string]$InstallDir = '',
+  [int]$ParentPid = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,18 +58,78 @@ function Remove-ShortcutIfExists {
   }
 }
 
+function Test-FileUnlocked([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) { return $true }
+  try {
+    $fs = [System.IO.File]::Open(
+      $Path,
+      [System.IO.FileMode]::Open,
+      [System.IO.FileAccess]::ReadWrite,
+      [System.IO.FileShare]::None
+    )
+    $fs.Close()
+    return $true
+  } catch {
+    return $false
+  }
+}
+
+function Wait-NexusClosed {
+  param([int]$WaitPid)
+
+  if ($WaitPid -gt 0) {
+    try {
+      $parent = Get-Process -Id $WaitPid -ErrorAction SilentlyContinue
+      if ($parent) {
+        Write-Log ('Esperando cierre del proceso ' + $WaitPid + '...')
+        $null = $parent.WaitForExit(180000)
+      } else {
+        Write-Log ('Proceso padre ' + $WaitPid + ' ya no existe.')
+      }
+    } catch {
+      Write-Log ('Aviso esperando el proceso padre: ' + $_.Exception.Message)
+    }
+  }
+
+  $exeCandidates = @(
+    (Join-Path $InstallDir 'transworld_nexus.exe'),
+    (Join-Path $LegacyInstallDir 'transworld_nexus.exe')
+  )
+  $deadline = (Get-Date).AddSeconds(180)
+  while ((Get-Date) -lt $deadline) {
+    $locked = $false
+    foreach ($exe in $exeCandidates) {
+      if (-not (Test-FileUnlocked $exe)) { $locked = $true; break }
+    }
+    if (-not $locked) { break }
+    Start-Sleep -Milliseconds 500
+  }
+
+  foreach ($exe in $exeCandidates) {
+    if (-not (Test-FileUnlocked $exe)) {
+      throw 'Los archivos de instalacion siguen bloqueados tras 180s.'
+    }
+  }
+
+  Start-Sleep -Milliseconds 800
+}
+
 Write-Log '--- Inicio de desinstalacion ---'
 Write-Host "Desinstalando $AppDisplayName..." -ForegroundColor Cyan
 
 try {
-  foreach ($dir in @($InstallDir, $LegacyInstallDir)) {
-    $exePath = Join-Path $dir 'transworld_nexus.exe'
-    if (Test-Path -LiteralPath $exePath) {
-      $proc = Get-Process -Name 'transworld_nexus' -ErrorAction SilentlyContinue
-      if ($proc) {
-        Write-Host 'Cierra Nexus antes de desinstalar.' -ForegroundColor Yellow
-        Write-Log 'Abortado: proceso transworld_nexus en ejecucion'
-        exit 1
+  if ($ParentPid -gt 0) {
+    Wait-NexusClosed -WaitPid $ParentPid
+  } else {
+    foreach ($dir in @($InstallDir, $LegacyInstallDir)) {
+      $exePath = Join-Path $dir 'transworld_nexus.exe'
+      if (Test-Path -LiteralPath $exePath) {
+        $proc = Get-Process -Name 'transworld_nexus' -ErrorAction SilentlyContinue
+        if ($proc) {
+          Write-Host 'Cierra Nexus antes de desinstalar.' -ForegroundColor Yellow
+          Write-Log 'Abortado: proceso transworld_nexus en ejecucion'
+          exit 1
+        }
       }
     }
   }

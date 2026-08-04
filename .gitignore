@@ -76,8 +76,8 @@ android/key.properties
 *.keystore
 upload-keystore.jks
 
-# Firebase client config (obtener vía Firebase Console / FlutterFire CLI;
-# ver docs/NOTIFICACIONES_PUSH.md). No versionar.
+# Firebase client config (FlutterFire). No versionar valores reales.
+# Stub versionado: lib/firebase_options.stub.dart (CI lo copia si no hay secret).
 # firebase.json (rutas FlutterFire) sí puede versionarse.
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist

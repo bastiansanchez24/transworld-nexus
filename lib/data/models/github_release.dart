@@ -22,14 +22,15 @@ class GitHubReleaseAsset {
 
   bool get isNexusApk {
     final lower = name.toLowerCase();
-    return lower.endsWith('.apk') && lower.contains('nexus');
+    return lower.endsWith('.apk') && lower.startsWith('android-nexus-');
   }
 
   bool get isZip => name.toLowerCase().endsWith('.zip');
 
+  /// Solo el paquete de app (`windows-NEXUS-v*.zip`), no `NexusBootstrap.zip`.
   bool get isNexusWindowsZip {
     final lower = name.toLowerCase();
-    return lower.endsWith('.zip') && lower.contains('nexus');
+    return lower.endsWith('.zip') && lower.startsWith('windows-nexus-');
   }
 
   factory GitHubReleaseAsset.fromJson(Map<String, dynamic> json) {
@@ -70,17 +71,12 @@ class GitHubRelease {
 
   /// Resuelve el APK de Nexus según el contrato del plan.
   ///
-  /// 1. Assets `.apk` cuyo nombre contiene `NEXUS`.
+  /// 1. Solo assets `android-NEXUS-*.apk`.
   /// 2. Preferir el que coincide con el tag (`android-NEXUS-vX.Y.Z.apk`).
   /// 3. Si hay varios, el de mayor [GitHubReleaseAsset.size].
   GitHubReleaseAsset? resolveNexusApk() {
     final candidates = assets.where((a) => a.isNexusApk).toList();
-    if (candidates.isEmpty) {
-      final fallback = assets.where((a) => a.isApk).toList();
-      if (fallback.isEmpty) return null;
-      fallback.sort((a, b) => b.size.compareTo(a.size));
-      return fallback.first;
-    }
+    if (candidates.isEmpty) return null;
 
     final tag = stripVersionPrefix(tagName);
     final exactName = 'android-NEXUS-v$tag.apk';
@@ -94,17 +90,12 @@ class GitHubRelease {
 
   /// Resuelve el ZIP de Windows según el contrato OTA.
   ///
-  /// 1. Assets `.zip` cuyo nombre contiene `NEXUS`.
+  /// 1. Solo assets `windows-NEXUS-*.zip` (nunca `NexusBootstrap.zip`).
   /// 2. Preferir el que coincide con el tag (`windows-NEXUS-vX.Y.Z.zip`).
   /// 3. Si hay varios, el de mayor [GitHubReleaseAsset.size].
   GitHubReleaseAsset? resolveNexusWindowsZip() {
     final candidates = assets.where((a) => a.isNexusWindowsZip).toList();
-    if (candidates.isEmpty) {
-      final fallback = assets.where((a) => a.isZip).toList();
-      if (fallback.isEmpty) return null;
-      fallback.sort((a, b) => b.size.compareTo(a.size));
-      return fallback.first;
-    }
+    if (candidates.isEmpty) return null;
 
     final tag = stripVersionPrefix(tagName);
     final exactName = 'windows-NEXUS-v$tag.zip';

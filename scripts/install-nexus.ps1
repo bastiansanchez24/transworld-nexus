@@ -144,16 +144,12 @@ function Resolve-NexusWindowsZipAsset {
   $tag = Get-StrippedTag $Release.tag_name
   $exactName = "windows-NEXUS-v$tag.zip"
 
+  # Solo windows-NEXUS-*.zip (excluye NexusBootstrap.zip y otros).
   $candidates = @(
     $Release.assets | Where-Object {
-      $_.name -match '(?i)nexus' -and $_.name -match '(?i)\.zip$'
+      $_.name -match '(?i)^windows-nexus-.+\.zip$'
     }
   )
-  if ($candidates.Count -eq 0) {
-    $candidates = @(
-      $Release.assets | Where-Object { $_.name -match '(?i)\.zip$' }
-    )
-  }
   if ($candidates.Count -eq 0) { return $null }
 
   foreach ($c in $candidates) {

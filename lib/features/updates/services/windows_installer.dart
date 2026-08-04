@@ -21,13 +21,17 @@ class WindowsInstallResult {
 /// app libere el `.exe`, extrae el ZIP sobre el directorio de instalación y
 /// reinicia Nexus.
 ///
-/// El script se lanza *detached*; la app debe cerrarse inmediatamente después
-/// de recibir [WindowsInstallOutcome.launched] para liberar los archivos.
+/// El script se lanza *fuera* del Job Object de Flutter (vía `cmd /c start`);
+/// la app debe cerrarse inmediatamente después de recibir
+/// [WindowsInstallOutcome.launched] para liberar los archivos.
 class WindowsInstaller {
   /// Lanza el actualizador. Solo devuelve [WindowsInstallOutcome.launched]
   /// cuando el directorio de instalación es escribible, de modo que la app
   /// nunca se cierre para una actualización que no puede aplicarse.
-  Future<WindowsInstallResult> install(File zipFile) async {
+  Future<WindowsInstallResult> install(
+    File zipFile, {
+    String? remoteVersion,
+  }) async {
     if (kIsWeb || !Platform.isWindows) {
       return const WindowsInstallResult(
         WindowsInstallOutcome.unsupportedPlatform,
@@ -45,7 +49,7 @@ class WindowsInstaller {
 
     final exePath = Platform.resolvedExecutable;
     final installDir = File(exePath).parent.path;
-    final exeName = File(exePath).uri.pathSegments.last;
+    final exeName = _exeFileName(exePath);
 
     // Pre-flight: si no podemos escribir en el directorio de instalación
     // (típico en `C:\Program Files` sin elevación) abortamos ANTES de cerrar
@@ -61,14 +65,31 @@ class WindowsInstaller {
     }
 
     final tempDir = await getTemporaryDirectory();
-    final scriptPath =
-        '${tempDir.path}\\nexus-update-${DateTime.now().millisecondsSinceEpoch}.ps1';
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final scriptPath = '${tempDir.path}\\nexus-update-$stamp.ps1';
+    final launcherPath = '${tempDir.path}\\nexus-update-launch-$stamp.cmd';
 
     try {
       // BOM obligatorio: Windows PowerShell 5.1 decodifica los archivos sin
       // BOM como ANSI y corrompería los acentos del script.
       await File(scriptPath).writeAsString(
         '\u{FEFF}$_updaterScript',
+        flush: true,
+      );
+      // Trampolín .cmd: `start` crea el proceso PowerShell fuera del Job
+      // Object de Flutter/Dart. Sin esto, `exit(0)` mata al updater antes
+      // de que pueda aplicar el ZIP (síntoma: la app se cierra y no vuelve).
+      await File(launcherPath).writeAsString(
+        // BOM ayuda a cmd.exe con rutas Unicode (p. ej. usuarios con acentos).
+        '\u{FEFF}${_launcherCmd(
+          powershell: _powershellExecutable,
+          scriptPath: scriptPath,
+          zipPath: zipFile.path,
+          installDir: installDir,
+          exeName: exeName,
+          parentPid: pid,
+          remoteVersion: remoteVersion ?? '',
+        )}',
         flush: true,
       );
     } catch (e) {
@@ -80,26 +101,13 @@ class WindowsInstaller {
 
     try {
       await Process.start(
-        _powershellExecutable,
-        [
-          '-NoProfile',
-          '-WindowStyle',
-          'Hidden',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-File',
-          scriptPath,
-          '-ZipPath',
-          zipFile.path,
-          '-InstallDir',
-          installDir,
-          '-ExeName',
-          exeName,
-          '-ParentPid',
-          '$pid',
-        ],
+        'cmd.exe',
+        ['/d', '/c', launcherPath],
         mode: ProcessStartMode.detached,
+        workingDirectory: tempDir.path,
       );
+      // Da tiempo a que `start` cree el proceso PowerShell breakaway.
+      await Future<void>.delayed(const Duration(milliseconds: 400));
       return const WindowsInstallResult(WindowsInstallOutcome.launched);
     } catch (e) {
       return WindowsInstallResult(
@@ -109,6 +117,13 @@ class WindowsInstaller {
     }
   }
 
+  /// Nombre del .exe sin usar `Uri` (más fiable con rutas Windows).
+  static String _exeFileName(String exePath) {
+    final normalized = exePath.replaceAll('/', '\\');
+    final idx = normalized.lastIndexOf('\\');
+    return idx < 0 ? normalized : normalized.substring(idx + 1);
+  }
+
   /// Ruta absoluta de PowerShell (no depende del `PATH` del proceso).
   static String get _powershellExecutable {
     final systemRoot = Platform.environment['SystemRoot'];
@@ -116,6 +131,44 @@ class WindowsInstaller {
     final resolved =
         '$systemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
     return File(resolved).existsSync() ? resolved : 'powershell.exe';
+  }
+
+  static String _launcherCmd({
+    required String powershell,
+    required String scriptPath,
+    required String zipPath,
+    required String installDir,
+    required String exeName,
+    required int parentPid,
+    required String remoteVersion,
+  }) {
+    String q(String value) => '"${value.replaceAll('"', '')}"';
+    final psArgs = [
+      '-NoProfile',
+      '-WindowStyle',
+      'Hidden',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      q(scriptPath),
+      '-ZipPath',
+      q(zipPath),
+      '-InstallDir',
+      q(installDir),
+      '-ExeName',
+      q(exeName),
+      '-ParentPid',
+      '$parentPid',
+      if (remoteVersion.isNotEmpty) ...['-RemoteVersion', q(remoteVersion)],
+    ].join(' ');
+
+    // `start "title" /b` — el título entre comillas es obligatorio para que
+    // rutas con espacios no se interpreten como título de ventana.
+    return '''
+@echo off
+chcp 65001 >nul
+start "NexusUpdate" /b ${q(powershell)} $psArgs
+''';
   }
 
   /// Escribe un archivo sonda para confirmar permisos de escritura reales
@@ -149,7 +202,8 @@ param(
   [Parameter(Mandatory = $true)][string]$ZipPath,
   [Parameter(Mandatory = $true)][string]$InstallDir,
   [Parameter(Mandatory = $true)][string]$ExeName,
-  [int]$ParentPid = 0
+  [int]$ParentPid = 0,
+  [string]$RemoteVersion = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -189,6 +243,17 @@ function Test-FileUnlocked([string]$Path) {
   }
 }
 
+function Test-InstallDirUnlocked {
+  $targets = @(
+    $exePath,
+    (Join-Path $InstallDir 'flutter_windows.dll')
+  )
+  foreach ($t in $targets) {
+    if (-not (Test-FileUnlocked $t)) { return $false }
+  }
+  return $true
+}
+
 # Copia recursiva con reintentos: tolera handles que el SO aún no liberó
 # (antivirus, indexador, DLLs recién descargadas).
 function Copy-Payload([string]$Source, [string]$Destination) {
@@ -199,41 +264,46 @@ function Copy-Payload([string]$Source, [string]$Destination) {
       Copy-Item -Path (Join-Path $Source $payloadGlob) -Destination $Destination -Recurse -Force -ErrorAction Stop
       return
     } catch {
-      if ($attempts -ge 5) { throw }
+      if ($attempts -ge 8) { throw }
       Write-Log ('Copia falló (intento ' + $attempts + '): ' + $_.Exception.Message)
-      Start-Sleep -Milliseconds 800
+      Start-Sleep -Milliseconds 1000
     }
   }
 }
 
 Write-Log '--- Inicio de actualización ---'
-Write-Log ('InstallDir=' + $InstallDir + ' ExeName=' + $ExeName + ' Zip=' + $ZipPath)
+Write-Log ('InstallDir=' + $InstallDir + ' ExeName=' + $ExeName + ' Zip=' + $ZipPath + ' Pid=' + $PID)
 
-# 1. Esperar a que la app cierre (por PID y por lock del .exe).
+# 1. Esperar a que la app cierre (por PID y por lock del .exe / DLL).
 if ($ParentPid -gt 0) {
   try {
     $parent = Get-Process -Id $ParentPid -ErrorAction SilentlyContinue
     if ($parent) {
       Write-Log ('Esperando cierre del proceso ' + $ParentPid + '...')
-      $parent.WaitForExit(120000) | Out-Null
+      $null = $parent.WaitForExit(180000)
+    } else {
+      Write-Log ('Proceso padre ' + $ParentPid + ' ya no existe.')
     }
   } catch {
     Write-Log ('Aviso esperando el proceso padre: ' + $_.Exception.Message)
   }
 }
 
-$deadline = (Get-Date).AddSeconds(120)
+$deadline = (Get-Date).AddSeconds(180)
 while ((Get-Date) -lt $deadline) {
-  if (Test-FileUnlocked $exePath) { break }
-  Start-Sleep -Milliseconds 400
+  if (Test-InstallDirUnlocked) { break }
+  Start-Sleep -Milliseconds 500
 }
 
-if (-not (Test-FileUnlocked $exePath)) {
-  Write-Log 'ERROR: el ejecutable sigue bloqueado tras 120s. Se aborta sin tocar la instalación.'
+if (-not (Test-InstallDirUnlocked)) {
+  Write-Log 'ERROR: archivos de instalación siguen bloqueados tras 180s. Se aborta sin tocar la instalación.'
   Start-Nexus
   Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
   exit 1
 }
+
+# Margen extra para antivirus / indexador tras liberar handles.
+Start-Sleep -Milliseconds 800
 
 $restoreNeeded = $false
 try {
@@ -269,6 +339,15 @@ try {
   Copy-Payload $source $InstallDir
   $restoreNeeded = $false
   Write-Log 'Actualización aplicada correctamente.'
+
+  if (-not [string]::IsNullOrWhiteSpace($RemoteVersion)) {
+    try {
+      Set-Content -LiteralPath (Join-Path $InstallDir '.nexus-version') -Value $RemoteVersion.Trim() -Encoding UTF8
+      Write-Log ('Versión registrada: ' + $RemoteVersion.Trim())
+    } catch {
+      Write-Log ('Aviso al escribir .nexus-version: ' + $_.Exception.Message)
+    }
+  }
 } catch {
   Write-Log ('ERROR: ' + $_.Exception.Message)
   if ($restoreNeeded) {

@@ -1,3 +1,5 @@
+import 'dart:io' show exit;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +18,8 @@ import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../fijados/providers/fijados_providers.dart';
 import '../../notificaciones/providers/notificaciones_providers.dart';
+import '../../updates/services/update_platform.dart';
+import '../../updates/services/windows_uninstaller.dart';
 import '../../updates/widgets/update_checker.dart';
 import '../models/home_featured_item.dart';
 import '../providers/home_dashboard_providers.dart';
@@ -32,6 +36,40 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _menuCuentaAbierto = false;
+  bool _desinstalando = false;
+
+  Future<void> _desinstalar() async {
+    if (_desinstalando || !canUninstallApp) return;
+    setState(() => _menuCuentaAbierto = false);
+
+    final ok = await confirmDialog(
+      context,
+      title: 'Desinstalar Nexus',
+      message:
+          'Se eliminarán la aplicación, los accesos directos y los datos '
+          'locales de Nexus en este equipo. Esta acción no se puede deshacer.',
+      confirmLabel: 'Desinstalar',
+    );
+    if (!ok || !mounted) return;
+
+    setState(() => _desinstalando = true);
+    final result = await WindowsUninstaller().uninstall();
+    if (!mounted) return;
+
+    if (result.outcome == WindowsUninstallOutcome.launched) {
+      Future.delayed(const Duration(milliseconds: 800), () => exit(0));
+      return;
+    }
+
+    setState(() => _desinstalando = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.message ?? 'No se pudo iniciar la desinstalación.',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +103,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   setState(() => _menuCuentaAbierto = false);
                   context.push(RoutePaths.actualizaciones);
                 },
+                onDesinstalar: canUninstallApp ? _desinstalar : null,
                 onCerrarSesion: () =>
                     ref.read(authRepositoryProvider).cerrarSesion(),
               ),
@@ -123,6 +162,7 @@ class _HeaderPerfil extends StatelessWidget {
     required this.onToggleMenu,
     required this.onMiPerfil,
     required this.onActualizaciones,
+    this.onDesinstalar,
     required this.onCerrarSesion,
   });
 
@@ -134,6 +174,7 @@ class _HeaderPerfil extends StatelessWidget {
   final VoidCallback onToggleMenu;
   final VoidCallback onMiPerfil;
   final VoidCallback onActualizaciones;
+  final VoidCallback? onDesinstalar;
   final VoidCallback onCerrarSesion;
 
   String get _firstName {
@@ -248,6 +289,7 @@ class _HeaderPerfil extends StatelessWidget {
                           child: _MenuCuenta(
                             onMiPerfil: onMiPerfil,
                             onActualizaciones: onActualizaciones,
+                            onDesinstalar: onDesinstalar,
                             onCerrarSesion: onCerrarSesion,
                           ),
                         )
@@ -293,11 +335,13 @@ class _MenuCuenta extends StatelessWidget {
   const _MenuCuenta({
     required this.onMiPerfil,
     required this.onActualizaciones,
+    this.onDesinstalar,
     required this.onCerrarSesion,
   });
 
   final VoidCallback onMiPerfil;
   final VoidCallback onActualizaciones;
+  final VoidCallback? onDesinstalar;
   final VoidCallback onCerrarSesion;
 
   @override
@@ -322,6 +366,15 @@ class _MenuCuenta extends StatelessWidget {
             label: 'Actualizaciones',
             onTap: onActualizaciones,
           ),
+          if (onDesinstalar != null) ...[
+            const Divider(height: 1, indent: 56, color: AppColors.divider),
+            _CuentaTile(
+              icon: Symbols.delete_forever_rounded,
+              label: 'Desinstalar',
+              destructivo: true,
+              onTap: onDesinstalar!,
+            ),
+          ],
           const Divider(height: 1, indent: 56, color: AppColors.divider),
           _CuentaTile(
             icon: Symbols.logout_rounded,

@@ -50,16 +50,16 @@ void main() {
       expect(release.resolveNexusWindowsZip()?.name, 'windows-NEXUS-v2.0.0.zip');
     });
 
-    test('usa cualquier zip si no hay candidatos Nexus', () {
+    test('sin windows-NEXUS zip retorna null (no fallback genérico)', () {
       final release = _release(
         tagName: 'v1.0.0',
         assets: [
           _asset('bundle.zip', size: 2000),
-          _asset('other.zip', size: 4000),
+          _asset('NexusBootstrap.zip', size: 4000),
         ],
       );
 
-      expect(release.resolveNexusWindowsZip()?.name, 'other.zip');
+      expect(release.resolveNexusWindowsZip(), isNull);
     });
   });
 
@@ -110,6 +110,31 @@ void main() {
         release.resolveNexusAsset(forWindows: true)?.name,
         'windows-NEXUS-v1.0.0.zip',
       );
+    });
+
+    test('ignora NexusBootstrap.zip aunque contenga nexus en el nombre', () {
+      final release = _release(
+        tagName: 'v1.0.0',
+        assets: [
+          _asset('NexusBootstrap.zip', size: 50000),
+          _asset('windows-NEXUS-v1.0.0.zip', size: 1000),
+        ],
+      );
+
+      expect(
+        release.resolveNexusWindowsZip()?.name,
+        'windows-NEXUS-v1.0.0.zip',
+      );
+      expect(_asset('NexusBootstrap.zip').isNexusWindowsZip, isFalse);
+    });
+
+    test('solo NexusBootstrap.zip no cuenta como paquete de app', () {
+      final release = _release(
+        tagName: 'v1.0.0',
+        assets: [_asset('NexusBootstrap.zip', size: 50000)],
+      );
+
+      expect(release.resolveNexusWindowsZip(), isNull);
     });
   });
 

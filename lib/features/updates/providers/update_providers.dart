@@ -162,7 +162,7 @@ class UpdateController extends StateNotifier<UpdateState> {
         downloadedFilePath: file.path,
       );
 
-      final result = await _service.install(file);
+      final result = await _service.install(file, info: info);
       if (!mounted) return;
 
       _applyInstallResult(result, file.path);
@@ -207,7 +207,7 @@ class UpdateController extends StateNotifier<UpdateState> {
       needsInstallPermission: false,
     );
 
-    final result = await _service.install(file);
+    final result = await _service.install(file, info: state.info);
     if (!mounted) return;
 
     _applyInstallResult(result, path);
@@ -218,14 +218,11 @@ class UpdateController extends StateNotifier<UpdateState> {
       case UpdateInstallOutcome.launched:
         state = state.copyWith(status: UpdateStatus.installing);
         if (Platform.isWindows) {
-          // El actualizador espera a que este proceso libere el .exe. Damos un
-          // margen mínimo para que el usuario vea "Aplicando actualización…"
-          // antes de que la ventana desaparezca y la app se reinicie sola.
-          Future.delayed(
-            const Duration(milliseconds: 1200),
-            () => exit(0),
-          );
+          // El updater ya corre fuera del Job Object (cmd/start). Cerramos
+          // para liberar .exe/DLLs; el script PowerShell reaplica y relanza.
+          Future.delayed(const Duration(milliseconds: 800), () => exit(0));
         }
+        return;
       case UpdateInstallOutcome.permissionRequired:
         state = state.copyWith(
           status: UpdateStatus.failed,
@@ -234,6 +231,7 @@ class UpdateController extends StateNotifier<UpdateState> {
               'Se requiere permiso para instalar aplicaciones.',
           downloadedFilePath: filePath,
         );
+        return;
       case UpdateInstallOutcome.unsupportedPlatform:
       case UpdateInstallOutcome.failed:
         state = state.copyWith(

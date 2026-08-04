@@ -78,6 +78,12 @@ dependencies:
   firebase_messaging: ^16.0.1
   flutter_local_notifications: ^19.4.1
 
+# Windows: skip upstream native FFI plugin (ATL + MSVC coroutine).
+# Inbox in-app is unaffected; system toasts are Android/iOS only.
+dependency_overrides:
+  flutter_local_notifications_windows:
+    path: packages/flutter_local_notifications_windows
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

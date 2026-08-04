@@ -24,3 +24,9 @@ bool get otaResolvesWindowsAsset {
   if (kIsWeb) return false;
   return Platform.isWindows;
 }
+
+/// Desinstalación desde el menú de la app (script bootstrap en Windows).
+bool get canUninstallApp {
+  if (kIsWeb) return false;
+  return Platform.isWindows;
+}

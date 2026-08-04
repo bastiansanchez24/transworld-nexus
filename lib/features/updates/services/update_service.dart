@@ -284,7 +284,10 @@ class UpdateService {
     return ok;
   }
 
-  Future<UpdateInstallResult> install(File file) async {
+  Future<UpdateInstallResult> install(
+    File file, {
+    AppUpdateInfo? info,
+  }) async {
     if (Platform.isAndroid) {
       final result = await _apkInstaller.install(file);
       return UpdateInstallResult(
@@ -293,7 +296,10 @@ class UpdateService {
       );
     }
     if (Platform.isWindows) {
-      final result = await _windowsInstaller.install(file);
+      final result = await _windowsInstaller.install(
+        file,
+        remoteVersion: info?.remoteVersion,
+      );
       return UpdateInstallResult(
         _mapWindowsOutcome(result.outcome),
         message: result.message,
