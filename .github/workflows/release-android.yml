@@ -120,8 +120,8 @@ jobs:
             Assets:
             - `android-NEXUS-${{ github.ref_name }}.apk`
             - `windows-NEXUS-${{ github.ref_name }}.zip` (subido por el job Windows)
-            - `NexusSetup.exe` — instalador bootstrap (descarga la última versión)
-            - `NexusBootstrap.zip` — scripts PS1/BAT del instalador bootstrap
+            - `NexusSetup.exe` — instalador bootstrap nativo (wizard Inno, sin PowerShell)
+            - `NexusBootstrap.zip` — alternativa CLI (scripts PS1/BAT)
 
             Para marcar la actualización como **obligatoria**, edita las notas
             de esta Release y agrega la línea:

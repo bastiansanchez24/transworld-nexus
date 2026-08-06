@@ -46,11 +46,18 @@ class UpdateController extends StateNotifier<UpdateState> {
   UpdateService get _service => _ref.read(updateServiceProvider);
 
   /// Check automático post-login (Android/Windows + online + debounce).
-  Future<void> checkOnLaunch() async {
+  Future<void> checkOnLaunch() => _checkAutomatic(onResume: false);
+
+  /// Check al volver del segundo plano (ignora debounce de sesión/6h).
+  Future<void> checkOnResume() => _checkAutomatic(onResume: true);
+
+  Future<void> _checkAutomatic({required bool onResume}) async {
     if (!otaUpdatesSupported) return;
     if (!(_ref.read(isOnlineProvider))) return;
     if (state.isBusy) return;
     if (_dialogVisible) return;
+
+    final previous = state;
 
     state = state.copyWith(
       status: UpdateStatus.checking,
@@ -58,7 +65,13 @@ class UpdateController extends StateNotifier<UpdateState> {
     );
 
     try {
-      final info = await _service.checkForUpdates();
+      final outcome = await _service.checkForUpdates(onResume: onResume);
+      if (!outcome.performed) {
+        // Skip (debounce/backoff): restaurar estado previo sin marcar al día.
+        state = previous;
+        return;
+      }
+      final info = outcome.info;
       if (info == null) {
         state = state.copyWith(status: UpdateStatus.upToDate, clearInfo: true);
         return;
@@ -100,7 +113,9 @@ class UpdateController extends StateNotifier<UpdateState> {
     );
 
     try {
-      final info = await _service.checkForUpdates(force: true, manual: true);
+      final outcome =
+          await _service.checkForUpdates(force: true, manual: true);
+      final info = outcome.info;
       if (info == null) {
         state = state.copyWith(status: UpdateStatus.upToDate, clearInfo: true);
         return;
@@ -218,8 +233,8 @@ class UpdateController extends StateNotifier<UpdateState> {
       case UpdateInstallOutcome.launched:
         state = state.copyWith(status: UpdateStatus.installing);
         if (Platform.isWindows) {
-          // El updater ya corre fuera del Job Object (cmd/start). Cerramos
-          // para liberar .exe/DLLs; el script PowerShell reaplica y relanza.
+          // El handshake confirmó que el updater ya corre fuera del Job
+          // Object. Cerramos para liberar .exe/DLLs; PowerShell actualiza.
           Future.delayed(const Duration(milliseconds: 800), () => exit(0));
         }
         return;

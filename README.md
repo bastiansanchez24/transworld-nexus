@@ -224,6 +224,9 @@ Garantías del actualizador (`lib/features/updates/services/windows_installer.da
   app **no se cierra** y muestra el error. Nexus debe vivir en una carpeta de
   usuario (ej. `%LOCALAPPDATA%\Nexus`); en `C:\Program Files` haría falta
   elevación y la OTA no se aplicará.
+- **Proceso independiente + handshake**: Explorer lanza PowerShell fuera del
+  ciclo de vida de Flutter y Nexus espera una señal real de inicio antes de
+  cerrarse. Si el updater no arranca en 10 segundos, la app permanece abierta.
 - **Validación del paquete**: si el ZIP no contiene el `.exe`, se aborta sin
   tocar la instalación.
 - **Backup + rollback**: se respalda la instalación antes de sobrescribir y se
@@ -232,6 +235,12 @@ Garantías del actualizador (`lib/features/updates/services/windows_installer.da
   indexador) antes de darse por vencida.
 - **Nunca deja al usuario sin app**: pase lo que pase, se relanza Nexus.
 - **Traza**: cada intento queda registrado en `%TEMP%\nexus-update.log`.
+
+Prueba de integración local (no modifica la instalación real):
+
+```powershell
+.\scripts\test-windows-ota.ps1
+```
 
 Los archivos ajenos al paquete (config local del usuario) se conservan: la
 actualización copia encima, no borra la carpeta.
@@ -243,12 +252,14 @@ que consulta GitHub Releases en runtime e instala siempre la última versión.
 
 | Archivo | Uso |
 |---------|-----|
-| `scripts/install-nexus.ps1` | Script principal (API → descarga ZIP → extrae) |
-| `scripts/install-nexus.bat` | Launcher de doble clic |
+| `scripts/installer_script.iss` | Instalador nativo Inno Setup → `NexusSetup.exe` (UI de Windows, sin PowerShell) |
+| `scripts/install-nexus.ps1` | Alternativa CLI (API → descarga ZIP → extrae) |
+| `scripts/install-nexus.bat` | Launcher de doble clic del script CLI |
 | `scripts/uninstall-nexus.ps1` | Desinstalación (binarios, datos en `%APPDATA%`, accesos directos) |
-| `scripts/installer_script.iss` | Wrapper Inno Setup → genera `NexusSetup.exe` |
 
-**Instalación rápida** (desde el repo clonado):
+**Instalación recomendada:** distribuir `NexusSetup.exe` (wizard de Windows).
+
+**Alternativa CLI** (desde el repo clonado):
 
 ```powershell
 .\scripts\install-nexus.bat
@@ -256,21 +267,21 @@ que consulta GitHub Releases en runtime e instala siempre la última versión.
 .\scripts\install-nexus.ps1 -DesktopShortcut
 ```
 
-**Compilar `NexusSetup.exe`** (requiere [Inno Setup 6+](https://jrsoftware.org/isinfo.php)):
+**Compilar `NexusSetup.exe`** (requiere [Inno Setup 6.1+](https://jrsoftware.org/isinfo.php)):
 
 ```powershell
 .\scripts\build-installer.ps1
 # Salida: build\windows\installer\NexusSetup.exe
 ```
 
-Flujo del bootstrap:
+Flujo del bootstrap (`NexusSetup.exe`):
 
-1. `GET /repos/{owner}/{repo}/releases/latest`
-2. Descarga `windows-NEXUS-vX.Y.Z.zip`
+1. Wizard Inno consulta `GET /repos/{owner}/{repo}/releases/latest`
+2. Descarga `windows-NEXUS-vX.Y.Z.zip` con barra de progreso nativa
 3. Verifica SHA-256 si GitHub expone `digest` en el asset
 4. Extrae en `%LOCALAPPDATA%\Nexus` (compatible con OTA posterior)
 5. Crea accesos en el menú Inicio (y escritorio si se pide)
-6. Registra desinstalación en *Agregar o quitar programas* (salvo vía Inno Setup)
+6. Registra desinstalación en *Agregar o quitar programas*
 
 Traza de instalación: `%TEMP%\nexus-install.log`.
 

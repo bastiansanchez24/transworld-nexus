@@ -172,7 +172,7 @@ class _NotificacionesScreenState extends ConsumerState<NotificacionesScreen> {
             return const EmptyStateView(
               icon: Symbols.notifications_rounded,
               message:
-                  'Sin notificaciones.\nVerás avisos de registros y hitos de acreditación (20%, 50%, 80%, 100%) aquí.',
+                  'Sin notificaciones.',
             );
           }
 

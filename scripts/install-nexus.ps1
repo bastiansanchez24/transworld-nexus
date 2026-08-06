@@ -49,9 +49,40 @@ $UninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68B
 $LogPath = Join-Path $env:TEMP 'nexus-install.log'
 $UiTotalSteps = 6
 $Script:UiStep = 0
+$Script:UiProgressOpen = $false
+$Script:UiWidth = 58
 
 if ([string]::IsNullOrWhiteSpace($InstallDir)) {
   $InstallDir = Join-Path $env:LOCALAPPDATA 'Nexus'
+}
+
+function Initialize-ConsoleUi {
+  try {
+    # Consola UTF-8 para tipografía y marco del instalador (también vía Inno).
+    $utf8 = [System.Text.Encoding]::UTF8
+    [Console]::OutputEncoding = $utf8
+    [Console]::InputEncoding = $utf8
+    $OutputEncoding = $utf8
+    try {
+      $setCp = Add-Type -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern bool SetConsoleOutputCP(uint wCodePageID);
+[DllImport("kernel32.dll")] public static extern bool SetConsoleCP(uint wCodePageID);
+'@ -Name 'NexusConsoleCp' -Namespace 'NexusNative' -PassThru -ErrorAction Stop
+      [void]$setCp::SetConsoleOutputCP(65001)
+      [void]$setCp::SetConsoleCP(65001)
+    } catch { }
+  } catch { }
+
+  try {
+    $Host.UI.RawUI.WindowTitle = 'Nexus  ·  Instalador'
+  } catch { }
+
+  try {
+    $buffer = $Host.UI.RawUI.BufferSize
+    if ($buffer.Width -lt 72) {
+      $Host.UI.RawUI.BufferSize = New-Object System.Management.Automation.Host.Size(88, $buffer.Height)
+    }
+  } catch { }
 }
 
 function Write-Log {
@@ -70,21 +101,62 @@ function Format-Megabytes {
   return "$mb MB"
 }
 
+function Write-UiRule {
+  param([string]$Char = '─')
+  Write-Host ('  ' + ($Char * $Script:UiWidth)) -ForegroundColor DarkCyan
+}
+
+function Write-UiBoxLine {
+  param(
+    [string]$Text = '',
+    [ConsoleColor]$Color = [ConsoleColor]::Cyan,
+    [switch]$Center
+  )
+  $inner = $Script:UiWidth - 2
+  if ($null -eq $Text) { $Text = '' }
+  if ($Text.Length -gt $inner) {
+    $Text = $Text.Substring(0, [math]::Max(0, $inner - 1)) + '…'
+  }
+  if ($Center) {
+    $pad = [math]::Max(0, $inner - $Text.Length)
+    $left = [math]::Floor($pad / 2)
+    $right = $pad - $left
+    $content = (' ' * $left) + $Text + (' ' * $right)
+  } else {
+    $content = $Text.PadRight($inner)
+  }
+  Write-Host '  ║' -NoNewline -ForegroundColor DarkCyan
+  Write-Host $content -NoNewline -ForegroundColor $Color
+  Write-Host '║' -ForegroundColor DarkCyan
+}
+
 function Show-InstallBanner {
   Clear-Host
   Write-Host ''
-  Write-Host '  ===============================================' -ForegroundColor Cyan
-  Write-Host '              NEXUS - Instalador                 ' -ForegroundColor Cyan
-  Write-Host '  ===============================================' -ForegroundColor Cyan
+  Write-Host ('  ╔' + ('═' * ($Script:UiWidth - 2)) + '╗') -ForegroundColor DarkCyan
+  Write-UiBoxLine -Color DarkCyan
+  Write-UiBoxLine -Text 'N E X U S' -Color Cyan -Center
+  Write-UiBoxLine -Color DarkCyan
+  Write-Host ('  ╚' + ('═' * ($Script:UiWidth - 2)) + '╝') -ForegroundColor DarkCyan
   Write-Host ''
   Write-UiDetail -Label 'Destino' -Value $InstallDir
+  Write-UiDetail -Label 'Registro' -Value "$Owner/$Repo"
+  Write-Host ''
+  Write-UiRule
   Write-Host ''
 }
 
 function Write-UiStep {
   param([string]$Message)
   $Script:UiStep++
-  Write-Host ("  [{0}/{1}] {2}" -f $Script:UiStep, $UiTotalSteps, $Message) -ForegroundColor White
+  if ($Script:UiProgressOpen) {
+    Write-Host ''
+    $Script:UiProgressOpen = $false
+  }
+  Write-Host ''
+  Write-Host '  ' -NoNewline
+  Write-Host (' {0}/{1} ' -f $Script:UiStep, $UiTotalSteps) -NoNewline -ForegroundColor Black -BackgroundColor Cyan
+  Write-Host ('  {0}' -f $Message) -ForegroundColor White
 }
 
 function Write-UiDetail {
@@ -92,29 +164,101 @@ function Write-UiDetail {
     [string]$Label,
     [string]$Value
   )
-  Write-Host ('       {0,-12}' -f ($Label + ':')) -NoNewline -ForegroundColor DarkGray
-  Write-Host $Value
+  Write-Host '      ' -NoNewline
+  Write-Host ('{0,-10}' -f $Label) -NoNewline -ForegroundColor DarkGray
+  Write-Host '  ' -NoNewline
+  Write-Host $Value -ForegroundColor Gray
 }
 
 function Write-UiOk {
   param([string]$Message)
-  Write-Host '       [OK] ' -NoNewline -ForegroundColor Green
-  Write-Host $Message -ForegroundColor Green
+  if ($Script:UiProgressOpen) {
+    Write-Host ''
+    $Script:UiProgressOpen = $false
+  }
+  Write-Host '      ' -NoNewline
+  Write-Host '✓' -NoNewline -ForegroundColor Green
+  Write-Host ('  {0}' -f $Message) -ForegroundColor Green
 }
 
 function Write-UiWait {
   param([string]$Message)
-  Write-Host '       ... ' -NoNewline -ForegroundColor DarkGray
-  Write-Host $Message -ForegroundColor DarkGray
+  Write-Host '      ' -NoNewline
+  Write-Host '…' -NoNewline -ForegroundColor DarkCyan
+  Write-Host ('  {0}' -f $Message) -ForegroundColor DarkGray
+}
+
+function Write-UiProgressLine {
+  param(
+    [int]$Percent,
+    [string]$Status,
+    [int]$BarWidth = 28
+  )
+  if ($Percent -lt 0) { $Percent = 0 }
+  if ($Percent -gt 100) { $Percent = 100 }
+  $filled = [int][math]::Round(($BarWidth * $Percent) / 100.0)
+  if ($filled -gt $BarWidth) { $filled = $BarWidth }
+  $empty = $BarWidth - $filled
+  $bar = ('█' * $filled) + ('░' * $empty)
+  $line = '      [{0}] {1,3}%  {2}' -f $bar, $Percent, $Status
+  if ($line.Length -gt 90) {
+    $line = $line.Substring(0, 89) + '…'
+  }
+  Write-Host ("`r" + $line.PadRight(96)) -NoNewline -ForegroundColor Cyan
+  $Script:UiProgressOpen = $true
+}
+
+function Close-UiProgressLine {
+  if ($Script:UiProgressOpen) {
+    Write-Host ''
+    $Script:UiProgressOpen = $false
+  }
+}
+
+function Show-InstallSuccess {
+  param([string]$Version)
+  Close-UiProgressLine
+  Write-Host ''
+  Write-UiRule
+  Write-Host ''
+  Write-Host ('  ╔' + ('═' * ($Script:UiWidth - 2)) + '╗') -ForegroundColor DarkGreen
+  Write-Host '  ║' -NoNewline -ForegroundColor DarkGreen
+  Write-Host (''.PadRight($Script:UiWidth - 2)) -NoNewline
+  Write-Host '║' -ForegroundColor DarkGreen
+  Write-Host '  ║' -NoNewline -ForegroundColor DarkGreen
+  $title = 'Instalación completada'
+  $pad = [math]::Max(0, ($Script:UiWidth - 2) - $title.Length)
+  $left = [math]::Floor($pad / 2)
+  Write-Host ((' ' * $left) + $title + (' ' * ($pad - $left))) -NoNewline -ForegroundColor Green
+  Write-Host '║' -ForegroundColor DarkGreen
+  Write-Host '  ║' -NoNewline -ForegroundColor DarkGreen
+  $sub = "Nexus v$Version listo para usar"
+  $pad2 = [math]::Max(0, ($Script:UiWidth - 2) - $sub.Length)
+  $left2 = [math]::Floor($pad2 / 2)
+  Write-Host ((' ' * $left2) + $sub + (' ' * ($pad2 - $left2))) -NoNewline -ForegroundColor Gray
+  Write-Host '║' -ForegroundColor DarkGreen
+  Write-Host '  ║' -NoNewline -ForegroundColor DarkGreen
+  Write-Host (''.PadRight($Script:UiWidth - 2)) -NoNewline
+  Write-Host '║' -ForegroundColor DarkGreen
+  Write-Host ('  ╚' + ('═' * ($Script:UiWidth - 2)) + '╝') -ForegroundColor DarkGreen
+  Write-Host ''
 }
 
 function Write-UserError {
   param([string]$Message)
   Write-Progress -Activity 'Instalando Nexus' -Completed -ErrorAction SilentlyContinue
+  Close-UiProgressLine
   Write-Log "ERROR: $Message"
   Write-Host ''
-  Write-Host '  [ERROR]' -ForegroundColor Red -NoNewline
-  Write-Host " $Message"
+  Write-Host ('  ╔' + ('═' * ($Script:UiWidth - 2)) + '╗') -ForegroundColor DarkRed
+  Write-Host '  ║' -NoNewline -ForegroundColor DarkRed
+  Write-Host ('  No se pudo completar la instalación'.PadRight($Script:UiWidth - 2)) -NoNewline -ForegroundColor Red
+  Write-Host '║' -ForegroundColor DarkRed
+  Write-Host ('  ╚' + ('═' * ($Script:UiWidth - 2)) + '╝') -ForegroundColor DarkRed
+  Write-Host ''
+  Write-Host '      ' -NoNewline
+  Write-Host '✗' -NoNewline -ForegroundColor Red
+  Write-Host ('  {0}' -f $Message) -ForegroundColor Red
 }
 
 function Start-UiProgress {
@@ -235,25 +379,32 @@ function Download-FileWithProgress {
   $buffer = New-Object byte[] 81920
   $totalRead = 0L
   $lastPct = -1
+  $lastDraw = [datetime]::MinValue
 
   try {
     while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
       $fileStream.Write($buffer, 0, $read)
       $totalRead += $read
 
+      $now = Get-Date
+      $shouldDraw = ($now - $lastDraw).TotalMilliseconds -ge 120
+
       if ($TotalBytes -gt 0) {
         $pct = [int][math]::Min(100, [math]::Floor(100.0 * $totalRead / $TotalBytes))
-        if ($pct -ne $lastPct) {
+        if (($pct -ne $lastPct -and $shouldDraw) -or $pct -eq 100) {
           $lastPct = $pct
-          $status = '{0} / {1} ({2}%)' -f (
+          $lastDraw = $now
+          $status = '{0} / {1}' -f (
             (Format-Megabytes $totalRead),
-            (Format-Megabytes $TotalBytes),
-            $pct
+            (Format-Megabytes $TotalBytes)
           )
+          Write-UiProgressLine -Percent $pct -Status $status
           Write-Progress -Activity $Activity -Status $status -PercentComplete $pct
         }
-      } else {
+      } elseif ($shouldDraw) {
+        $lastDraw = $now
         $status = '{0} descargados' -f (Format-Megabytes $totalRead)
+        Write-UiProgressLine -Percent 0 -Status $status
         Write-Progress -Activity $Activity -Status $status -PercentComplete 0
       }
     }
@@ -262,6 +413,7 @@ function Download-FileWithProgress {
     $stream.Close()
     $response.Close()
     Write-Progress -Activity $Activity -Completed -ErrorAction SilentlyContinue
+    Close-UiProgressLine
   }
 
   return $totalRead
@@ -277,6 +429,7 @@ function Expand-NexusPackage {
   $staging = Join-Path $env:TEMP ('nexus-install-staging-' + [guid]::NewGuid().ToString())
   New-Item -ItemType Directory -Path $staging -Force | Out-Null
   try {
+    Write-UiProgressLine -Percent 10 -Status 'Descomprimiendo paquete...'
     Write-Progress -Activity $Activity -Status 'Descomprimiendo paquete...' -PercentComplete 10
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $staging -Force
 
@@ -291,12 +444,15 @@ function Expand-NexusPackage {
       throw "El paquete no contiene $ExeName."
     }
 
+    Write-UiProgressLine -Percent 60 -Status 'Copiando archivos...'
     Write-Progress -Activity $Activity -Status 'Copiando archivos a la carpeta de instalación...' -PercentComplete 60
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
     Copy-Payload -Source $source -Destination $Destination
+    Write-UiProgressLine -Percent 100 -Status 'Extracción completada'
     Write-Progress -Activity $Activity -Status 'Extracción completada' -PercentComplete 100
   } finally {
     Write-Progress -Activity $Activity -Completed -ErrorAction SilentlyContinue
+    Close-UiProgressLine
     Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
@@ -416,6 +572,7 @@ function Remove-LegacyInstallArtifacts {
 
 # --- Main ---
 
+Initialize-ConsoleUi
 Write-Log '--- Inicio de instalación bootstrap ---'
 Show-InstallBanner
 
@@ -426,8 +583,8 @@ try {
   }
   Write-UiOk -Message 'Carpeta de destino accesible'
 
-  Write-UiStep -Message 'Consultando la última versión en GitHub Releases'
-  Write-UiWait -Message 'Conectando con GitHub...'
+  Write-UiStep -Message 'Consultando la última versión'
+  Write-UiWait -Message 'Conectando con GitHub Releases...'
 
   $headers = @{
     Accept = 'application/vnd.github+json'
@@ -461,10 +618,9 @@ try {
   }
 
   $assetSizeBytes = [long]$asset.size
-  Write-UiOk -Message ('Version v{0} encontrada' -f $version)
+  Write-UiOk -Message ('Versión v{0} encontrada' -f $version)
   Write-UiDetail -Label 'Paquete' -Value $asset.name
   Write-UiDetail -Label 'Tamaño' -Value (Format-Megabytes $assetSizeBytes)
-  Write-Host ''
 
   Write-UiStep -Message 'Descargando paquete'
   Write-Log ("Release=" + $release.tag_name + ' Asset=' + $asset.name + ' Size=' + (Format-Megabytes $assetSizeBytes))
@@ -480,7 +636,7 @@ try {
     -TotalBytes $assetSizeBytes `
     -Activity 'Descargando Nexus'
 
-  Write-UiOk -Message ('Descarga completa: {0}' -f (Format-Megabytes $downloadedBytes))
+  Write-UiOk -Message ('Descarga completa · {0}' -f (Format-Megabytes $downloadedBytes))
   Write-Log ('Descarga completada: ' + $zipPath)
 
   Write-UiStep -Message 'Verificando integridad del paquete'
@@ -495,7 +651,7 @@ try {
         Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
         throw 'La verificación SHA-256 del paquete descargado falló. Descarga abortada.'
       }
-      Write-UiOk -Message 'Integridad verificada'
+      Write-UiOk -Message 'Integridad verificada (SHA-256)'
       Write-Log 'SHA-256 verificado correctamente.'
     } else {
       Write-UiOk -Message 'Verificación omitida (GitHub no publicó digest)'
@@ -540,7 +696,7 @@ try {
   Write-UiOk -Message 'Acceso directo en el menú Inicio creado'
 
   if ($SkipUninstallRegistry) {
-    Write-UiOk -Message ('Version v{0} registrada para el instalador' -f $version)
+    Write-UiOk -Message ('Versión v{0} registrada para el instalador' -f $version)
   } else {
     Register-UninstallEntry -Version $version -InstallLocation $InstallDir
     Write-Log 'Entrada de desinstalación registrada.'
@@ -548,11 +704,7 @@ try {
   }
   Write-InstalledVersionFile -Version $version -InstallLocation $InstallDir
 
-  Write-Host ''
-  Write-Host '  ===============================================' -ForegroundColor Green
-  Write-Host ('     NEXUS v{0} instalado correctamente' -f $version) -ForegroundColor Green
-  Write-Host '  ===============================================' -ForegroundColor Green
-  Write-Host ''
+  Show-InstallSuccess -Version $version
   Write-Log 'Instalación completada.'
 
   if ($Launch) {
@@ -567,7 +719,9 @@ try {
   Stop-UiProgress
   Write-UserError $_.Exception.Message
   Write-Host ''
-  Write-Host ('  Log: {0}' -f $LogPath) -ForegroundColor DarkGray
+  Write-Host '      ' -NoNewline
+  Write-Host 'Log' -NoNewline -ForegroundColor DarkGray
+  Write-Host ('  {0}' -f $LogPath) -ForegroundColor DarkGray
   Write-Host ''
   Write-Log '--- Fin con error ---'
   exit 1

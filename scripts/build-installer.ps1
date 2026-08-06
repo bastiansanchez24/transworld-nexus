@@ -4,8 +4,9 @@
   Compila el instalador bootstrap con Inno Setup (ISCC).
 
 .DESCRIPTION
-  Requiere Inno Setup 6+ instalado. Busca ISCC.exe en rutas habituales
-  o usa la variable de entorno INNO_SETUP_COMPILER.
+  Requiere Inno Setup 6.1+ (CreateDownloadPage). El setup descarga e
+  instala la última release sin PowerShell. Busca ISCC.exe en rutas
+  habituales o usa la variable de entorno INNO_SETUP_COMPILER.
 
 .EXAMPLE
   .\scripts\build-installer.ps1
@@ -42,7 +43,7 @@ if (-not $iscc) {
   throw @'
 No se encontró ISCC.exe (Inno Setup).
 
-Instala Inno Setup 6 desde https://jrsoftware.org/isinfo.php
+Instala Inno Setup 6.1+ desde https://jrsoftware.org/isinfo.php
 o define INNO_SETUP_COMPILER con la ruta completa a ISCC.exe.
 '@
 }

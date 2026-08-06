@@ -114,6 +114,31 @@ const _prefsLastCheckMs = 'ota_last_check_ms';
 const _prefsLastRateLimitMs = 'ota_last_rate_limit_ms';
 const _checkDebounce = Duration(hours: 6);
 const _rateLimitBackoff = Duration(hours: 1);
+/// Evita martillar GitHub si el usuario cambia de app muy seguido.
+const _resumeMinInterval = Duration(seconds: 30);
+
+/// Resultado de un check OTA (distingue skip vs al día vs disponible).
+class UpdateCheckOutcome {
+  const UpdateCheckOutcome._({
+    required this.performed,
+    this.info,
+  });
+
+  const UpdateCheckOutcome.skipped()
+      : this._(performed: false);
+
+  const UpdateCheckOutcome.upToDate()
+      : this._(performed: true);
+
+  const UpdateCheckOutcome.available(AppUpdateInfo info)
+      : this._(performed: true, info: info);
+
+  /// `false` si no se consultó la red (debounce, sesión, backoff, etc.).
+  final bool performed;
+  final AppUpdateInfo? info;
+
+  bool get hasUpdate => info != null;
+}
 
 /// Orquesta check → diálogo → descarga → verify → install.
 class UpdateService {
@@ -134,33 +159,55 @@ class UpdateService {
   final WindowsInstaller _windowsInstaller;
 
   bool _checkedThisSession = false;
+  DateTime? _lastAutoCheckAt;
 
   /// Consulta GitHub Releases y decide si hay update.
   ///
-  /// [force]: ignora debounce y flag de sesión (check manual).
-  /// Retorna info si hay update; `null` si está al día o soft-fail.
-  Future<AppUpdateInfo?> checkForUpdates({
+  /// [force]: ignora debounce, sesión y backoff (check manual).
+  /// [onResume]: ignora debounce de 6h y flag de sesión; respeta backoff
+  /// y un intervalo mínimo corto entre checks automáticos.
+  Future<UpdateCheckOutcome> checkForUpdates({
     bool force = false,
     bool manual = false,
+    bool onResume = false,
   }) async {
-    if (!otaUpdatesSupported) return null;
+    if (!otaUpdatesSupported) {
+      return const UpdateCheckOutcome.skipped();
+    }
 
     if (!force) {
-      if (_checkedThisSession) {
-        developer.log('OTA: ya se consultó en esta sesión.', name: 'UpdateService');
-        return null;
-      }
-      if (!_shouldCheckNow()) {
-        developer.log('OTA: dentro del debounce de 6h.', name: 'UpdateService');
-        return null;
-      }
       if (_isInRateLimitBackoff()) {
         developer.log('OTA: backoff por rate limit.', name: 'UpdateService');
-        return null;
+        return const UpdateCheckOutcome.skipped();
+      }
+      if (onResume) {
+        if (!_shouldCheckOnResume()) {
+          developer.log(
+            'OTA: resume demasiado seguido (<${_resumeMinInterval.inSeconds}s).',
+            name: 'UpdateService',
+          );
+          return const UpdateCheckOutcome.skipped();
+        }
+      } else {
+        if (_checkedThisSession) {
+          developer.log(
+            'OTA: ya se consultó en esta sesión.',
+            name: 'UpdateService',
+          );
+          return const UpdateCheckOutcome.skipped();
+        }
+        if (!_shouldCheckNow()) {
+          developer.log(
+            'OTA: dentro del debounce de 6h.',
+            name: 'UpdateService',
+          );
+          return const UpdateCheckOutcome.skipped();
+        }
       }
     }
 
     _checkedThisSession = true;
+    _lastAutoCheckAt = DateTime.now();
 
     try {
       final release = await _source.fetchLatest();
@@ -174,7 +221,7 @@ class UpdateService {
           'OTA: latest es prerelease; se ignora en canal stable.',
           name: 'UpdateService',
         );
-        return null;
+        return const UpdateCheckOutcome.upToDate();
       }
 
       final remote = tryParseVersion(release.tagName);
@@ -183,7 +230,7 @@ class UpdateService {
           'OTA: tag no SemVer (${release.tagName}).',
           name: 'UpdateService',
         );
-        return null;
+        return const UpdateCheckOutcome.upToDate();
       }
 
       final packageInfo = await PackageInfo.fromPlatform();
@@ -193,7 +240,7 @@ class UpdateService {
           'OTA: versión instalada inválida (${packageInfo.version}).',
           name: 'UpdateService',
         );
-        return null;
+        return const UpdateCheckOutcome.upToDate();
       }
 
       if (!isRemoteNewer(installed, remote)) {
@@ -201,7 +248,7 @@ class UpdateService {
           'OTA: al día ($installed >= $remote).',
           name: 'UpdateService',
         );
-        return null;
+        return const UpdateCheckOutcome.upToDate();
       }
 
       final forWindows = otaResolvesWindowsAsset;
@@ -218,19 +265,21 @@ class UpdateService {
                 : 'La última Release no incluye un APK de Nexus.',
           );
         }
-        return null;
+        return const UpdateCheckOutcome.upToDate();
       }
 
-      return AppUpdateInfo(
-        installedVersion: installed.toString(),
-        remoteVersion: remote.toString(),
-        releaseName: release.name.isNotEmpty
-            ? release.name
-            : 'Nexus v${remote.toString()}',
-        notes: release.notesForDisplay,
-        isForced: release.isForced,
-        asset: asset,
-        tagName: release.tagName,
+      return UpdateCheckOutcome.available(
+        AppUpdateInfo(
+          installedVersion: installed.toString(),
+          remoteVersion: remote.toString(),
+          releaseName: release.name.isNotEmpty
+              ? release.name
+              : 'Nexus v${remote.toString()}',
+          notes: release.notesForDisplay,
+          isForced: release.isForced,
+          asset: asset,
+          tagName: release.tagName,
+        ),
       );
     } on GitHubReleaseException catch (e) {
       if (e.isRateLimited) {
@@ -241,7 +290,7 @@ class UpdateService {
       }
       developer.log('OTA check falló: $e', name: 'UpdateService');
       if (manual) rethrow;
-      return null;
+      return const UpdateCheckOutcome.skipped();
     } catch (e, st) {
       developer.log(
         'OTA check inesperado: $e',
@@ -249,7 +298,7 @@ class UpdateService {
         stackTrace: st,
       );
       if (manual) rethrow;
-      return null;
+      return const UpdateCheckOutcome.skipped();
     }
   }
 
@@ -344,6 +393,12 @@ class UpdateService {
       DateTime.fromMillisecondsSinceEpoch(last),
     );
     return elapsed >= _checkDebounce;
+  }
+
+  bool _shouldCheckOnResume() {
+    final last = _lastAutoCheckAt;
+    if (last == null) return true;
+    return DateTime.now().difference(last) >= _resumeMinInterval;
   }
 
   bool _isInRateLimitBackoff() {

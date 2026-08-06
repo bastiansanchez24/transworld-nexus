@@ -21,7 +21,8 @@ class WindowsInstallResult {
 /// app libere el `.exe`, extrae el ZIP sobre el directorio de instalación y
 /// reinicia Nexus.
 ///
-/// El script se lanza *fuera* del Job Object de Flutter (vía `cmd /c start`);
+/// El script se lanza *fuera* del Job Object de Flutter mediante el shell de
+/// Windows (Explorer);
 /// la app debe cerrarse inmediatamente después de recibir
 /// [WindowsInstallOutcome.launched] para liberar los archivos.
 class WindowsInstaller {
@@ -67,7 +68,8 @@ class WindowsInstaller {
     final tempDir = await getTemporaryDirectory();
     final stamp = DateTime.now().millisecondsSinceEpoch;
     final scriptPath = '${tempDir.path}\\nexus-update-$stamp.ps1';
-    final launcherPath = '${tempDir.path}\\nexus-update-launch-$stamp.cmd';
+    final launcherPath = '${tempDir.path}\\nexus-update-launch-$stamp.ps1';
+    final readyPath = '${tempDir.path}\\nexus-update-ready-$stamp';
 
     try {
       // BOM obligatorio: Windows PowerShell 5.1 decodifica los archivos sin
@@ -76,20 +78,10 @@ class WindowsInstaller {
         '\u{FEFF}$_updaterScript',
         flush: true,
       );
-      // Trampolín .cmd: `start` crea el proceso PowerShell fuera del Job
-      // Object de Flutter/Dart. Sin esto, `exit(0)` mata al updater antes
-      // de que pueda aplicar el ZIP (síntoma: la app se cierra y no vuelve).
+      // Shell.Application delega el arranque a Explorer, fuera del Job Object
+      // de Flutter. Así el updater sobrevive al `exit(0)` de Nexus sin admin.
       await File(launcherPath).writeAsString(
-        // BOM ayuda a cmd.exe con rutas Unicode (p. ej. usuarios con acentos).
-        '\u{FEFF}${_launcherCmd(
-          powershell: _powershellExecutable,
-          scriptPath: scriptPath,
-          zipPath: zipFile.path,
-          installDir: installDir,
-          exeName: exeName,
-          parentPid: pid,
-          remoteVersion: remoteVersion ?? '',
-        )}',
+        '\u{FEFF}$_shellLauncherScript',
         flush: true,
       );
     } catch (e) {
@@ -100,14 +92,65 @@ class WindowsInstaller {
     }
 
     try {
-      await Process.start(
-        'cmd.exe',
-        ['/d', '/c', launcherPath],
-        mode: ProcessStartMode.detached,
+      final launch = await Process.run(
+        _powershellExecutable,
+        [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          launcherPath,
+          '-PowerShellPath',
+          _powershellExecutable,
+          '-UpdaterScript',
+          scriptPath,
+          '-ZipPath',
+          zipFile.path,
+          '-InstallDir',
+          installDir,
+          '-ExeName',
+          exeName,
+          '-ParentPid',
+          '$pid',
+          '-ReadyPath',
+          readyPath,
+          if (remoteVersion != null && remoteVersion.isNotEmpty) ...[
+            '-RemoteVersion',
+            remoteVersion,
+          ],
+        ],
         workingDirectory: tempDir.path,
       );
-      // Da tiempo a que `start` cree el proceso PowerShell breakaway.
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      try {
+        await File(launcherPath).delete();
+      } catch (_) {}
+
+      if (launch.exitCode != 0) {
+        return WindowsInstallResult(
+          WindowsInstallOutcome.failed,
+          message: 'Windows no pudo crear el proceso actualizador: '
+              '${launch.stderr.toString().trim()}',
+        );
+      }
+
+      final ready = File(readyPath);
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (DateTime.now().isBefore(deadline) && !await ready.exists()) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+
+      if (!await ready.exists()) {
+        return const WindowsInstallResult(
+          WindowsInstallOutcome.failed,
+          message: 'El actualizador de Windows no alcanzó a iniciar. '
+              'Nexus permanecerá abierto; vuelve a intentarlo.',
+        );
+      }
+
+      try {
+        await ready.delete();
+      } catch (_) {}
       return const WindowsInstallResult(WindowsInstallOutcome.launched);
     } catch (e) {
       return WindowsInstallResult(
@@ -133,44 +176,6 @@ class WindowsInstaller {
     return File(resolved).existsSync() ? resolved : 'powershell.exe';
   }
 
-  static String _launcherCmd({
-    required String powershell,
-    required String scriptPath,
-    required String zipPath,
-    required String installDir,
-    required String exeName,
-    required int parentPid,
-    required String remoteVersion,
-  }) {
-    String q(String value) => '"${value.replaceAll('"', '')}"';
-    final psArgs = [
-      '-NoProfile',
-      '-WindowStyle',
-      'Hidden',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-File',
-      q(scriptPath),
-      '-ZipPath',
-      q(zipPath),
-      '-InstallDir',
-      q(installDir),
-      '-ExeName',
-      q(exeName),
-      '-ParentPid',
-      '$parentPid',
-      if (remoteVersion.isNotEmpty) ...['-RemoteVersion', q(remoteVersion)],
-    ].join(' ');
-
-    // `start "title" /b` — el título entre comillas es obligatorio para que
-    // rutas con espacios no se interpreten como título de ventana.
-    return '''
-@echo off
-chcp 65001 >nul
-start "NexusUpdate" /b ${q(powershell)} $psArgs
-''';
-  }
-
   /// Escribe un archivo sonda para confirmar permisos de escritura reales
   /// (ACL + virtualización), que `FileStat` no refleja de forma fiable.
   static Future<bool> _isDirectoryWritable(String dirPath) async {
@@ -190,6 +195,46 @@ start "NexusUpdate" /b ${q(powershell)} $psArgs
   }
 }
 
+/// Trampolín que pide al shell de Windows crear el proceso PowerShell.
+/// El comando real se codifica en UTF-16LE/Base64 para conservar sin ambigüedad
+/// rutas con espacios, acentos y apóstrofes.
+const _shellLauncherScript = r'''
+param(
+  [Parameter(Mandatory = $true)][string]$PowerShellPath,
+  [Parameter(Mandatory = $true)][string]$UpdaterScript,
+  [Parameter(Mandatory = $true)][string]$ZipPath,
+  [Parameter(Mandatory = $true)][string]$InstallDir,
+  [Parameter(Mandatory = $true)][string]$ExeName,
+  [Parameter(Mandatory = $true)][int]$ParentPid,
+  [Parameter(Mandatory = $true)][string]$ReadyPath,
+  [string]$RemoteVersion = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+function ConvertTo-SingleQuotedLiteral([string]$Value) {
+  return "'" + $Value.Replace("'", "''") + "'"
+}
+
+$invocation = @(
+  '&',
+  (ConvertTo-SingleQuotedLiteral $UpdaterScript),
+  '-ZipPath', (ConvertTo-SingleQuotedLiteral $ZipPath),
+  '-InstallDir', (ConvertTo-SingleQuotedLiteral $InstallDir),
+  '-ExeName', (ConvertTo-SingleQuotedLiteral $ExeName),
+  '-ParentPid', $ParentPid,
+  '-ReadyPath', (ConvertTo-SingleQuotedLiteral $ReadyPath),
+  '-RemoteVersion', (ConvertTo-SingleQuotedLiteral $RemoteVersion)
+) -join ' '
+
+$encoded = [Convert]::ToBase64String(
+  [Text.Encoding]::Unicode.GetBytes($invocation)
+)
+$arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand ' + $encoded
+$shell = New-Object -ComObject Shell.Application
+$shell.ShellExecute($PowerShellPath, $arguments, $InstallDir, 'open', 0)
+''';
+
 /// Actualizador out-of-process.
 ///
 /// Garantías de diseño:
@@ -203,6 +248,7 @@ param(
   [Parameter(Mandatory = $true)][string]$InstallDir,
   [Parameter(Mandatory = $true)][string]$ExeName,
   [int]$ParentPid = 0,
+  [Parameter(Mandatory = $true)][string]$ReadyPath,
   [string]$RemoteVersion = ''
 )
 
@@ -273,6 +319,16 @@ function Copy-Payload([string]$Source, [string]$Destination) {
 
 Write-Log '--- Inicio de actualización ---'
 Write-Log ('InstallDir=' + $InstallDir + ' ExeName=' + $ExeName + ' Zip=' + $ZipPath + ' Pid=' + $PID)
+
+# Handshake con Nexus: confirma que PowerShell inició y pudo interpretar todos
+# los parámetros antes de que la app se cierre y libere sus binarios.
+try {
+  Set-Content -LiteralPath $ReadyPath -Value $PID -Encoding ASCII
+  Write-Log 'Actualizador listo; esperando cierre de Nexus.'
+} catch {
+  Write-Log ('ERROR creando señal de inicio: ' + $_.Exception.Message)
+  exit 1
+}
 
 # 1. Esperar a que la app cierre (por PID y por lock del .exe / DLL).
 if ($ParentPid -gt 0) {
@@ -364,6 +420,7 @@ try {
   Start-Nexus
   Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $ZipPath -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $ReadyPath -Force -ErrorAction SilentlyContinue
   Write-Log '--- Fin de actualización ---'
   Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
 }

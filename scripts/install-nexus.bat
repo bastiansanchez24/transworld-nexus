@@ -1,12 +1,17 @@
 @echo off
 setlocal
-title Instalador Nexus
+title Nexus  ·  Instalador
+chcp 65001 >nul 2>&1
+color 0B
 
 set "SCRIPT_DIR=%~dp0"
 set "PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 
 if not exist "%PS%" (
-  echo No se encontro PowerShell en este equipo.
+  color 0C
+  echo.
+  echo   No se encontro PowerShell en este equipo.
+  echo.
   pause
   exit /b 1
 )
