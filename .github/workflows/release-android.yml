@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-android:
     runs-on: ubuntu-latest
     # Map secrets to env first — `secrets` is not allowed in step `if` expressions.
     env:
@@ -96,42 +96,26 @@ jobs:
       - name: Build APK (release)
         run: flutter build apk --release
 
-      - name: Rename APK asset
+      - name: Stage APK asset
         shell: bash
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           SRC="build/app/outputs/flutter-apk/app-release.apk"
-          DEST="build/app/outputs/flutter-apk/android-NEXUS-${TAG}.apk"
+          mkdir -p dist
+          DEST="dist/android-nexus-${TAG}.apk"
           cp "$SRC" "$DEST"
-          echo "ASSET_PATH=$DEST" >> "$GITHUB_ENV"
-          echo "ASSET_NAME=android-NEXUS-${TAG}.apk" >> "$GITHUB_ENV"
+          ls -lh "$DEST"
 
-      - name: Create GitHub Release and upload APK
-        uses: softprops/action-gh-release@v2
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref_name }}
-          name: NEXUS ${{ github.ref_name }}
-          generate_release_notes: true
-          files: ${{ env.ASSET_PATH }}
-          body: |
-            Actualización de Nexus `${{ github.ref_name }}`.
-
-            Assets:
-            - `android-NEXUS-${{ github.ref_name }}.apk`
-            - `windows-NEXUS-${{ github.ref_name }}.zip` (subido por el job Windows)
-            - `NexusSetup.exe` — instalador bootstrap nativo (wizard Inno, sin PowerShell)
-            - `NexusBootstrap.zip` — alternativa CLI (scripts PS1/BAT)
-
-            Para marcar la actualización como **obligatoria**, edita las notas
-            de esta Release y agrega la línea:
-
-            `[FORCE_UPDATE]`
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: android-apk
+          path: dist/android-nexus-*.apk
+          if-no-files-found: error
+          retention-days: 7
 
   build-windows:
-    needs: build-and-release
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -142,6 +126,20 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Verify pubspec version matches tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          EXPECTED="${TAG#v}"
+          PUBSPEC_VERSION=$(grep -E '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d'+' -f1)
+          echo "Tag version: $EXPECTED"
+          echo "pubspec version: $PUBSPEC_VERSION"
+          if [ "$PUBSPEC_VERSION" != "$EXPECTED" ]; then
+            echo "::error::pubspec.yaml version ($PUBSPEC_VERSION) no coincide con el tag ($EXPECTED). Alinea version: X.Y.Z+N antes de tagear."
+            exit 1
+          fi
 
       - name: Prepare firebase_options
         shell: bash
@@ -183,20 +181,19 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "${{ github.ref_name }}"
           $src = "build/windows/x64/runner/Release"
-          $destDir = "build/windows/dist"
-          $zipName = "windows-NEXUS-$tag.zip"
+          $destDir = "dist"
+          $zipName = "windows-nexus-$tag.zip"
           New-Item -ItemType Directory -Path $destDir -Force | Out-Null
           $zipPath = Join-Path $destDir $zipName
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path (Join-Path $src '*') -DestinationPath $zipPath
-          "ASSET_PATH=$zipPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "ASSET_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Packaged $zipPath"
 
       - name: Package bootstrap installer scripts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $destDir = "build/windows/dist"
+          $destDir = "dist"
           $bootstrapZip = Join-Path $destDir "NexusBootstrap.zip"
           if (Test-Path $bootstrapZip) { Remove-Item $bootstrapZip -Force }
           Compress-Archive -Path @(
@@ -204,7 +201,6 @@ jobs:
             "scripts/install-nexus.bat",
             "scripts/uninstall-nexus.ps1"
           ) -DestinationPath $bootstrapZip
-          "BOOTSTRAP_PATH=$bootstrapZip" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build NexusSetup.exe (Inno Setup)
         shell: pwsh
@@ -218,15 +214,69 @@ jobs:
           & "$env:GITHUB_WORKSPACE\scripts\build-installer.ps1"
           $setup = "build/windows/installer/NexusSetup.exe"
           if (-not (Test-Path $setup)) { throw "Falta $setup" }
-          "SETUP_PATH=$setup" | Out-File -FilePath $env:GITHUB_ENV -Append
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item $setup (Join-Path dist "NexusSetup.exe") -Force
 
-      - name: Upload Windows assets to GitHub Release
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-dist
+          path: |
+            dist/windows-nexus-*.zip
+            dist/NexusBootstrap.zip
+            dist/NexusSetup.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release:
+    needs: [build-android, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: release-assets
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-dist
+          path: release-assets
+
+      - name: List release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          find release-assets -type f -print
+          test -f "release-assets/android-nexus-${GITHUB_REF_NAME}.apk"
+          test -f "release-assets/windows-nexus-${GITHUB_REF_NAME}.zip"
+          test -f "release-assets/NexusBootstrap.zip"
+          test -f "release-assets/NexusSetup.exe"
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
+          name: NEXUS ${{ github.ref_name }}
+          generate_release_notes: true
           files: |
-            ${{ env.ASSET_PATH }}
-            ${{ env.BOOTSTRAP_PATH }}
-            ${{ env.SETUP_PATH }}
+            release-assets/android-nexus-${{ github.ref_name }}.apk
+            release-assets/windows-nexus-${{ github.ref_name }}.zip
+            release-assets/NexusBootstrap.zip
+            release-assets/NexusSetup.exe
+          body: |
+            Actualización de Nexus `${{ github.ref_name }}`.
+
+            Assets:
+            - `android-nexus-${{ github.ref_name }}.apk`
+            - `windows-nexus-${{ github.ref_name }}.zip`
+            - `NexusSetup.exe` — instalador bootstrap nativo (wizard Inno, sin PowerShell)
+            - `NexusBootstrap.zip` — alternativa CLI (scripts PS1/BAT)
+
+            Para marcar la actualización como **obligatoria**, edita las notas
+            de esta Release y agrega la línea:
+
+            `[FORCE_UPDATE]`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

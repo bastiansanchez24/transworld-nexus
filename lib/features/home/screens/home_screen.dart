@@ -49,6 +49,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'Se eliminarán la aplicación, los accesos directos y los datos '
           'locales de Nexus en este equipo. Esta acción no se puede deshacer.',
       confirmLabel: 'Desinstalar',
+      destructive: true,
     );
     if (!ok || !mounted) return;
 

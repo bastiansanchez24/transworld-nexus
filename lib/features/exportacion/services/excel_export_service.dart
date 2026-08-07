@@ -8,9 +8,9 @@ import '../../../data/models/registrado.dart';
 /// Genera el `.xlsx` de descarga (registrados o acreditados) a partir de
 /// una lista de [Registrado]. Reemplaza a `xlsx.utils.json_to_sheet` /
 /// `XLSX.writeFile` del proyecto legado, sin depender de Electron
-/// (`window.ipcRenderer`, ver Sección 4.13/17.4 de la auditoría): en
-/// Flutter, compartir/guardar el archivo resultante lo resuelve
-/// `share_plus` de forma nativa en cada plataforma.
+/// (`window.ipcRenderer`, ver Sección 4.13/17.4 de la auditoría): la
+/// entrega del archivo la resuelve `export_file_delivery` (guardar en
+/// Windows; compartir en el resto).
 class ExcelExportService {
   const ExcelExportService();
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -10,6 +9,7 @@ import '../../../core/widgets/nexus_components.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
 import '../services/excel_export_service.dart';
+import '../services/export_file_delivery.dart';
 
 class ExportarScreen extends ConsumerStatefulWidget {
   const ExportarScreen({super.key, required this.eventoId});
@@ -43,18 +43,14 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
       final nombreArchivo =
           '${evento.nombre.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}_${soloAcreditados ? 'acreditados' : 'registrados'}.xlsx';
 
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [
-            XFile.fromData(
-              bytes,
-              name: nombreArchivo,
-              mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ),
-          ],
-          fileNameOverrides: [nombreArchivo],
-        ),
+      final entregado = await entregarExportacion(
+        bytes: bytes,
+        nombreArchivo: nombreArchivo,
       );
+      if (!entregado || !mounted) return;
+      if (esWindowsApp) {
+        showAppSnackBar(context, 'Archivo guardado.');
+      }
     } catch (e) {
       if (mounted) showAppSnackBar(context, 'No se pudo exportar: $e', isError: true);
     } finally {
@@ -64,6 +60,12 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ayuda = esWindowsApp
+        ? 'Genera un archivo .xlsx con los datos del evento. '
+            'Se abrirá el diálogo para guardarlo en tu equipo.'
+        : 'Genera un archivo .xlsx con los datos del evento. '
+            'Se abrirá el selector nativo para guardarlo o compartirlo.';
+
     return AppScaffold(
       title: 'Exportar a Excel',
       body: Padding(
@@ -84,15 +86,14 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
                 border: Border.all(color: AppColors.border),
                 boxShadow: AppColors.shadowRest,
               ),
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SectionLabel('Exportación'),
-                  SizedBox(height: 10),
+                  const SectionLabel('Exportación'),
+                  const SizedBox(height: 10),
                   Text(
-                    'Genera un archivo .xlsx con los datos del evento. '
-                    'Se abrirá el selector nativo para guardarlo o compartirlo.',
-                    style: TextStyle(
+                    ayuda,
+                    style: const TextStyle(
                       fontSize: 14,
                       color: AppColors.textSecondary,
                       height: 1.45,

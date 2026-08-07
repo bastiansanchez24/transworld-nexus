@@ -77,7 +77,7 @@ class _EventHeroPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
 
-    // Fondo: headerGradient navy (#0C3357 → #175E93).
+    // Fondo: headerGradient navy (primaryDeep → primaryLight).
     canvas.drawRect(
       rect,
       Paint()..shader = AppColors.headerGradient.createShader(rect),

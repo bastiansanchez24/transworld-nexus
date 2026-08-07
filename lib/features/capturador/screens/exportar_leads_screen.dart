@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
+import '../../exportacion/services/export_file_delivery.dart';
 import '../providers/capturador_providers.dart';
 import '../services/excel_export_leads_service.dart';
 
@@ -46,19 +46,14 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
       final nombreArchivo =
           '${evento.nombre.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}_leads.xlsx';
 
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [
-            XFile.fromData(
-              bytes,
-              name: nombreArchivo,
-              mimeType:
-                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ),
-          ],
-          fileNameOverrides: [nombreArchivo],
-        ),
+      final entregado = await entregarExportacion(
+        bytes: bytes,
+        nombreArchivo: nombreArchivo,
       );
+      if (!entregado || !mounted) return;
+      if (esWindowsApp) {
+        showAppSnackBar(context, 'Archivo guardado.');
+      }
     } catch (e) {
       if (mounted) {
         showAppSnackBar(
@@ -74,6 +69,12 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ayuda = esWindowsApp
+        ? 'Genera un archivo .xlsx con los leads capturados en este evento. '
+            'Se abrirá el diálogo para guardarlo en tu equipo.'
+        : 'Genera un archivo .xlsx con los leads capturados en este evento. '
+            'Se abrirá el selector nativo para guardarlo o compartirlo.';
+
     return AppScaffold(
       title: 'Exportar leads',
       body: Padding(
@@ -81,10 +82,9 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Genera un archivo .xlsx con los leads capturados en este evento. '
-              'Se abrirá el selector nativo para guardarlo o compartirlo.',
-              style: TextStyle(color: AppColors.textSecondary),
+            Text(
+              ayuda,
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: AppSpacing.xxl),
             PrimaryGradientButton(
