@@ -4,7 +4,7 @@
   Instalador bootstrap de Nexus para Windows.
 
 .DESCRIPTION
-  Consulta la última GitHub Release, descarga windows-NEXUS-vX.Y.Z.zip,
+  Consulta la última GitHub Release, descarga windows-nexus-vX.Y.Z.zip,
   extrae en %LOCALAPPDATA%\Nexus y crea accesos directos.
   No requiere recompilarse por versión: siempre instala el último release.
 
@@ -286,9 +286,9 @@ function Resolve-NexusWindowsZipAsset {
   param($Release)
 
   $tag = Get-StrippedTag $Release.tag_name
-  $exactName = "windows-NEXUS-v$tag.zip"
+  $exactName = "windows-nexus-v$tag.zip"
 
-  # Solo windows-NEXUS-*.zip (excluye NexusBootstrap.zip y otros).
+  # Solo windows-nexus-*.zip (excluye NexusBootstrap.zip y otros).
   $candidates = @(
     $Release.assets | Where-Object {
       $_.name -match '(?i)^windows-nexus-.+\.zip$'
@@ -297,7 +297,7 @@ function Resolve-NexusWindowsZipAsset {
   if ($candidates.Count -eq 0) { return $null }
 
   foreach ($c in $candidates) {
-    if ($c.name -eq $exactName) { return $c }
+    if ($c.name.ToLowerInvariant() -eq $exactName) { return $c }
   }
 
   return ($candidates | Sort-Object { [long]$_.size } -Descending | Select-Object -First 1)
@@ -614,7 +614,7 @@ try {
   $version = Get-StrippedTag $release.tag_name
   $asset = Resolve-NexusWindowsZipAsset -Release $release
   if ($null -eq $asset) {
-    throw "El release $($release.tag_name) no incluye un ZIP de Windows (windows-NEXUS-v*.zip)."
+    throw "El release $($release.tag_name) no incluye un ZIP de Windows (windows-nexus-v*.zip)."
   }
 
   $assetSizeBytes = [long]$asset.size

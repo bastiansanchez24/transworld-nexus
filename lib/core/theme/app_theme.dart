@@ -2,22 +2,29 @@ import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Tokens de color del rediseño Nexus (HANDOFF §1). Únicos permitidos.
+/// Tokens de color Nexus — anclados al mark Transworld (navy + lima).
 class AppColors {
   AppColors._();
 
-  static const primary = Color(0xFF14507F); // navy-700
-  static const primaryDeep = Color(0xFF0C3357); // navy-900
-  static const primaryLight = Color(0xFF175E93); // navy-500
-  static const ink = Color(0xFF10263D);
-  static const textSecondary = Color(0xFF5C6E82);
-  static const textTertiary = Color(0xFF8CA0B3);
+  // Brand (muestreados del logo: navy #203E6D · lima #B1F22A).
+  static const primary = Color(0xFF203E6D); // logo navy
+  static const primaryDeep = Color(0xFF162B4C); // navy-900
+  static const primaryLight = Color(0xFF2E568F); // navy-500
+  static const accent = Color(0xFFB1F22A); // logo lima
+  static const accentGlow = Color(0xFFA0DE2A); // lima glow del motion spec
+
+  static const ink = Color(0xFF14253F);
+  static const textSecondary = Color(0xFF5A6B82);
+  static const textTertiary = Color(0xFF8A9BB0);
   static const background = Color(0xFFF2F5F9);
   static const surface = Color(0xFFFFFFFF);
-  static const border = Color(0xFFE4EAF1);
-  static const tintNavy = Color(0xFFE8F0F8);
-  static const success = Color(0xFF178A56);
-  static const successTint = Color(0xFFE5F4EC);
+  static const border = Color(0xFFE3E9F1);
+  static const tintNavy = Color(0xFFE8EDF5);
+  static const tintLime = Color(0xFFF3FCE0);
+
+  // Semánticos: success en familia lima (más oscuro para texto legible).
+  static const success = Color(0xFF6B9E14);
+  static const successTint = tintLime;
   static const warning = Color(0xFFB96E12);
   static const warningTint = Color(0xFFFBF0DF);
   static const danger = Color(0xFFC03A2B);
@@ -27,12 +34,11 @@ class AppColors {
   static const divider = Color(0xFFF0F4F8);
   static const dashedBorder = Color(0xFFB9C8D6);
   static const toggleOff = Color(0xFFD4DDE6);
-  static const toastCheck = Color(0xFF5BD69B);
+  static const toastCheck = accent;
 
   /// Alias de compatibilidad con pantallas legacy.
   static const primaryDark = primaryDeep;
   static const error = danger;
-  static const accent = success;
   static const surfaceMuted = tintNavy;
 
   static const headerGradient = LinearGradient(
@@ -43,7 +49,7 @@ class AppColors {
 
   static const shadowRest = [
     BoxShadow(
-      color: Color(0x0D0D2A4A),
+      color: Color(0x0D14253F),
       offset: Offset(0, 1),
       blurRadius: 2,
     ),
@@ -51,7 +57,7 @@ class AppColors {
 
   static const shadowLifted = [
     BoxShadow(
-      color: Color(0x1A0D2A4A),
+      color: Color(0x1A14253F),
       offset: Offset(0, 6),
       blurRadius: 18,
     ),
@@ -59,7 +65,7 @@ class AppColors {
 
   static const shadowFab = [
     BoxShadow(
-      color: Color(0x660C3357),
+      color: Color(0x66203E6D),
       offset: Offset(0, 10),
       blurRadius: 24,
     ),
@@ -67,7 +73,7 @@ class AppColors {
 
   static const shadowHero = [
     BoxShadow(
-      color: Color(0x47041426),
+      color: Color(0x4714253F),
       offset: Offset(0, 10),
       blurRadius: 26,
     ),
@@ -75,15 +81,15 @@ class AppColors {
 
   static const shadowToast = [
     BoxShadow(
-      color: Color(0x59041426),
+      color: Color(0x5914253F),
       offset: Offset(0, 12),
       blurRadius: 28,
     ),
   ];
 
   static const avatarPairs = <(Color, Color)>[
-    (Color(0xFFE8F0F8), Color(0xFF14507F)),
-    (Color(0xFFE5F4EC), Color(0xFF178A56)),
+    (tintNavy, primary),
+    (tintLime, success),
     (Color(0xFFFBF0DF), Color(0xFFB96E12)),
     (Color(0xFFF0EBF8), Color(0xFF6A4FA3)),
     (Color(0xFFFAE9E6), Color(0xFFC03A2B)),
@@ -155,6 +161,10 @@ class AppTheme {
       onPrimaryContainer: AppColors.primaryDeep,
       secondary: AppColors.primaryLight,
       onSecondary: Colors.white,
+      tertiary: AppColors.accent,
+      onTertiary: AppColors.primaryDeep,
+      tertiaryContainer: AppColors.tintLime,
+      onTertiaryContainer: AppColors.primaryDeep,
       error: AppColors.danger,
       onError: Colors.white,
       surface: AppColors.surface,

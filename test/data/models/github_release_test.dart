@@ -30,6 +30,18 @@ void main() {
       final release = _release(
         tagName: 'v1.4.0',
         assets: [
+          _asset('windows-nexus-v1.3.0.zip', size: 9000),
+          _asset('windows-nexus-v1.4.0.zip', size: 1000),
+        ],
+      );
+
+      expect(release.resolveNexusWindowsZip()?.name, 'windows-nexus-v1.4.0.zip');
+    });
+
+    test('match exacto es case-insensitive (releases legacy)', () {
+      final release = _release(
+        tagName: 'v1.4.0',
+        assets: [
           _asset('windows-NEXUS-v1.3.0.zip', size: 9000),
           _asset('windows-NEXUS-v1.4.0.zip', size: 1000),
         ],
@@ -42,15 +54,15 @@ void main() {
       final release = _release(
         tagName: 'v2.0.0',
         assets: [
-          _asset('windows-NEXUS-v2.0.0-beta.zip', size: 5000),
-          _asset('windows-NEXUS-v2.0.0.zip', size: 8000),
+          _asset('windows-nexus-v2.0.0-beta.zip', size: 5000),
+          _asset('windows-nexus-v2.0.0.zip', size: 8000),
         ],
       );
 
-      expect(release.resolveNexusWindowsZip()?.name, 'windows-NEXUS-v2.0.0.zip');
+      expect(release.resolveNexusWindowsZip()?.name, 'windows-nexus-v2.0.0.zip');
     });
 
-    test('sin windows-NEXUS zip retorna null (no fallback genérico)', () {
+    test('sin windows-nexus zip retorna null (no fallback genérico)', () {
       final release = _release(
         tagName: 'v1.0.0',
         assets: [
@@ -68,31 +80,31 @@ void main() {
       final release = _release(
         tagName: 'v1.0.0',
         assets: [
-          _asset('android-NEXUS-v1.0.0.apk'),
-          _asset('windows-NEXUS-v1.0.0.zip'),
+          _asset('android-nexus-v1.0.0.apk'),
+          _asset('windows-nexus-v1.0.0.zip'),
         ],
       );
 
       expect(
         release.resolveNexusAsset(forWindows: false)?.name,
-        'android-NEXUS-v1.0.0.apk',
+        'android-nexus-v1.0.0.apk',
       );
       expect(
         release.resolveNexusAsset(forWindows: true)?.name,
-        'windows-NEXUS-v1.0.0.zip',
+        'windows-nexus-v1.0.0.zip',
       );
     });
 
     test('nunca cruza el APK con el ZIP de Windows', () {
       final soloApk = _release(
         tagName: 'v1.0.0',
-        assets: [_asset('android-NEXUS-v1.0.0.apk')],
+        assets: [_asset('android-nexus-v1.0.0.apk')],
       );
       expect(soloApk.resolveNexusAsset(forWindows: true), isNull);
 
       final soloZip = _release(
         tagName: 'v1.0.0',
-        assets: [_asset('windows-NEXUS-v1.0.0.zip')],
+        assets: [_asset('windows-nexus-v1.0.0.zip')],
       );
       expect(soloZip.resolveNexusAsset(forWindows: false), isNull);
     });
@@ -102,13 +114,13 @@ void main() {
         tagName: 'v1.0.0',
         assets: [
           _asset('debug-symbols.zip', size: 90000),
-          _asset('windows-NEXUS-v1.0.0.zip', size: 1000),
+          _asset('windows-nexus-v1.0.0.zip', size: 1000),
         ],
       );
 
       expect(
         release.resolveNexusAsset(forWindows: true)?.name,
-        'windows-NEXUS-v1.0.0.zip',
+        'windows-nexus-v1.0.0.zip',
       );
     });
 
@@ -117,13 +129,13 @@ void main() {
         tagName: 'v1.0.0',
         assets: [
           _asset('NexusBootstrap.zip', size: 50000),
-          _asset('windows-NEXUS-v1.0.0.zip', size: 1000),
+          _asset('windows-nexus-v1.0.0.zip', size: 1000),
         ],
       );
 
       expect(
         release.resolveNexusWindowsZip()?.name,
-        'windows-NEXUS-v1.0.0.zip',
+        'windows-nexus-v1.0.0.zip',
       );
       expect(_asset('NexusBootstrap.zip').isNexusWindowsZip, isFalse);
     });
@@ -141,12 +153,12 @@ void main() {
   group('digest del asset Windows', () {
     test('expone el sha256 en hex cuando GitHub lo entrega', () {
       final hex = 'a' * 64;
-      final asset = _asset('windows-NEXUS-v1.0.0.zip', digest: 'sha256:$hex');
+      final asset = _asset('windows-nexus-v1.0.0.zip', digest: 'sha256:$hex');
       expect(asset.sha256Hex, hex);
     });
 
     test('sha256Hex es null si no hay digest', () {
-      expect(_asset('windows-NEXUS-v1.0.0.zip').sha256Hex, isNull);
+      expect(_asset('windows-nexus-v1.0.0.zip').sha256Hex, isNull);
     });
   });
 }

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/acreditacion/screens/acreditar_confirmado_screen.dart';
 import '../../features/acreditacion/screens/acreditar_qr_screen.dart';
 import '../../features/auth/providers/auth_providers.dart';
+import '../../features/auth/providers/splash_providers.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/recrear_pass_screen.dart';
 import '../../features/auth/screens/recuperar_password_screen.dart';
@@ -118,6 +119,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     externoEventoActivoOverrideProvider,
     (_, _) => refreshListenable.refresh(),
   );
+  ref.listen(splashReadyProvider, (_, _) => refreshListenable.refresh());
 
   return GoRouter(
     initialLocation: RoutePaths.splash,
@@ -136,6 +138,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final session = authClient.currentSession;
       final esPublica = _esRutaPublica(location);
       final enSplash = location == RoutePaths.splash;
+      final splashReady = ref.read(splashReadyProvider);
+
+      // No cortar el draw-on del logo en arranques rápidos.
+      if (!splashReady) {
+        return enSplash ? null : RoutePaths.splash;
+      }
 
       if (session == null && !esPublica) {
         return RoutePaths.login;

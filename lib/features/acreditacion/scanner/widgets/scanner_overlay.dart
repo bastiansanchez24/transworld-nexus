@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
+
 /// Overlay premium del escáner: blur exterior, esquinas animadas, controles y pill.
 ///
 /// La animación de esquinas vive aquí (Ticker aislado) para no reconstruir
@@ -256,7 +258,7 @@ class _GlassPillButton extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+            padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(28),
               color: active
@@ -284,8 +286,54 @@ class _GlassPillButton extends StatelessWidget {
                     letterSpacing: -0.2,
                   ),
                 ),
+                const SizedBox(width: 12),
+                _MiniToggle(active: active),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Switch compacto dentro del pill (solo visual; el tap lo maneja el padre).
+class _MiniToggle extends StatelessWidget {
+  const _MiniToggle({required this.active});
+
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      width: 40,
+      height: 24,
+      padding: const EdgeInsets.all(2.5),
+      decoration: BoxDecoration(
+        color: active
+            ? AppColors.accent
+            : Colors.white.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignment: active ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 19,
+          height: 19,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.22),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
           ),
         ),
       ),
@@ -314,7 +362,7 @@ class _FeedbackBanner extends StatelessWidget {
             color: Colors.black.withValues(alpha: 0.45),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: (isError ? const Color(0xFFFF453A) : const Color(0xFF30D158))
+              color: (isError ? AppColors.danger : AppColors.accent)
                   .withValues(alpha: 0.7),
             ),
           ),

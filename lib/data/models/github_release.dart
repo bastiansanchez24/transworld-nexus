@@ -27,7 +27,7 @@ class GitHubReleaseAsset {
 
   bool get isZip => name.toLowerCase().endsWith('.zip');
 
-  /// Solo el paquete de app (`windows-NEXUS-v*.zip`), no `NexusBootstrap.zip`.
+  /// Solo el paquete de app (`windows-nexus-v*.zip`), no `NexusBootstrap.zip`.
   bool get isNexusWindowsZip {
     final lower = name.toLowerCase();
     return lower.endsWith('.zip') && lower.startsWith('windows-nexus-');
@@ -71,17 +71,17 @@ class GitHubRelease {
 
   /// Resuelve el APK de Nexus según el contrato del plan.
   ///
-  /// 1. Solo assets `android-NEXUS-*.apk`.
-  /// 2. Preferir el que coincide con el tag (`android-NEXUS-vX.Y.Z.apk`).
+  /// 1. Solo assets `android-nexus-*.apk` (casing indiferente).
+  /// 2. Preferir el que coincide con el tag (`android-nexus-vX.Y.Z.apk`).
   /// 3. Si hay varios, el de mayor [GitHubReleaseAsset.size].
   GitHubReleaseAsset? resolveNexusApk() {
     final candidates = assets.where((a) => a.isNexusApk).toList();
     if (candidates.isEmpty) return null;
 
     final tag = stripVersionPrefix(tagName);
-    final exactName = 'android-NEXUS-v$tag.apk';
+    final exactName = 'android-nexus-v$tag.apk';
     for (final c in candidates) {
-      if (c.name == exactName) return c;
+      if (c.name.toLowerCase() == exactName) return c;
     }
 
     candidates.sort((a, b) => b.size.compareTo(a.size));
@@ -90,17 +90,17 @@ class GitHubRelease {
 
   /// Resuelve el ZIP de Windows según el contrato OTA.
   ///
-  /// 1. Solo assets `windows-NEXUS-*.zip` (nunca `NexusBootstrap.zip`).
-  /// 2. Preferir el que coincide con el tag (`windows-NEXUS-vX.Y.Z.zip`).
+  /// 1. Solo assets `windows-nexus-*.zip` (nunca `NexusBootstrap.zip`).
+  /// 2. Preferir el que coincide con el tag (`windows-nexus-vX.Y.Z.zip`).
   /// 3. Si hay varios, el de mayor [GitHubReleaseAsset.size].
   GitHubReleaseAsset? resolveNexusWindowsZip() {
     final candidates = assets.where((a) => a.isNexusWindowsZip).toList();
     if (candidates.isEmpty) return null;
 
     final tag = stripVersionPrefix(tagName);
-    final exactName = 'windows-NEXUS-v$tag.zip';
+    final exactName = 'windows-nexus-v$tag.zip';
     for (final c in candidates) {
-      if (c.name == exactName) return c;
+      if (c.name.toLowerCase() == exactName) return c;
     }
 
     candidates.sort((a, b) => b.size.compareTo(a.size));

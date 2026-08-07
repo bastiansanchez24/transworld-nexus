@@ -176,11 +176,20 @@ Future<bool> confirmDialog(
   required String title,
   required String message,
   String confirmLabel = 'Confirmar',
+  bool destructive = false,
 }) async {
   final result = await showDialog<bool>(
     context: context,
+    barrierDismissible: !destructive,
     builder: (context) => AlertDialog(
-      title: Text(title),
+      icon: destructive
+          ? const Icon(
+              Icons.warning_amber_rounded,
+              color: AppColors.danger,
+              size: 36,
+            )
+          : null,
+      title: Text(title, textAlign: destructive ? TextAlign.center : null),
       content: Text(message),
       actions: [
         TextButton(
@@ -188,6 +197,9 @@ Future<bool> confirmDialog(
           child: const Text('Cancelar'),
         ),
         FilledButton(
+          style: destructive
+              ? FilledButton.styleFrom(backgroundColor: AppColors.danger)
+              : null,
           onPressed: () => Navigator.of(context).pop(true),
           child: Text(confirmLabel),
         ),
