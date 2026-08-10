@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,9 @@ import 'features/notificaciones/services/push_notification_service.dart';
 class TransworldNexusApp extends ConsumerWidget {
   const TransworldNexusApp({super.key});
 
+  static String get publicAppName =>
+      kIsWeb ? 'Transworld | RegisPro' : 'RegisPro';
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Mantiene vivo el listener de conectividad -> sincronización offline
@@ -23,7 +27,7 @@ class TransworldNexusApp extends ConsumerWidget {
     ref.read(pushNotificationServiceProvider).attachRouter(router);
 
     return MaterialApp.router(
-      title: 'Nexus',
+      title: publicAppName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       locale: const Locale('es'),
