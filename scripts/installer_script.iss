@@ -16,7 +16,7 @@ AppName={#MyAppName}
 AppVersion=0.0.0
 AppPublisher={#MyAppPublisher}
 UninstallDisplayName={#MyAppName}
-DefaultDirName={localappdata}\Nexus
+DefaultDirName={localappdata}\RegisPro
 DefaultGroupName={#MyAppName}
 DisableDirPage=yes
 DisableProgramGroupPage=yes
@@ -56,8 +56,9 @@ Name: "desktopicon"; Description: "Crear un acceso directo en el escritorio"; Gr
 
 [Files]
 ; Paquete resuelto en tiempo de instalación (descarga + extracción en [Code]).
-Source: "{tmp}\nexus-payload\*"; DestDir: "{app}"; Flags: external recursesubdirs createallsubdirs ignoreversion
-Source: "uninstall-nexus.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; Debe coincidir con GPayloadDir (= {tmp}\regispro-payload).
+Source: "{tmp}\regispro-payload\*"; DestDir: "{app}"; Flags: external recursesubdirs createallsubdirs ignoreversion
+Source: "uninstall-regispro.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
@@ -67,13 +68,15 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir RegisPro"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}"
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-nexus.ps1"" -InstallDir ""{app}"""; Flags: waituntilterminated runascurrentuser; RunOnceId: "UninstallNexus"
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-regispro.ps1"" -InstallDir ""{app}"""; Flags: waituntilterminated runascurrentuser; RunOnceId: "UninstallRegisPro"
 
 [UninstallDelete]
+Type: filesandordirs; Name: "{userappdata}\Transworld\RegisPro"
 Type: filesandordirs; Name: "{userappdata}\Transworld\Nexus"
 Type: filesandordirs; Name: "{userappdata}\Transworld\Transworld Nexus"
 Type: filesandordirs; Name: "{userdocs}\leads_pendientes"
 Type: filesandordirs; Name: "{app}"
+Type: filesandordirs; Name: "{localappdata}\Nexus"
 Type: filesandordirs; Name: "{localappdata}\Transworld NEXUS"
 
 [Code]
@@ -160,13 +163,14 @@ begin
   Result := JsonGetStringFrom(Json, Key, 1);
 end;
 
-function IsWindowsNexusZip(const Name: String): Boolean;
+function IsWindowsAppZip(const Name: String): Boolean;
 var
   LowerName: String;
 begin
   LowerName := LowerCase(Name);
   Result :=
-    (Pos('windows-nexus-', LowerName) = 1) and
+    ((Pos('windows-regispro-', LowerName) = 1) or
+     (Pos('windows-nexus-', LowerName) = 1)) and
     (Length(LowerName) > 4) and
     (Copy(LowerName, Length(LowerName) - 3, 4) = '.zip');
 end;
@@ -189,7 +193,7 @@ function TryReadAssetAtNameKey(const Json: String; NameKeyPos: Integer;
 begin
   Result := False;
   AssetName := JsonGetStringFrom(Json, 'name', NameKeyPos);
-  if (AssetName = '') or (not IsWindowsNexusZip(AssetName)) then
+  if (AssetName = '') or (not IsWindowsAppZip(AssetName)) then
     Exit;
   { GitHub coloca digest y browser_download_url después de name en el objeto asset. }
   AssetUrl := JsonGetStringFrom(Json, 'browser_download_url', NameKeyPos);
@@ -202,18 +206,21 @@ end;
 function ResolveWindowsZipAsset(const Json, Version: String;
   var AssetName, AssetUrl, AssetSha: String): Boolean;
 var
-  ExactName, LowerJson, Needle: String;
+  ExactRegisPro, ExactLegacy, LowerJson, Needle: String;
   SearchFrom, FoundPos, AbsPos: Integer;
   CandName, CandUrl, CandSha: String;
   FirstName, FirstUrl, FirstSha: String;
-  HaveFirst: Boolean;
+  LegacyName, LegacyUrl, LegacySha: String;
+  HaveFirst, HaveLegacy: Boolean;
 begin
   Result := False;
   AssetName := '';
   AssetUrl := '';
   AssetSha := '';
-  ExactName := 'windows-NEXUS-v' + Version + '.zip';
+  ExactRegisPro := 'windows-regispro-v' + Version + '.zip';
+  ExactLegacy := 'windows-nexus-v' + Version + '.zip';
   HaveFirst := False;
+  HaveLegacy := False;
 
   LowerJson := LowerCase(Json);
   Needle := '"name"';
@@ -226,13 +233,20 @@ begin
     AbsPos := SearchFrom + FoundPos - 1;
     if TryReadAssetAtNameKey(Json, AbsPos, CandName, CandUrl, CandSha) then
     begin
-      if CompareText(CandName, ExactName) = 0 then
+      if CompareText(CandName, ExactRegisPro) = 0 then
       begin
         AssetName := CandName;
         AssetUrl := CandUrl;
         AssetSha := CandSha;
         Result := True;
         Exit;
+      end;
+      if (not HaveLegacy) and (CompareText(CandName, ExactLegacy) = 0) then
+      begin
+        LegacyName := CandName;
+        LegacyUrl := CandUrl;
+        LegacySha := CandSha;
+        HaveLegacy := True;
       end;
       if not HaveFirst then
       begin
@@ -243,6 +257,15 @@ begin
       end;
     end;
     SearchFrom := AbsPos + Length(Needle);
+  end;
+
+  if HaveLegacy then
+  begin
+    AssetName := LegacyName;
+    AssetUrl := LegacyUrl;
+    AssetSha := LegacySha;
+    Result := True;
+    Exit;
   end;
 
   if HaveFirst then
@@ -263,7 +286,7 @@ begin
   Http := CreateOleObject('WinHttp.WinHttpRequest.5.1');
   Http.Open('GET', Url, False);
   Http.SetRequestHeader('Accept', 'application/vnd.github+json');
-  Http.SetRequestHeader('User-Agent', 'Nexus-Installer');
+  Http.SetRequestHeader('User-Agent', 'RegisPro-Installer');
   Http.SetRequestHeader('X-GitHub-Api-Version', '2022-11-28');
   Http.SetTimeouts(30000, 30000, 30000, 300000);
   Http.Send;
@@ -359,31 +382,41 @@ procedure WriteInstalledVersionFile(const Version: String);
 var
   Path: String;
 begin
-  Path := ExpandConstant('{app}\.nexus-version');
+  Path := ExpandConstant('{app}\.regispro-version');
   if not SaveStringToFile(Path, Trim(Version), False) then
-    Log('Aviso: no se pudo escribir .nexus-version');
+    Log('Aviso: no se pudo escribir .regispro-version');
+end;
+
+procedure RemoveLegacyDirIfDifferent(const LegacyDir: String);
+begin
+  if CompareText(LegacyDir, ExpandConstant('{app}')) = 0 then
+    Exit;
+  if DirExists(LegacyDir) then
+  begin
+    Log('Eliminando instalación legacy: ' + LegacyDir);
+    DelTree(LegacyDir, True, True, True);
+  end;
 end;
 
 procedure RemoveLegacyInstallArtifacts;
 var
-  LegacyDir, LegacyStartMenu, Desktop, Shortcut: String;
+  LegacyStartMenu, Desktop, Shortcut: String;
 begin
-  LegacyDir := ExpandConstant('{localappdata}\Transworld NEXUS');
-  if CompareText(LegacyDir, ExpandConstant('{app}')) <> 0 then
-  begin
-    if DirExists(LegacyDir) then
-    begin
-      Log('Eliminando instalación legacy: ' + LegacyDir);
-      DelTree(LegacyDir, True, True, True);
-    end;
-  end;
+  RemoveLegacyDirIfDifferent(ExpandConstant('{localappdata}\Nexus'));
+  RemoveLegacyDirIfDifferent(ExpandConstant('{localappdata}\Transworld NEXUS'));
 
   LegacyStartMenu := ExpandConstant('{userprograms}\Transworld NEXUS');
+  if DirExists(LegacyStartMenu) then
+    DelTree(LegacyStartMenu, True, True, True);
+  LegacyStartMenu := ExpandConstant('{userprograms}\Nexus');
   if DirExists(LegacyStartMenu) then
     DelTree(LegacyStartMenu, True, True, True);
 
   Desktop := ExpandConstant('{autodesktop}');
   Shortcut := AddBackslash(Desktop) + 'Transworld NEXUS.lnk';
+  if FileExists(Shortcut) then
+    DeleteFile(Shortcut);
+  Shortcut := AddBackslash(Desktop) + 'Nexus.lnk';
   if FileExists(Shortcut) then
     DeleteFile(Shortcut);
 
@@ -401,7 +434,11 @@ var
   Path: String;
 begin
   Result := '';
-  Path := ExpandConstant('{app}\.nexus-version');
+  Path := ExpandConstant('{app}\.regispro-version');
+  if not FileExists(Path) then
+    Path := ExpandConstant('{app}\.nexus-version');
+  if not FileExists(Path) then
+    Path := ExpandConstant('{localappdata}\RegisPro\.regispro-version');
   if not FileExists(Path) then
     Path := ExpandConstant('{localappdata}\Nexus\.nexus-version');
   if not FileExists(Path) then
@@ -476,9 +513,9 @@ begin
   GInstalledVersion := '';
 
   ApiUrl := 'https://api.github.com/repos/' + RepoOwner + '/' + RepoName + '/releases/latest';
-  ZipPath := ExpandConstant('{tmp}\nexus-windows.zip');
-  StagingDir := ExpandConstant('{tmp}\nexus-staging');
-  GPayloadDir := ExpandConstant('{tmp}\nexus-payload');
+  ZipPath := ExpandConstant('{tmp}\regispro-windows.zip');
+  StagingDir := ExpandConstant('{tmp}\regispro-staging');
+  GPayloadDir := ExpandConstant('{tmp}\regispro-payload');
 
   if FileExists(ZipPath) then
     DeleteFile(ZipPath);
@@ -503,7 +540,7 @@ begin
       if not ResolveWindowsZipAsset(Json, Version, AssetName, AssetUrl, AssetSha) then
         RaiseException(
           'El release ' + Tag +
-          ' no incluye un ZIP de Windows (windows-NEXUS-v*.zip).');
+          ' no incluye un ZIP de Windows (windows-regispro-v*.zip).');
 
       GInstalledVersion := Version;
       Log('Release=' + Tag + ' Asset=' + AssetName + ' Sha=' + AssetSha);
@@ -518,7 +555,7 @@ begin
   end;
 
   DownloadPage.Clear;
-  DownloadPage.Add(AssetUrl, 'nexus-windows.zip', AssetSha);
+  DownloadPage.Add(AssetUrl, 'regispro-windows.zip', AssetSha);
   DownloadPage.Show;
   try
     try
@@ -566,7 +603,7 @@ end;
 
 procedure InitializeWizard;
 begin
-  GPayloadDir := ExpandConstant('{tmp}\nexus-payload');
+  GPayloadDir := ExpandConstant('{tmp}\regispro-payload');
   GPayloadReady := False;
   GInstalledVersion := '';
   GLastError := '';

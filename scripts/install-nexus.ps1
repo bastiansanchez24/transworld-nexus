@@ -4,8 +4,8 @@
   Instalador bootstrap de RegisPro para Windows.
 
 .DESCRIPTION
-  Consulta la última GitHub Release, descarga windows-nexus-vX.Y.Z.zip,
-  extrae en %LOCALAPPDATA%\Nexus y crea accesos directos.
+  Consulta la última GitHub Release, descarga windows-regispro-vX.Y.Z.zip,
+  extrae en %LOCALAPPDATA%\RegisPro y crea accesos directos.
   No requiere recompilarse por versión: siempre instala el último release.
 
 .PARAMETER Owner
@@ -15,7 +15,7 @@
   Nombre del repositorio GitHub (default: transworld_project_nexus).
 
 .PARAMETER InstallDir
-  Carpeta de destino. Por defecto %LOCALAPPDATA%\Nexus
+  Carpeta de destino. Por defecto %LOCALAPPDATA%\RegisPro
   (escribible sin admin, compatible con actualizaciones OTA).
 
 .PARAMETER DesktopShortcut
@@ -46,14 +46,14 @@ $ErrorActionPreference = 'Stop'
 $ExeName = 'transworld_nexus.exe'
 $AppDisplayName = 'RegisPro'
 $UninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}'
-$LogPath = Join-Path $env:TEMP 'nexus-install.log'
+$LogPath = Join-Path $env:TEMP 'regispro-install.log'
 $UiTotalSteps = 6
 $Script:UiStep = 0
 $Script:UiProgressOpen = $false
 $Script:UiWidth = 58
 
 if ([string]::IsNullOrWhiteSpace($InstallDir)) {
-  $InstallDir = Join-Path $env:LOCALAPPDATA 'Nexus'
+  $InstallDir = Join-Path $env:LOCALAPPDATA 'RegisPro'
 }
 
 function Initialize-ConsoleUi {
@@ -67,7 +67,7 @@ function Initialize-ConsoleUi {
       $setCp = Add-Type -MemberDefinition @'
 [DllImport("kernel32.dll")] public static extern bool SetConsoleOutputCP(uint wCodePageID);
 [DllImport("kernel32.dll")] public static extern bool SetConsoleCP(uint wCodePageID);
-'@ -Name 'NexusConsoleCp' -Namespace 'NexusNative' -PassThru -ErrorAction Stop
+'@ -Name 'RegisProConsoleCp' -Namespace 'RegisProNative' -PassThru -ErrorAction Stop
       [void]$setCp::SetConsoleOutputCP(65001)
       [void]$setCp::SetConsoleCP(65001)
     } catch { }
@@ -286,18 +286,22 @@ function Resolve-NexusWindowsZipAsset {
   param($Release)
 
   $tag = Get-StrippedTag $Release.tag_name
-  $exactName = "windows-nexus-v$tag.zip"
+  $exactRegisPro = "windows-regispro-v$tag.zip"
+  $exactLegacy = "windows-nexus-v$tag.zip"
 
-  # Solo windows-nexus-*.zip (excluye NexusBootstrap.zip y otros).
+  # Prefiere windows-regispro-*.zip; acepta windows-nexus-*.zip (legacy).
   $candidates = @(
     $Release.assets | Where-Object {
-      $_.name -match '(?i)^windows-nexus-.+\.zip$'
+      $_.name -match '(?i)^windows-(regispro|nexus)-.+\.zip$'
     }
   )
   if ($candidates.Count -eq 0) { return $null }
 
   foreach ($c in $candidates) {
-    if ($c.name.ToLowerInvariant() -eq $exactName) { return $c }
+    if ($c.name.ToLowerInvariant() -eq $exactRegisPro) { return $c }
+  }
+  foreach ($c in $candidates) {
+    if ($c.name.ToLowerInvariant() -eq $exactLegacy) { return $c }
   }
 
   return ($candidates | Sort-Object { [long]$_.size } -Descending | Select-Object -First 1)
@@ -324,7 +328,7 @@ function Get-FileSha256Hex {
 
 function Test-DirectoryWritable {
   param([string]$DirPath)
-  $probe = Join-Path $DirPath (".nexus-write-probe-" + [guid]::NewGuid().ToString())
+  $probe = Join-Path $DirPath (".regispro-write-probe-" + [guid]::NewGuid().ToString())
   try {
     New-Item -ItemType Directory -Path $DirPath -Force | Out-Null
     Set-Content -LiteralPath $probe -Value 'ok' -Encoding ASCII
@@ -364,7 +368,7 @@ function Download-FileWithProgress {
   )
 
   $request = [System.Net.HttpWebRequest]::Create($Uri)
-  $request.UserAgent = 'Nexus-Installer'
+  $request.UserAgent = 'RegisPro-Installer'
   $request.AllowAutoRedirect = $true
   $request.Timeout = 300000
 
@@ -426,7 +430,7 @@ function Expand-NexusPackage {
     [string]$Activity = 'Extrayendo archivos'
   )
 
-  $staging = Join-Path $env:TEMP ('nexus-install-staging-' + [guid]::NewGuid().ToString())
+  $staging = Join-Path $env:TEMP ('regispro-install-staging-' + [guid]::NewGuid().ToString())
   New-Item -ItemType Directory -Path $staging -Force | Out-Null
   try {
     Write-UiProgressLine -Percent 10 -Status 'Descomprimiendo paquete...'
@@ -478,9 +482,9 @@ function Register-UninstallEntry {
     [string]$InstallLocation
   )
 
-  $uninstallScript = Join-Path $InstallLocation 'uninstall-nexus.ps1'
+  $uninstallScript = Join-Path $InstallLocation 'uninstall-regispro.ps1'
   if (-not (Test-Path -LiteralPath $uninstallScript)) {
-    $uninstallScript = Join-Path $PSScriptRoot 'uninstall-nexus.ps1'
+    $uninstallScript = Join-Path $PSScriptRoot 'uninstall-regispro.ps1'
   }
 
   $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -499,9 +503,9 @@ function Register-UninstallEntry {
 
 function Install-UninstallScript {
   param([string]$Destination)
-  $source = Join-Path $PSScriptRoot 'uninstall-nexus.ps1'
+  $source = Join-Path $PSScriptRoot 'uninstall-regispro.ps1'
   if (Test-Path -LiteralPath $source) {
-    Copy-Item -LiteralPath $source -Destination (Join-Path $Destination 'uninstall-nexus.ps1') -Force
+    Copy-Item -LiteralPath $source -Destination (Join-Path $Destination 'uninstall-regispro.ps1') -Force
   }
 }
 
@@ -510,15 +514,15 @@ function Write-InstalledVersionFile {
     [string]$Version,
     [string]$InstallLocation
   )
-  $versionFile = Join-Path $InstallLocation '.nexus-version'
+  $versionFile = Join-Path $InstallLocation '.regispro-version'
   Set-Content -LiteralPath $versionFile -Value $Version.Trim() -Encoding ASCII -NoNewline
   Write-Log ('Version persistida en ' + $versionFile)
 }
 
-function Stop-NexusIfRunning {
+function Stop-RegisProIfRunning {
   $proc = Get-Process -Name 'transworld_nexus' -ErrorAction SilentlyContinue
   if (-not $proc) { return }
-  Write-Log ('Cerrando Nexus (PID ' + $proc.Id + ') antes de limpiar legacy...')
+  Write-Log ('Cerrando RegisPro (PID ' + $proc.Id + ') antes de limpiar legacy...')
   $proc | Stop-Process -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 2
 }
@@ -526,54 +530,53 @@ function Stop-NexusIfRunning {
 function Remove-LegacyInstallArtifacts {
   param([string]$CurrentInstallDir)
 
-  $legacyInstallDir = Join-Path $env:LOCALAPPDATA 'Transworld NEXUS'
-  if ($legacyInstallDir -eq $CurrentInstallDir) { return }
+  Stop-RegisProIfRunning
 
-  Stop-NexusIfRunning
+  $legacyDirs = @(
+    (Join-Path $env:LOCALAPPDATA 'Nexus'),
+    (Join-Path $env:LOCALAPPDATA 'Transworld NEXUS')
+  )
+  foreach ($legacyInstallDir in $legacyDirs) {
+    if ($legacyInstallDir -eq $CurrentInstallDir) { continue }
+    if (Test-Path -LiteralPath $legacyInstallDir) {
+      Remove-Item -LiteralPath $legacyInstallDir -Recurse -Force -ErrorAction SilentlyContinue
+      Write-Log ('Instalación legacy eliminada: ' + $legacyInstallDir)
+    }
+  }
 
-  $legacyStartMenuDir = Join-Path ([Environment]::GetFolderPath('Programs')) 'Transworld NEXUS'
+  $legacyStartMenuDirs = @(
+    (Join-Path ([Environment]::GetFolderPath('Programs')) 'Transworld NEXUS'),
+    (Join-Path ([Environment]::GetFolderPath('Programs')) 'Nexus')
+  )
+  foreach ($legacyStartMenuDir in $legacyStartMenuDirs) {
+    if (($legacyStartMenuDir -ne (Join-Path ([Environment]::GetFolderPath('Programs')) $AppDisplayName)) -and
+        (Test-Path -LiteralPath $legacyStartMenuDir)) {
+      Remove-Item -LiteralPath $legacyStartMenuDir -Recurse -Force -ErrorAction SilentlyContinue
+      Write-Log ('Carpeta de menú Inicio legacy eliminada: ' + $legacyStartMenuDir)
+    }
+  }
+
   $legacyUninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}_is1'
-  $desktop = [Environment]::GetFolderPath('Desktop')
+  if (Test-Path -LiteralPath $legacyUninstallKey) {
+    Remove-Item -LiteralPath $legacyUninstallKey -Recurse -Force -ErrorAction SilentlyContinue
+  }
 
+  $desktop = [Environment]::GetFolderPath('Desktop')
   foreach ($name in @('Transworld NEXUS.lnk', 'Nexus.lnk')) {
     $shortcut = Join-Path $desktop $name
     if (Test-Path -LiteralPath $shortcut) {
-      Remove-Item -LiteralPath $shortcut -Force
+      Remove-Item -LiteralPath $shortcut -Force -ErrorAction SilentlyContinue
       Write-Log ('Acceso directo legacy eliminado: ' + $shortcut)
     }
   }
 
-  foreach ($name in @('Transworld NEXUS.lnk', 'Nexus.lnk', "$AppDisplayName.lnk")) {
-    $shortcut = Join-Path $legacyStartMenuDir $name
+  # También limpia accesos antiguos en el menú Inicio de la app actual si quedaron.
+  $currentStartMenu = Join-Path ([Environment]::GetFolderPath('Programs')) $AppDisplayName
+  foreach ($name in @('Transworld NEXUS.lnk', 'Nexus.lnk')) {
+    $shortcut = Join-Path $currentStartMenu $name
     if (Test-Path -LiteralPath $shortcut) {
-      Remove-Item -LiteralPath $shortcut -Force
-      Write-Log ('Acceso directo legacy eliminado: ' + $shortcut)
+      Remove-Item -LiteralPath $shortcut -Force -ErrorAction SilentlyContinue
     }
-  }
-
-  $legacyNexusStartMenuDir = Join-Path ([Environment]::GetFolderPath('Programs')) 'Nexus'
-  if (($legacyNexusStartMenuDir -ne (Join-Path ([Environment]::GetFolderPath('Programs')) $AppDisplayName)) -and
-      (Test-Path -LiteralPath $legacyNexusStartMenuDir)) {
-    Remove-Item -LiteralPath $legacyNexusStartMenuDir -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Log ('Carpeta de menú Inicio legacy eliminada: ' + $legacyNexusStartMenuDir)
-  }
-
-  if (Test-Path -LiteralPath $legacyStartMenuDir) {
-    Remove-Item -LiteralPath $legacyStartMenuDir -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Log ('Carpeta de menú Inicio legacy eliminada: ' + $legacyStartMenuDir)
-  }
-
-  if (Test-Path -LiteralPath $legacyInstallDir) {
-    Write-Log ('Eliminando instalación legacy: ' + $legacyInstallDir)
-    Remove-Item -LiteralPath $legacyInstallDir -Recurse -Force -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $legacyInstallDir) {
-      Write-Log ('Aviso: no se pudo eliminar por completo ' + $legacyInstallDir)
-    }
-  }
-
-  if (Test-Path -LiteralPath $legacyUninstallKey) {
-    Remove-Item -LiteralPath $legacyUninstallKey -Recurse -Force
-    Write-Log 'Entrada de desinstalación legacy (Inno) eliminada.'
   }
 }
 
@@ -596,7 +599,7 @@ try {
   $headers = @{
     Accept = 'application/vnd.github+json'
     'X-GitHub-Api-Version' = '2022-11-28'
-    'User-Agent' = 'Nexus-Installer'
+    'User-Agent' = 'RegisPro-Installer'
   }
 
   $apiUrl = "https://api.github.com/repos/$Owner/$Repo/releases/latest"
@@ -621,7 +624,7 @@ try {
   $version = Get-StrippedTag $release.tag_name
   $asset = Resolve-NexusWindowsZipAsset -Release $release
   if ($null -eq $asset) {
-    throw "El release $($release.tag_name) no incluye un ZIP de Windows (windows-nexus-v*.zip)."
+    throw "El release $($release.tag_name) no incluye un ZIP de Windows (windows-regispro-v*.zip)."
   }
 
   $assetSizeBytes = [long]$asset.size
@@ -632,7 +635,7 @@ try {
   Write-UiStep -Message 'Descargando paquete'
   Write-Log ("Release=" + $release.tag_name + ' Asset=' + $asset.name + ' Size=' + (Format-Megabytes $assetSizeBytes))
 
-  $zipPath = Join-Path $env:TEMP ("nexus-install-v$version.zip")
+  $zipPath = Join-Path $env:TEMP ("regispro-install-v$version.zip")
   if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
   }

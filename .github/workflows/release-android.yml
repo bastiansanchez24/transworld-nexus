@@ -103,7 +103,7 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           SRC="build/app/outputs/flutter-apk/app-release.apk"
           mkdir -p dist
-          DEST="dist/android-nexus-${TAG}.apk"
+          DEST="dist/android-regispro-${TAG}.apk"
           cp "$SRC" "$DEST"
           ls -lh "$DEST"
 
@@ -111,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: dist/android-nexus-*.apk
+          path: dist/android-regispro-*.apk
           if-no-files-found: error
           retention-days: 7
 
@@ -182,7 +182,7 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $src = "build/windows/x64/runner/Release"
           $destDir = "dist"
-          $zipName = "windows-nexus-$tag.zip"
+          $zipName = "windows-regispro-$tag.zip"
           New-Item -ItemType Directory -Path $destDir -Force | Out-Null
           $zipPath = Join-Path $destDir $zipName
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
@@ -193,7 +193,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-zip
-          path: dist/windows-nexus-*.zip
+          path: dist/windows-regispro-*.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -266,7 +266,7 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           SRC="build/web"
           mkdir -p dist
-          DEST="dist/web-nexus-${TAG}.zip"
+          DEST="dist/web-regispro-${TAG}.zip"
           rm -f "$DEST"
           (cd "$SRC" && zip -r "$GITHUB_WORKSPACE/$DEST" .)
           ls -lh "$DEST"
@@ -275,7 +275,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-zip
-          path: dist/web-nexus-*.zip
+          path: dist/web-regispro-*.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -306,9 +306,9 @@ jobs:
         run: |
           set -euo pipefail
           find release-assets -type f -print
-          test -f "release-assets/android-nexus-${GITHUB_REF_NAME}.apk"
-          test -f "release-assets/windows-nexus-${GITHUB_REF_NAME}.zip"
-          test -f "release-assets/web-nexus-${GITHUB_REF_NAME}.zip"
+          test -f "release-assets/android-regispro-${GITHUB_REF_NAME}.apk"
+          test -f "release-assets/windows-regispro-${GITHUB_REF_NAME}.zip"
+          test -f "release-assets/web-regispro-${GITHUB_REF_NAME}.zip"
 
       # Solo sube assets. No setea name/body/generate_release_notes
       # para no modificar el título ni la descripción de la release.
@@ -317,8 +317,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            release-assets/android-nexus-${{ github.ref_name }}.apk
-            release-assets/windows-nexus-${{ github.ref_name }}.zip
-            release-assets/web-nexus-${{ github.ref_name }}.zip
+            release-assets/android-regispro-${{ github.ref_name }}.apk
+            release-assets/windows-regispro-${{ github.ref_name }}.zip
+            release-assets/web-regispro-${{ github.ref_name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

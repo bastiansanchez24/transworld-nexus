@@ -398,10 +398,10 @@ try {
 
   if (-not [string]::IsNullOrWhiteSpace($RemoteVersion)) {
     try {
-      Set-Content -LiteralPath (Join-Path $InstallDir '.nexus-version') -Value $RemoteVersion.Trim() -Encoding UTF8
+      Set-Content -LiteralPath (Join-Path $InstallDir '.regispro-version') -Value $RemoteVersion.Trim() -Encoding UTF8
       Write-Log ('Versión registrada: ' + $RemoteVersion.Trim())
     } catch {
-      Write-Log ('Aviso al escribir .nexus-version: ' + $_.Exception.Message)
+      Write-Log ('Aviso al escribir .regispro-version: ' + $_.Exception.Message)
     }
   }
 } catch {

@@ -61,20 +61,20 @@ void main() {
   });
 
   group('GitHubRelease.resolveNexusApk', () {
-    test('elige asset nexus exacto por tag', () {
+    test('elige asset regispro exacto por tag', () {
       final release = GitHubRelease.fromJson({
         'tag_name': 'v1.2.0',
-        'name': 'NEXUS 1.2.0',
+        'name': 'RegisPro 1.2.0',
         'body': 'notes',
         'prerelease': false,
         'assets': [
           {
-            'name': 'android-nexus-v1.1.apk',
+            'name': 'android-regispro-v1.1.apk',
             'size': 10,
             'browser_download_url': 'https://example.com/old.apk',
           },
           {
-            'name': 'android-nexus-v1.2.0.apk',
+            'name': 'android-regispro-v1.2.0.apk',
             'size': 20,
             'browser_download_url': 'https://example.com/new.apk',
             'digest':
@@ -84,24 +84,24 @@ void main() {
       });
 
       final apk = release.resolveNexusApk();
-      expect(apk?.name, 'android-nexus-v1.2.0.apk');
+      expect(apk?.name, 'android-regispro-v1.2.0.apk');
       expect(apk?.sha256Hex, startsWith('aaaa'));
     });
 
-    test('si no hay match exacto, elige el nexus más grande', () {
+    test('si no hay match exacto, elige el apk más grande', () {
       final release = GitHubRelease.fromJson({
         'tag_name': 'v1.1.0',
-        'name': 'NEXUS',
+        'name': 'RegisPro',
         'body': '[FORCE_UPDATE]',
         'prerelease': false,
         'assets': [
           {
-            'name': 'android-nexus-v1.1.apk',
+            'name': 'android-regispro-v1.1.apk',
             'size': 100,
             'browser_download_url': 'https://example.com/a.apk',
           },
           {
-            'name': 'android-nexus-arm64.apk',
+            'name': 'android-regispro-arm64.apk',
             'size': 200,
             'browser_download_url': 'https://example.com/b.apk',
           },
@@ -109,7 +109,7 @@ void main() {
       });
 
       expect(release.isForced, isTrue);
-      expect(release.resolveNexusApk()?.name, 'android-nexus-arm64.apk');
+      expect(release.resolveNexusApk()?.name, 'android-regispro-arm64.apk');
     });
 
     test('sin APK retorna null', () {

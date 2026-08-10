@@ -22,15 +22,20 @@ class GitHubReleaseAsset {
 
   bool get isNexusApk {
     final lower = name.toLowerCase();
-    return lower.endsWith('.apk') && lower.startsWith('android-nexus-');
+    return lower.endsWith('.apk') &&
+        (lower.startsWith('android-regispro-') ||
+            lower.startsWith('android-nexus-'));
   }
 
   bool get isZip => name.toLowerCase().endsWith('.zip');
 
-  /// Solo el paquete de app (`windows-nexus-v*.zip`), no `NexusBootstrap.zip`.
+  /// Solo el paquete de app (`windows-regispro-v*.zip`), no bootstrap ni otros.
+  /// Acepta el prefijo legacy `windows-nexus-` por compatibilidad.
   bool get isNexusWindowsZip {
     final lower = name.toLowerCase();
-    return lower.endsWith('.zip') && lower.startsWith('windows-nexus-');
+    return lower.endsWith('.zip') &&
+        (lower.startsWith('windows-regispro-') ||
+            lower.startsWith('windows-nexus-'));
   }
 
   factory GitHubReleaseAsset.fromJson(Map<String, dynamic> json) {
@@ -69,19 +74,24 @@ class GitHubRelease {
     return v?.toString();
   }
 
-  /// Resuelve el APK de Nexus según el contrato del plan.
+  /// Resuelve el APK de RegisPro según el contrato del plan.
   ///
-  /// 1. Solo assets `android-nexus-*.apk` (casing indiferente).
-  /// 2. Preferir el que coincide con el tag (`android-nexus-vX.Y.Z.apk`).
+  /// 1. Solo assets `android-regispro-*.apk` (o legacy `android-nexus-*.apk`).
+  /// 2. Preferir el que coincide con el tag (`android-regispro-vX.Y.Z.apk`).
   /// 3. Si hay varios, el de mayor [GitHubReleaseAsset.size].
   GitHubReleaseAsset? resolveNexusApk() {
     final candidates = assets.where((a) => a.isNexusApk).toList();
     if (candidates.isEmpty) return null;
 
     final tag = stripVersionPrefix(tagName);
-    final exactName = 'android-nexus-v$tag.apk';
-    for (final c in candidates) {
-      if (c.name.toLowerCase() == exactName) return c;
+    final preferred = <String>[
+      'android-regispro-v$tag.apk',
+      'android-nexus-v$tag.apk',
+    ];
+    for (final exactName in preferred) {
+      for (final c in candidates) {
+        if (c.name.toLowerCase() == exactName) return c;
+      }
     }
 
     candidates.sort((a, b) => b.size.compareTo(a.size));
@@ -90,17 +100,22 @@ class GitHubRelease {
 
   /// Resuelve el ZIP de Windows según el contrato OTA.
   ///
-  /// 1. Solo assets `windows-nexus-*.zip` (nunca `NexusBootstrap.zip`).
-  /// 2. Preferir el que coincide con el tag (`windows-nexus-vX.Y.Z.zip`).
+  /// 1. Solo assets `windows-regispro-*.zip` (o legacy `windows-nexus-*.zip`).
+  /// 2. Preferir el que coincide con el tag (`windows-regispro-vX.Y.Z.zip`).
   /// 3. Si hay varios, el de mayor [GitHubReleaseAsset.size].
   GitHubReleaseAsset? resolveNexusWindowsZip() {
     final candidates = assets.where((a) => a.isNexusWindowsZip).toList();
     if (candidates.isEmpty) return null;
 
     final tag = stripVersionPrefix(tagName);
-    final exactName = 'windows-nexus-v$tag.zip';
-    for (final c in candidates) {
-      if (c.name.toLowerCase() == exactName) return c;
+    final preferred = <String>[
+      'windows-regispro-v$tag.zip',
+      'windows-nexus-v$tag.zip',
+    ];
+    for (final exactName in preferred) {
+      for (final c in candidates) {
+        if (c.name.toLowerCase() == exactName) return c;
+      }
     }
 
     candidates.sort((a, b) => b.size.compareTo(a.size));

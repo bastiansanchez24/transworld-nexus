@@ -21,8 +21,8 @@ class WindowsUninstallResult {
 /// Lanza la desinstalación fuera del Job Object de Flutter (vía `cmd /c start`).
 ///
 /// Escribe un wrapper temporal que espera al cierre de la app y luego ejecuta
-/// `uninstall-nexus.ps1` del directorio de instalación (compatible con scripts
-/// antiguos que no aceptan `-ParentPid`). La app debe cerrarse tras
+/// `uninstall-regispro.ps1` del directorio de instalación (con fallback a
+/// `uninstall-nexus.ps1` en instalaciones antiguas). La app debe cerrarse tras
 /// [WindowsUninstallOutcome.launched].
 class WindowsUninstaller {
   Future<WindowsUninstallResult> uninstall() async {
@@ -35,9 +35,9 @@ class WindowsUninstaller {
 
     final exePath = Platform.resolvedExecutable;
     final installDir = File(exePath).parent.path;
-    final installedScript = '$installDir\\uninstall-nexus.ps1';
+    final installedScript = _resolveUninstallScript(installDir);
 
-    if (!File(installedScript).existsSync()) {
+    if (installedScript == null) {
       return WindowsUninstallResult(
         WindowsUninstallOutcome.scriptMissing,
         message:
@@ -49,8 +49,8 @@ class WindowsUninstaller {
 
     final tempDir = await getTemporaryDirectory();
     final stamp = DateTime.now().millisecondsSinceEpoch;
-    final wrapperPath = '${tempDir.path}\\nexus-uninstall-$stamp.ps1';
-    final launcherPath = '${tempDir.path}\\nexus-uninstall-launch-$stamp.cmd';
+    final wrapperPath = '${tempDir.path}\\regispro-uninstall-$stamp.ps1';
+    final launcherPath = '${tempDir.path}\\regispro-uninstall-launch-$stamp.cmd';
 
     try {
       await File(wrapperPath).writeAsString(
@@ -92,6 +92,14 @@ class WindowsUninstaller {
     }
   }
 
+  static String? _resolveUninstallScript(String installDir) {
+    for (final name in ['uninstall-regispro.ps1', 'uninstall-nexus.ps1']) {
+      final path = '$installDir\\$name';
+      if (File(path).existsSync()) return path;
+    }
+    return null;
+  }
+
   static String get _powershellExecutable {
     final systemRoot = Platform.environment['SystemRoot'];
     if (systemRoot == null || systemRoot.isEmpty) return 'powershell.exe';
@@ -115,7 +123,7 @@ class WindowsUninstaller {
 \$ParentPid = $parentPid
 \$UninstallScript = '${psLiteral(uninstallScript)}'
 \$InstallDir = '${psLiteral(installDir)}'
-\$LogPath = Join-Path \$env:TEMP 'nexus-uninstall.log'
+\$LogPath = Join-Path \$env:TEMP 'regispro-uninstall.log'
 
 function Write-Log([string]\$Message) {
   \$line = '[{0}] {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), \$Message
@@ -168,7 +176,7 @@ exit \$LASTEXITCODE
     return '''
 @echo off
 chcp 65001 >nul
-start "NexusUninstall" /b ${q(powershell)} $psArgs
+start "RegisProUninstall" /b ${q(powershell)} $psArgs
 ''';
   }
 }

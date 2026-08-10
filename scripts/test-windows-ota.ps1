@@ -5,7 +5,7 @@
 .DESCRIPTION
   Extrae los scripts PowerShell embebidos en windows_installer.dart, crea una
   instalación y un ZIP ficticios dentro de %TEMP%, lanza el updater mediante
-  el shell de Windows y valida que el binario y .nexus-version hayan sido
+  el shell de Windows y valida que el binario y .regispro-version hayan sido
   reemplazados.
 #>
 
@@ -18,7 +18,7 @@ $dartPath = Join-Path $repoRoot 'lib\features\updates\services\windows_installer
 $testRoot = Join-Path $env:TEMP ('nexus-ota-integration-' + [guid]::NewGuid().ToString())
 $installDir = Join-Path $testRoot 'Instalación con espacios'
 $payloadDir = Join-Path $testRoot 'payload'
-$zipPath = Join-Path $testRoot 'windows-nexus-v9.9.9.zip'
+$zipPath = Join-Path $testRoot 'windows-regispro-v9.9.9.zip'
 $updaterPath = Join-Path $testRoot 'nexus-update.ps1'
 $launcherPath = Join-Path $testRoot 'nexus-update-launch.ps1'
 $readyPath = Join-Path $testRoot 'nexus-update-ready'
@@ -72,13 +72,14 @@ try {
     throw "El launcher WMI terminó con código $LASTEXITCODE"
   }
   $deadline = (Get-Date).AddSeconds(30)
-  $versionPath = Join-Path $installDir '.nexus-version'
-  while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $versionPath)) {
-    Start-Sleep -Milliseconds 100
+  $versionPath = Join-Path $installDir '.regispro-version'
+  while ((Get-Date) -lt $deadline) {
+    if (Test-Path -LiteralPath $versionPath) { break }
+    Start-Sleep -Milliseconds 200
   }
 
   if (-not (Test-Path -LiteralPath $versionPath)) {
-    throw 'El updater no escribió .nexus-version dentro del plazo.'
+    throw 'El updater no escribió .regispro-version dentro del plazo.'
   }
   if ((Get-Content -LiteralPath $versionPath -Raw).Trim() -ne '9.9.9') {
     throw 'La versión instalada no coincide con la versión remota.'

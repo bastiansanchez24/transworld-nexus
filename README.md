@@ -198,8 +198,8 @@ versión instalada (`package_info_plus` ↔ `pubspec.yaml`).
 |----------|----------|
 | Tag | `vMAJOR.MINOR.PATCH` (ej. `v1.2.0`) |
 | `pubspec.yaml` | `version: MAJOR.MINOR.PATCH+BUILD` **debe coincidir** con el tag (sin `v`) |
-| Asset Android | `android-NEXUS-vMAJOR.MINOR.PATCH.apk` |
-| Asset Windows | `windows-NEXUS-vMAJOR.MINOR.PATCH.zip` (contenido de `build/windows/x64/runner/Release/`) |
+| Asset Android | `android-regispro-vMAJOR.MINOR.PATCH.apk` |
+| Asset Windows | `windows-regispro-vMAJOR.MINOR.PATCH.zip` (contenido de `build/windows/x64/runner/Release/`) |
 | Force update | Incluir la línea `[FORCE_UPDATE]` en el body de la Release |
 
 Si el body contiene `[FORCE_UPDATE]`, el diálogo no se puede cerrar ni
@@ -222,7 +222,7 @@ Garantías del actualizador (`lib/features/updates/services/windows_installer.da
 
 - **Pre-flight de escritura**: si la carpeta de instalación no es escribible, la
   app **no se cierra** y muestra el error. Nexus debe vivir en una carpeta de
-  usuario (ej. `%LOCALAPPDATA%\Nexus`); en `C:\Program Files` haría falta
+  usuario (ej. `%LOCALAPPDATA%\RegisPro`); en `C:\Program Files` haría falta
   elevación y la OTA no se aplicará.
 - **Proceso independiente + handshake**: Explorer lanza PowerShell fuera del
   ciclo de vida de Flutter y Nexus espera una señal real de inicio antes de
@@ -255,7 +255,7 @@ que consulta GitHub Releases en runtime e instala siempre la última versión.
 | `scripts/installer_script.iss` | Instalador nativo Inno Setup → `NexusSetup.exe` (UI de Windows, sin PowerShell) |
 | `scripts/install-nexus.ps1` | Alternativa CLI (API → descarga ZIP → extrae) |
 | `scripts/install-nexus.bat` | Launcher de doble clic del script CLI |
-| `scripts/uninstall-nexus.ps1` | Desinstalación (binarios, datos en `%APPDATA%`, accesos directos) |
+| `scripts/uninstall-regispro.ps1` | Desinstalación (binarios, datos en `%APPDATA%`, accesos directos) |
 
 **Instalación recomendada:** distribuir `NexusSetup.exe` (wizard de Windows).
 
@@ -277,9 +277,9 @@ que consulta GitHub Releases en runtime e instala siempre la última versión.
 Flujo del bootstrap (`NexusSetup.exe`):
 
 1. Wizard Inno consulta `GET /repos/{owner}/{repo}/releases/latest`
-2. Descarga `windows-NEXUS-vX.Y.Z.zip` con barra de progreso nativa
+2. Descarga `windows-regispro-vX.Y.Z.zip` con barra de progreso nativa
 3. Verifica SHA-256 si GitHub expone `digest` en el asset
-4. Extrae en `%LOCALAPPDATA%\Nexus` (compatible con OTA posterior)
+4. Extrae en `%LOCALAPPDATA%\RegisPro` (compatible con OTA posterior)
 5. Crea accesos en el menú Inicio (y escritorio si se pide)
 6. Registra desinstalación en *Agregar o quitar programas*
 
@@ -303,7 +303,7 @@ Sin keystore, Gradle firma con debug (útil en local; **no** para distribución)
 2. Crea y pushea el tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 3. El workflow [`.github/workflows/release-android.yml`](.github/workflows/release-android.yml)
    valida que pubspec == tag, construye el APK y el ZIP de Windows, y crea/actualiza
-   el Release con los assets `android-NEXUS-vX.Y.Z.apk` y `windows-NEXUS-vX.Y.Z.zip`.
+   el Release con los assets `android-regispro-vX.Y.Z.apk` y `windows-regispro-vX.Y.Z.zip`.
 4. (Opcional) Edita las notas del Release y agrega `[FORCE_UPDATE]` si aplica.
 
 ### Variables `.env`

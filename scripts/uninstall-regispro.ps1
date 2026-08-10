@@ -18,16 +18,22 @@ $ErrorActionPreference = 'Stop'
 $AppDisplayName = 'RegisPro'
 $UninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}_is1'
 $LegacyUninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}'
-$AppDataDir = Join-Path $env:APPDATA 'Transworld\Nexus'
-$LegacyAppDataDir = Join-Path $env:APPDATA 'Transworld\Transworld Nexus'
+$AppDataDir = Join-Path $env:APPDATA 'Transworld\RegisPro'
+$LegacyAppDataDirs = @(
+  (Join-Path $env:APPDATA 'Transworld\Nexus'),
+  (Join-Path $env:APPDATA 'Transworld\Transworld Nexus')
+)
 $PendingPhotosDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'leads_pendientes'
-$LogPath = Join-Path $env:TEMP 'nexus-uninstall.log'
+$LogPath = Join-Path $env:TEMP 'regispro-uninstall.log'
 
 if ([string]::IsNullOrWhiteSpace($InstallDir)) {
-  $InstallDir = Join-Path $env:LOCALAPPDATA 'Nexus'
+  $InstallDir = Join-Path $env:LOCALAPPDATA 'RegisPro'
 }
 
-$LegacyInstallDir = Join-Path $env:LOCALAPPDATA 'Transworld NEXUS'
+$LegacyInstallDirs = @(
+  (Join-Path $env:LOCALAPPDATA 'Nexus'),
+  (Join-Path $env:LOCALAPPDATA 'Transworld NEXUS')
+)
 $StartMenuDirs = @(
   (Join-Path ([Environment]::GetFolderPath('Programs')) 'RegisPro'),
   (Join-Path ([Environment]::GetFolderPath('Programs')) 'Nexus'),
@@ -75,7 +81,7 @@ function Test-FileUnlocked([string]$Path) {
   }
 }
 
-function Wait-NexusClosed {
+function Wait-RegisProClosed {
   param([int]$WaitPid)
 
   if ($WaitPid -gt 0) {
@@ -93,9 +99,8 @@ function Wait-NexusClosed {
   }
 
   $exeCandidates = @(
-    (Join-Path $InstallDir 'transworld_nexus.exe'),
-    (Join-Path $LegacyInstallDir 'transworld_nexus.exe')
-  )
+    (Join-Path $InstallDir 'transworld_nexus.exe')
+  ) + @($LegacyInstallDirs | ForEach-Object { Join-Path $_ 'transworld_nexus.exe' })
   $deadline = (Get-Date).AddSeconds(180)
   while ((Get-Date) -lt $deadline) {
     $locked = $false
@@ -120,9 +125,9 @@ Write-Host "Desinstalando $AppDisplayName..." -ForegroundColor Cyan
 
 try {
   if ($ParentPid -gt 0) {
-    Wait-NexusClosed -WaitPid $ParentPid
+    Wait-RegisProClosed -WaitPid $ParentPid
   } else {
-    foreach ($dir in @($InstallDir, $LegacyInstallDir)) {
+    foreach ($dir in (@($InstallDir) + $LegacyInstallDirs)) {
       $exePath = Join-Path $dir 'transworld_nexus.exe'
       if (Test-Path -LiteralPath $exePath) {
         $proc = Get-Process -Name 'transworld_nexus' -ErrorAction SilentlyContinue
@@ -138,6 +143,7 @@ try {
   foreach ($startMenuDir in $StartMenuDirs) {
     Remove-ShortcutIfExists (Join-Path $startMenuDir "$AppDisplayName.lnk")
     Remove-ShortcutIfExists (Join-Path $startMenuDir 'Transworld NEXUS.lnk')
+    Remove-ShortcutIfExists (Join-Path $startMenuDir 'Nexus.lnk')
     if (Test-Path -LiteralPath $startMenuDir) {
       Remove-Item -LiteralPath $startMenuDir -Force -Recurse -ErrorAction SilentlyContinue
     }
@@ -149,10 +155,16 @@ try {
   }
 
   Remove-DirectoryIfExists $AppDataDir
-  Remove-DirectoryIfExists $LegacyAppDataDir
+  foreach ($legacyAppData in $LegacyAppDataDirs) {
+    Remove-DirectoryIfExists $legacyAppData
+  }
   Remove-DirectoryIfExists $PendingPhotosDir
   Remove-DirectoryIfExists $InstallDir
-  Remove-DirectoryIfExists $LegacyInstallDir
+  foreach ($legacyInstall in $LegacyInstallDirs) {
+    if ($legacyInstall -ne $InstallDir) {
+      Remove-DirectoryIfExists $legacyInstall
+    }
+  }
 
   if (Test-Path -LiteralPath $UninstallKey) {
     Write-Log 'Eliminando entrada del registro de desinstalacion'
