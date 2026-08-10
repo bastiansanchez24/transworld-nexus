@@ -57,9 +57,9 @@ Write-Host "  Salida: $outDir"
 
 & $iscc $issPath
 
-$exe = Join-Path $outDir 'NexusSetup.exe'
+$exe = Join-Path $outDir 'RegisProSetup.exe'
 if (-not (Test-Path -LiteralPath $exe)) {
-  throw "No se generó NexusSetup.exe en $outDir"
+  throw "No se generó RegisProSetup.exe en $outDir"
 }
 
 Write-Host ''

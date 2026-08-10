@@ -1,11 +1,11 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Desinstala Nexus (instalación bootstrap en carpeta de usuario).
+  Desinstala RegisPro (instalación bootstrap en carpeta de usuario).
 
 .PARAMETER ParentPid
   Si se indica (>0), espera a que ese proceso termine antes de borrar
-  (flujo "Desinstalar" desde la app). Sin ParentPid, aborta si Nexus sigue abierto.
+  (flujo "Desinstalar" desde la app). Sin ParentPid, aborta si RegisPro sigue abierto.
 #>
 [CmdletBinding()]
 param(
@@ -15,7 +15,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$AppDisplayName = 'Nexus'
+$AppDisplayName = 'RegisPro'
 $UninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}_is1'
 $LegacyUninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}'
 $AppDataDir = Join-Path $env:APPDATA 'Transworld\Nexus'
@@ -29,10 +29,11 @@ if ([string]::IsNullOrWhiteSpace($InstallDir)) {
 
 $LegacyInstallDir = Join-Path $env:LOCALAPPDATA 'Transworld NEXUS'
 $StartMenuDirs = @(
+  (Join-Path ([Environment]::GetFolderPath('Programs')) 'RegisPro'),
   (Join-Path ([Environment]::GetFolderPath('Programs')) 'Nexus'),
   (Join-Path ([Environment]::GetFolderPath('Programs')) 'Transworld NEXUS')
 )
-$DesktopShortcutNames = @('Nexus.lnk', 'Transworld NEXUS.lnk')
+$DesktopShortcutNames = @('RegisPro.lnk', 'Nexus.lnk', 'Transworld NEXUS.lnk')
 
 function Write-Log {
   param([string]$Message)
@@ -126,7 +127,7 @@ try {
       if (Test-Path -LiteralPath $exePath) {
         $proc = Get-Process -Name 'transworld_nexus' -ErrorAction SilentlyContinue
         if ($proc) {
-          Write-Host 'Cierra Nexus antes de desinstalar.' -ForegroundColor Yellow
+          Write-Host 'Cierra RegisPro antes de desinstalar.' -ForegroundColor Yellow
           Write-Log 'Abortado: proceso transworld_nexus en ejecucion'
           exit 1
         }

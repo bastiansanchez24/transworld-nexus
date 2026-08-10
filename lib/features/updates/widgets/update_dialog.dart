@@ -174,7 +174,42 @@ class UpdateDialog extends StatelessWidget {
                         : null,
               ),
             ],
-            if (failed && state.errorMessage != null) ...[
+            if (failed && state.needsInstallPermission) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.tintNavy,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.settings_applications_rounded,
+                      color: AppColors.primary,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        state.errorMessage ??
+                            'Para actualizar RegisPro debes permitir la instalación '
+                                'de aplicaciones. Actívalo en Configuración y '
+                                'vuelve a intentar.',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: AppColors.ink,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (failed && state.errorMessage != null) ...[
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -207,16 +242,14 @@ class UpdateDialog extends StatelessWidget {
             child: const Text('Más tarde'),
           ),
         if (failed && state.needsInstallPermission)
-          TextButton(
+          OutlinedButton(
             onPressed: onOpenSettings,
-            child: const Text('Abrir ajustes'),
+            child: const Text('Configuración'),
           ),
         if (failed)
           FilledButton(
             onPressed: onRetry,
-            child: Text(
-              state.needsInstallPermission ? 'Reintentar instalación' : 'Reintentar',
-            ),
+            child: const Text('Reintentar'),
           )
         else if (!busy)
           FilledButton(

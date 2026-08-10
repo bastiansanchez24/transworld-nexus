@@ -1,9 +1,9 @@
-﻿; Instalador bootstrap de Nexus (Inno Setup nativo).
+﻿; Instalador bootstrap de RegisPro (Inno Setup nativo).
 ; Descarga la última release desde GitHub, sin PowerShell.
 ; Requiere Inno Setup 6.1+ (CreateDownloadPage).
 ; Compilar: .\scripts\build-installer.ps1
 
-#define MyAppName "Nexus"
+#define MyAppName "RegisPro"
 #define MyAppPublisher "Transworld"
 #define MyAppExeName "transworld_nexus.exe"
 #define MyRepoOwner "bastiansanchez24"
@@ -23,7 +23,7 @@ DisableProgramGroupPage=yes
 DisableFinishedPage=no
 AllowNoIcons=yes
 OutputDir=..\build\windows\installer
-OutputBaseFilename=NexusSetup
+OutputBaseFilename=RegisProSetup
 SetupIconFile=..\windows\runner\resources\app_icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -40,16 +40,16 @@ MinVersion=10.0
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Messages]
-spanish.SetupAppTitle=Nexus
-spanish.SetupWindowTitle=Nexus — Instalador
-spanish.WelcomeLabel1=Bienvenido a Nexus
-spanish.WelcomeLabel2=Este asistente descargará e instalará automáticamente la última versión de Nexus desde GitHub.%n%nNo se requieren privilegios de administrador.%n%nPulsa Siguiente para continuar.
+spanish.SetupAppTitle=RegisPro
+spanish.SetupWindowTitle=RegisPro — Instalador
+spanish.WelcomeLabel1=Bienvenido a RegisPro
+spanish.WelcomeLabel2=Este asistente descargará e instalará automáticamente la última versión de RegisPro desde GitHub.%n%nNo se requieren privilegios de administrador.%n%nPulsa Siguiente para continuar.
 spanish.ClickNext=Pulsa Siguiente para empezar la instalación automática.
-spanish.ReadyLabel1=Listo para instalar Nexus
+spanish.ReadyLabel1=Listo para instalar RegisPro
 spanish.ReadyLabel2a=Se consultará GitHub Releases, se descargará el paquete Windows y se instalará en tu perfil de usuario.
-spanish.FinishedHeadingLabel=Nexus quedó instalado
-spanish.FinishedLabelNoIcons=Nexus se instaló correctamente en tu equipo.
-spanish.FinishedLabel=Nexus se instaló correctamente en tu equipo.
+spanish.FinishedHeadingLabel=RegisPro quedó instalado
+spanish.FinishedLabelNoIcons=RegisPro se instaló correctamente en tu equipo.
+spanish.FinishedLabel=RegisPro se instaló correctamente en tu equipo.
 
 [Tasks]
 Name: "desktopicon"; Description: "Crear un acceso directo en el escritorio"; GroupDescription: "Opciones adicionales:"; Flags: unchecked
@@ -64,7 +64,7 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{a
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Abrir Nexus"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}"
+Filename: "{app}\{#MyAppExeName}"; Description: "Abrir RegisPro"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}"
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-nexus.ps1"" -InstallDir ""{app}"""; Flags: waituntilterminated runascurrentuser; RunOnceId: "UninstallNexus"
@@ -572,13 +572,13 @@ begin
   GLastError := '';
 
   DownloadPage := CreateDownloadPage(
-    'Descargando Nexus',
+    'Descargando RegisPro',
     'Obteniendo la última versión desde GitHub Releases...',
     nil);
   DownloadPage.ShowBaseNameInsteadOfUrl := True;
 
   ProgressPage := CreateOutputProgressPage(
-    'Preparando Nexus',
+    'Preparando RegisPro',
     'Esto puede tardar unos segundos...');
 end;
 

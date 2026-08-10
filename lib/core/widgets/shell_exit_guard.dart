@@ -22,7 +22,7 @@ class ShellExitGuard extends StatelessWidget {
         final salir = await confirmDialog(
           context,
           title: 'Salir de la aplicación',
-          message: '¿Deseas cerrar Nexus?',
+          message: '¿Deseas cerrar RegisPro?',
           confirmLabel: 'Salir',
         );
         if (salir && context.mounted) {

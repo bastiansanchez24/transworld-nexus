@@ -128,7 +128,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
 
   String _textoCompartir({required String nombre}) {
     final buffer = StringBuffer()
-      ..writeln('Acceso Transworld Nexus')
+      ..writeln('Acceso Transworld RegisPro')
       ..writeln('Nombre: $nombre')
       ..writeln('Email: ${_emailController.text.trim()}');
     final pass = _passwordGenerada ?? _passwordController.text;

@@ -243,14 +243,14 @@ class UpdateService {
       final asset = release.resolveNexusAsset(forWindows: forWindows);
       if (asset == null || asset.browserDownloadUrl.isEmpty) {
         developer.log(
-          'OTA: Release sin asset Nexus (${forWindows ? 'Windows' : 'Android'}).',
+          'OTA: Release sin asset RegisPro (${forWindows ? 'Windows' : 'Android'}).',
           name: 'UpdateService',
         );
         if (manual) {
           throw GitHubReleaseException(
             forWindows
-                ? 'La última Release no incluye un paquete Windows de Nexus.'
-                : 'La última Release no incluye un APK de Nexus.',
+                ? 'La última Release no incluye un paquete Windows de RegisPro.'
+                : 'La última Release no incluye un APK de RegisPro.',
           );
         }
         return const UpdateCheckOutcome.upToDate();
@@ -264,7 +264,7 @@ class UpdateService {
           remoteVersion: remote.toString(),
           releaseName: release.name.isNotEmpty
               ? release.name
-              : 'Nexus v${remote.toString()}',
+              : 'RegisPro v${remote.toString()}',
           notes: release.notesForDisplay,
           isForced: manual ? release.isForced : true,
           asset: asset,
@@ -349,6 +349,8 @@ class UpdateService {
       message: otaUnsupportedMessage,
     );
   }
+
+  Future<bool> hasInstallPermission() => _apkInstaller.hasInstallPermission();
 
   Future<bool> openInstallSettings() => _apkInstaller.openInstallSettings();
 

@@ -16,7 +16,7 @@ void main() {
               onPressed: () async {
                 resultado = await confirmDialog(
                   context,
-                  title: 'Desinstalar Nexus',
+                  title: 'Desinstalar RegisPro',
                   message: 'Esta acción no se puede deshacer.',
                   confirmLabel: 'Desinstalar',
                   destructive: true,
@@ -33,20 +33,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
-    expect(find.text('Desinstalar Nexus'), findsOneWidget);
+    expect(find.text('Desinstalar RegisPro'), findsOneWidget);
     expect(find.text('Esta acción no se puede deshacer.'), findsOneWidget);
     expect(resultado, isNull);
 
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
 
-    expect(find.text('Desinstalar Nexus'), findsOneWidget);
+    expect(find.text('Desinstalar RegisPro'), findsOneWidget);
     expect(resultado, isNull);
 
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Desinstalar Nexus'), findsNothing);
+    expect(find.text('Desinstalar RegisPro'), findsNothing);
     expect(resultado, isFalse);
   });
 }

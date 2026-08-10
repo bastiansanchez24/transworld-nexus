@@ -141,6 +141,17 @@ class UpdateController extends StateNotifier<UpdateState> {
     final info = state.info;
     if (info == null) return;
 
+    // Android: avisar antes de descargar si no puede instalar APKs.
+    if (Platform.isAndroid && !await _service.hasInstallPermission()) {
+      if (!mounted) return;
+      state = state.copyWith(
+        status: UpdateStatus.failed,
+        needsInstallPermission: true,
+        errorMessage: ApkInstaller.installPermissionMessage,
+      );
+      return;
+    }
+
     state = state.copyWith(
       status: UpdateStatus.downloading,
       progress: 0,
@@ -245,8 +256,8 @@ class UpdateController extends StateNotifier<UpdateState> {
         state = state.copyWith(
           status: UpdateStatus.failed,
           needsInstallPermission: true,
-          errorMessage: result.message ??
-              'Se requiere permiso para instalar aplicaciones.',
+          errorMessage:
+              result.message ?? ApkInstaller.installPermissionMessage,
           downloadedFilePath: filePath,
         );
         return;
