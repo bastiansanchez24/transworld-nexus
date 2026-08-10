@@ -21,20 +21,34 @@ class ApkInstallResult {
 
 /// Instala un APK descargado abriendo el instalador del sistema.
 class ApkInstaller {
+  static const installPermissionMessage =
+      'Para actualizar RegisPro debes permitir la instalación de aplicaciones. '
+      'Activa el permiso en Configuración y vuelve a intentar.';
+
+  /// Solo consulta el estado (sin abrir pantallas del sistema).
+  Future<bool> hasInstallPermission() async {
+    if (kIsWeb || !Platform.isAndroid) return false;
+    return (await Permission.requestInstallPackages.status).isGranted;
+  }
+
   /// Comprueba / solicita permiso de instalar paquetes desconocidos.
   Future<bool> ensureInstallPermission() async {
     if (kIsWeb || !Platform.isAndroid) return false;
 
-    final status = await Permission.requestInstallPackages.status;
-    if (status.isGranted) return true;
+    if (await hasInstallPermission()) return true;
 
     final requested = await Permission.requestInstallPackages.request();
     return requested.isGranted;
   }
 
-  /// Abre los ajustes de "instalar apps desconocidas" para esta app.
+  /// Abre la pantalla del sistema para permitir instalar desde RegisPro.
+  ///
+  /// En Android 8+ es la ruta correcta (no el detalle genérico de la app).
   Future<bool> openInstallSettings() async {
     if (kIsWeb || !Platform.isAndroid) return false;
+    final status = await Permission.requestInstallPackages.request();
+    if (status.isGranted) return true;
+    // Fallback si el OEM no abre la pantalla especial.
     return openAppSettings();
   }
 
@@ -58,8 +72,7 @@ class ApkInstaller {
     if (!allowed) {
       return const ApkInstallResult(
         ApkInstallOutcome.permissionRequired,
-        message:
-            'Debes permitir que Nexus instale aplicaciones para continuar.',
+        message: installPermissionMessage,
       );
     }
 
@@ -79,8 +92,7 @@ class ApkInstaller {
       case ResultType.permissionDenied:
         return const ApkInstallResult(
           ApkInstallOutcome.permissionRequired,
-          message:
-              'Permiso denegado. Abre Ajustes y permite instalar apps desconocidas.',
+          message: installPermissionMessage,
         );
       case ResultType.fileNotFound:
         return const ApkInstallResult(

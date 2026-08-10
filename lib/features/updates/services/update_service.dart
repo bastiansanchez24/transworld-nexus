@@ -110,9 +110,7 @@ class UpdateInstallResult {
   final String? message;
 }
 
-const _prefsLastCheckMs = 'ota_last_check_ms';
 const _prefsLastRateLimitMs = 'ota_last_rate_limit_ms';
-const _checkDebounce = Duration(hours: 6);
 const _rateLimitBackoff = Duration(hours: 1);
 /// Evita martillar GitHub si el usuario cambia de app muy seguido.
 const _resumeMinInterval = Duration(seconds: 30);
@@ -189,16 +187,10 @@ class UpdateService {
           return const UpdateCheckOutcome.skipped();
         }
       } else {
+        // Al abrir home: una consulta por sesión (sin debounce de 6h).
         if (_checkedThisSession) {
           developer.log(
             'OTA: ya se consultó en esta sesión.',
-            name: 'UpdateService',
-          );
-          return const UpdateCheckOutcome.skipped();
-        }
-        if (!_shouldCheckNow()) {
-          developer.log(
-            'OTA: dentro del debounce de 6h.',
             name: 'UpdateService',
           );
           return const UpdateCheckOutcome.skipped();
@@ -211,10 +203,6 @@ class UpdateService {
 
     try {
       final release = await _source.fetchLatest();
-      await _prefs.setInt(
-        _prefsLastCheckMs,
-        DateTime.now().millisecondsSinceEpoch,
-      );
 
       if (release.prerelease) {
         developer.log(
@@ -255,28 +243,30 @@ class UpdateService {
       final asset = release.resolveNexusAsset(forWindows: forWindows);
       if (asset == null || asset.browserDownloadUrl.isEmpty) {
         developer.log(
-          'OTA: Release sin asset Nexus (${forWindows ? 'Windows' : 'Android'}).',
+          'OTA: Release sin asset RegisPro (${forWindows ? 'Windows' : 'Android'}).',
           name: 'UpdateService',
         );
         if (manual) {
           throw GitHubReleaseException(
             forWindows
-                ? 'La última Release no incluye un paquete Windows de Nexus.'
-                : 'La última Release no incluye un APK de Nexus.',
+                ? 'La última Release no incluye un paquete Windows de RegisPro.'
+                : 'La última Release no incluye un APK de RegisPro.',
           );
         }
         return const UpdateCheckOutcome.upToDate();
       }
 
+      // Check automático (home/resume): siempre obligatoria.
+      // Check manual: respeta [FORCE_UPDATE] en el body de la Release.
       return UpdateCheckOutcome.available(
         AppUpdateInfo(
           installedVersion: installed.toString(),
           remoteVersion: remote.toString(),
           releaseName: release.name.isNotEmpty
               ? release.name
-              : 'Nexus v${remote.toString()}',
+              : 'RegisPro v${remote.toString()}',
           notes: release.notesForDisplay,
-          isForced: release.isForced,
+          isForced: manual ? release.isForced : true,
           asset: asset,
           tagName: release.tagName,
         ),
@@ -360,6 +350,8 @@ class UpdateService {
     );
   }
 
+  Future<bool> hasInstallPermission() => _apkInstaller.hasInstallPermission();
+
   Future<bool> openInstallSettings() => _apkInstaller.openInstallSettings();
 
   UpdateInstallOutcome _mapApkOutcome(ApkInstallOutcome outcome) {
@@ -384,15 +376,6 @@ class UpdateService {
       case WindowsInstallOutcome.failed:
         return UpdateInstallOutcome.failed;
     }
-  }
-
-  bool _shouldCheckNow() {
-    final last = _prefs.getInt(_prefsLastCheckMs);
-    if (last == null) return true;
-    final elapsed = DateTime.now().difference(
-      DateTime.fromMillisecondsSinceEpoch(last),
-    );
-    return elapsed >= _checkDebounce;
   }
 
   bool _shouldCheckOnResume() {

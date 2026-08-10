@@ -46,12 +46,14 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
       final nombreArchivo =
           '${evento.nombre.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}_leads.xlsx';
 
-      final entregado = await entregarExportacion(
+      if (!mounted) return;
+      final entrega = await entregarExportacion(
+        context: context,
         bytes: bytes,
         nombreArchivo: nombreArchivo,
       );
-      if (!entregado || !mounted) return;
-      if (esWindowsApp) {
+      if (entrega == EntregaExportacion.cancelada || !mounted) return;
+      if (entrega == EntregaExportacion.guardada) {
         showAppSnackBar(context, 'Archivo guardado.');
       }
     } catch (e) {
@@ -69,26 +71,46 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ayuda = esWindowsApp
-        ? 'Genera un archivo .xlsx con los leads capturados en este evento. '
-            'Se abrirá el diálogo para guardarlo en tu equipo.'
-        : 'Genera un archivo .xlsx con los leads capturados en este evento. '
-            'Se abrirá el selector nativo para guardarlo o compartirlo.';
-
     return AppScaffold(
-      title: 'Exportar leads',
+      title: 'Exportar a Excel',
       body: Padding(
-        padding: AppSpacing.screen,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.screenH,
+          AppSpacing.xl,
+          AppSpacing.screenH,
+          AppSpacing.xxxl,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              ayuda,
-              style: const TextStyle(color: AppColors.textSecondary),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.border),
+                boxShadow: AppColors.shadowRest,
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SectionLabel('Exportación'),
+                  SizedBox(height: 10),
+                  Text(
+                    'Descarga la lista de leads de este evento para '
+                    'guardarla o enviarla a quien necesites.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: AppSpacing.xxl),
             PrimaryGradientButton(
-              label: _generando ? 'Generando…' : 'Exportar todos los leads',
+              label: 'Exportar todos los leads',
               loading: _generando,
               onPressed: _generando ? null : _exportar,
             ),

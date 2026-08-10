@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../providers/update_providers.dart';
 import '../services/update_platform.dart';
 import '../services/update_service.dart';
@@ -173,7 +174,42 @@ class UpdateDialog extends StatelessWidget {
                         : null,
               ),
             ],
-            if (failed && state.errorMessage != null) ...[
+            if (failed && state.needsInstallPermission) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.tintNavy,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.settings_applications_rounded,
+                      color: AppColors.primary,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        state.errorMessage ??
+                            'Para actualizar RegisPro debes permitir la instalación '
+                                'de aplicaciones. Actívalo en Configuración y '
+                                'vuelve a intentar.',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: AppColors.ink,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (failed && state.errorMessage != null) ...[
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -206,16 +242,14 @@ class UpdateDialog extends StatelessWidget {
             child: const Text('Más tarde'),
           ),
         if (failed && state.needsInstallPermission)
-          TextButton(
+          OutlinedButton(
             onPressed: onOpenSettings,
-            child: const Text('Abrir ajustes'),
+            child: const Text('Configuración'),
           ),
         if (failed)
           FilledButton(
             onPressed: onRetry,
-            child: Text(
-              state.needsInstallPermission ? 'Reintentar instalación' : 'Reintentar',
-            ),
+            child: const Text('Reintentar'),
           )
         else if (!busy)
           FilledButton(
@@ -233,6 +267,9 @@ class UpdateDialog extends StatelessWidget {
 /// [UpdateController.isDialogVisible] solo se limpia al terminar [showDialog],
 /// y [UpdateController.dismiss] se llama una sola vez al cerrar sin instalar.
 Future<void> showAppUpdateDialog(BuildContext context, WidgetRef ref) async {
+  // Nunca mostrar el modal sin sesión (login/splash/público).
+  if (ref.read(authRepositoryProvider).currentSession == null) return;
+
   final controller = ref.read(updateControllerProvider.notifier);
   if (controller.isDialogVisible) return;
   controller.markDialogVisible(true);

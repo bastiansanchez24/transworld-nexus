@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/connectivity_service.dart';
 import '../../../data/offline/sync_queue_service.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/github_release_repository.dart';
 import '../services/apk_downloader.dart';
 import '../services/apk_installer.dart';
@@ -53,6 +54,8 @@ class UpdateController extends StateNotifier<UpdateState> {
 
   Future<void> _checkAutomatic({required bool onResume}) async {
     if (!otaUpdatesSupported) return;
+    // Solo con sesión: el modal de update no debe aparecer en login/splash.
+    if (_ref.read(authRepositoryProvider).currentSession == null) return;
     if (!(_ref.read(isOnlineProvider))) return;
     if (state.isBusy) return;
     if (_dialogVisible) return;
@@ -137,6 +140,17 @@ class UpdateController extends StateNotifier<UpdateState> {
   Future<void> downloadAndInstall() async {
     final info = state.info;
     if (info == null) return;
+
+    // Android: avisar antes de descargar si no puede instalar APKs.
+    if (Platform.isAndroid && !await _service.hasInstallPermission()) {
+      if (!mounted) return;
+      state = state.copyWith(
+        status: UpdateStatus.failed,
+        needsInstallPermission: true,
+        errorMessage: ApkInstaller.installPermissionMessage,
+      );
+      return;
+    }
 
     state = state.copyWith(
       status: UpdateStatus.downloading,
@@ -242,8 +256,8 @@ class UpdateController extends StateNotifier<UpdateState> {
         state = state.copyWith(
           status: UpdateStatus.failed,
           needsInstallPermission: true,
-          errorMessage: result.message ??
-              'Se requiere permiso para instalar aplicaciones.',
+          errorMessage:
+              result.message ?? ApkInstaller.installPermissionMessage,
           downloadedFilePath: filePath,
         );
         return;

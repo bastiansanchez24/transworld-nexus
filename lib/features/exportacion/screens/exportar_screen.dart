@@ -43,12 +43,14 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
       final nombreArchivo =
           '${evento.nombre.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}_${soloAcreditados ? 'acreditados' : 'registrados'}.xlsx';
 
-      final entregado = await entregarExportacion(
+      if (!mounted) return;
+      final entrega = await entregarExportacion(
+        context: context,
         bytes: bytes,
         nombreArchivo: nombreArchivo,
       );
-      if (!entregado || !mounted) return;
-      if (esWindowsApp) {
+      if (entrega == EntregaExportacion.cancelada || !mounted) return;
+      if (entrega == EntregaExportacion.guardada) {
         showAppSnackBar(context, 'Archivo guardado.');
       }
     } catch (e) {
@@ -60,12 +62,6 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ayuda = esWindowsApp
-        ? 'Genera un archivo .xlsx con los datos del evento. '
-            'Se abrirá el diálogo para guardarlo en tu equipo.'
-        : 'Genera un archivo .xlsx con los datos del evento. '
-            'Se abrirá el selector nativo para guardarlo o compartirlo.';
-
     return AppScaffold(
       title: 'Exportar a Excel',
       body: Padding(
@@ -86,14 +82,15 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
                 border: Border.all(color: AppColors.border),
                 boxShadow: AppColors.shadowRest,
               ),
-              child: Column(
+              child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SectionLabel('Exportación'),
-                  const SizedBox(height: 10),
+                  SectionLabel('Exportación'),
+                  SizedBox(height: 10),
                   Text(
-                    ayuda,
-                    style: const TextStyle(
+                    'Descarga la lista de asistentes del evento para '
+                    'guardarla o enviarla a quien necesites.',
+                    style: TextStyle(
                       fontSize: 14,
                       color: AppColors.textSecondary,
                       height: 1.45,

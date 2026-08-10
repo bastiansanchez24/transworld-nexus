@@ -42,8 +42,8 @@ class WindowsUninstaller {
         WindowsUninstallOutcome.scriptMissing,
         message:
             'No se encontró el desinstalador en $installDir. '
-            'Usa Configuración → Aplicaciones → Nexus, o vuelve a instalar '
-            'con NexusSetup.',
+            'Usa Configuración → Aplicaciones → RegisPro, o vuelve a instalar '
+            'con RegisProSetup.',
       );
     }
 

@@ -67,7 +67,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
 
   String _textoCompartir({List<String> eventoNombres = const []}) {
     final buffer = StringBuffer()
-      ..writeln('Acceso Transworld Nexus')
+      ..writeln('Acceso Transworld RegisPro')
       ..writeln('Nombre: ${_nombreController.text.trim()}')
       ..writeln('Email: ${_emailController.text.trim()}')
       ..writeln('Contraseña: ${_passwordController.text}');

@@ -1,11 +1,11 @@
 {
-    "name": "Transworld Nexus",
-    "short_name": "Transworld Nexus",
+    "name": "Transworld | RegisPro",
+    "short_name": "RegisPro",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#206591",
-    "theme_color": "#206591",
-    "description": "Transworld Nexus — registro y acreditación de eventos.",
+    "background_color": "#162B4C",
+    "theme_color": "#162B4C",
+    "description": "Transworld RegisPro — registro y acreditación de eventos.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

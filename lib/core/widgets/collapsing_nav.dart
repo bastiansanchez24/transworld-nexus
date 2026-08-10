@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/browser_theme_color.dart';
 import 'pressable.dart';
 
 enum CollapsingNavStyle { standard, home, detail }
@@ -95,110 +96,117 @@ class CollapsingNavOverlay extends StatelessWidget {
     final showActions = alwaysShowActions || titleOpacity > 0.05;
     final showBlur = bgOpacity > 0.01;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: overlayStyle,
-      child: SizedBox(
-        height: height,
-        child: Stack(
-          children: [
-            // Bloquea taps en toda la zona de la navbar; sin esto el scroll
-            // recibe toques en áreas sin widget interactivo (título, blur, etc.).
-            Positioned.fill(
-              child: AbsorbPointer(
-                child: const SizedBox.expand(),
-              ),
-            ),
-            if (showBlur)
+    final browserThemeColor = overlayStyle == SystemUiOverlayStyle.light
+        ? AppColors.primaryDeep
+        : AppColors.background;
+
+    return BrowserThemeColor(
+      color: browserThemeColor,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: overlayStyle,
+        child: SizedBox(
+          height: height,
+          child: Stack(
+            children: [
+              // Bloquea taps en toda la zona de la navbar; sin esto el scroll
+              // recibe toques en áreas sin widget interactivo (título, blur, etc.).
               Positioned.fill(
-                child: IgnorePointer(
-                  child: ClipRect(
-                    // Blur visible sin volver a sigma 22 (afectaba scroll en listas).
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: isHome
-                              ? null
-                              : AppColors.background.withValues(
-                                  alpha: 0.30 * bgOpacity,
-                                ),
-                          gradient: isHome
-                              ? LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color.fromRGBO(
-                                      12,
-                                      51,
-                                      87,
-                                      0.55 * bgOpacity,
-                                    ),
-                                    Color.fromRGBO(
-                                      23,
-                                      94,
-                                      147,
-                                      0.55 * bgOpacity,
-                                    ),
-                                  ],
-                                )
-                              : null,
-                          border: Border(
-                            bottom: BorderSide(color: borderColor, width: 1),
+                child: AbsorbPointer(
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              if (showBlur)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ClipRect(
+                      // Blur visible sin volver a sigma 22 (afectaba scroll en listas).
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: isHome
+                                ? null
+                                : AppColors.background.withValues(
+                                    alpha: 0.30 * bgOpacity,
+                                  ),
+                            gradient: isHome
+                                ? LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Color.fromRGBO(
+                                        12,
+                                        51,
+                                        87,
+                                        0.55 * bgOpacity,
+                                      ),
+                                      Color.fromRGBO(
+                                        23,
+                                        94,
+                                        147,
+                                        0.55 * bgOpacity,
+                                      ),
+                                    ],
+                                  )
+                                : null,
+                            border: Border(
+                              bottom: BorderSide(color: borderColor, width: 1),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            Positioned(
-              top: metrics.topInset + gap,
-              left: 0,
-              right: 0,
-              height: CollapsingNavMetrics.titleZone,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: (showActions && leading != null)
-                          ? Center(child: leading)
-                          : null,
-                    ),
-                    Expanded(
-                      child: Opacity(
-                        opacity: titleOpacity,
-                        child: Transform.translate(
-                          offset: Offset(0, titleTranslateY),
-                          child: Text(
-                            title,
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.2,
-                              color: titleColor,
+              Positioned(
+                top: metrics.topInset + gap,
+                left: 0,
+                right: 0,
+                height: CollapsingNavMetrics.titleZone,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: (showActions && leading != null)
+                            ? Center(child: leading)
+                            : null,
+                      ),
+                      Expanded(
+                        child: Opacity(
+                          opacity: titleOpacity,
+                          child: Transform.translate(
+                            offset: Offset(0, titleTranslateY),
+                            child: Text(
+                              title,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.2,
+                                color: titleColor,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: (showActions && trailing != null)
-                          ? Center(child: trailing)
-                          : null,
-                    ),
-                  ],
+                      SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: (showActions && trailing != null)
+                            ? Center(child: trailing)
+                            : null,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

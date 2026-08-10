@@ -26,8 +26,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   static const _holdMs = 2100.0;
   static const _holdProgress = _holdMs / _totalMs;
 
+  /// Tiempo máximo esperando sesión/perfil después del hold del logo.
+  static const _navigationTimeout = Duration(seconds: 8);
+
   late final AnimationController _controller;
   Timer? _fallbackTimer;
+  Timer? _navigationTimeoutTimer;
   var _markedReady = false;
 
   @override
@@ -36,6 +40,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _controller = AnimationController(vsync: this)
       ..addListener(_onTick)
       ..addStatusListener(_onStatus);
+    if (!showAnimatedSplash) {
+      // Web / iOS / etc.: el router no debería montar esto; si llega, no bloquear.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _markReady());
+      return;
+    }
     // Si el asset no carga (tests / fallo de I/O), no bloquear el router.
     _fallbackTimer = Timer(const Duration(milliseconds: 2500), _markReady);
   }
@@ -60,11 +69,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _markedReady = true;
     _fallbackTimer?.cancel();
     ref.read(splashReadyProvider.notifier).state = true;
+    if (!showAnimatedSplash) return;
+    // Si el redirect se queda esperando el perfil, forzar escape a login.
+    ref.read(splashNavigationTimedOutProvider.notifier).state = false;
+    _navigationTimeoutTimer = Timer(_navigationTimeout, () {
+      if (!mounted) return;
+      ref.read(splashNavigationTimedOutProvider.notifier).state = true;
+    });
   }
 
   @override
   void dispose() {
     _fallbackTimer?.cancel();
+    _navigationTimeoutTimer?.cancel();
     _controller
       ..removeListener(_onTick)
       ..removeStatusListener(_onStatus)

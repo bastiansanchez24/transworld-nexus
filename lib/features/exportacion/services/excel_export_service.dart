@@ -10,7 +10,7 @@ import '../../../data/models/registrado.dart';
 /// `XLSX.writeFile` del proyecto legado, sin depender de Electron
 /// (`window.ipcRenderer`, ver Sección 4.13/17.4 de la auditoría): la
 /// entrega del archivo la resuelve `export_file_delivery` (guardar en
-/// Windows; compartir en el resto).
+/// Windows; guardar o compartir en móvil; compartir en el resto).
 class ExcelExportService {
   const ExcelExportService();
 

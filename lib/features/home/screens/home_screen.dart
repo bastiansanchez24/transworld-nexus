@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/notificaciones_header_button.dart';
@@ -44,10 +45,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final ok = await confirmDialog(
       context,
-      title: 'Desinstalar Nexus',
+      title: 'Desinstalar RegisPro',
       message:
           'Se eliminarán la aplicación, los accesos directos y los datos '
-          'locales de Nexus en este equipo. Esta acción no se puede deshacer.',
+          'locales de RegisPro en este equipo. Esta acción no se puede deshacer.',
       confirmLabel: 'Desinstalar',
       destructive: true,
     );
@@ -80,72 +81,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ref.watch(homeFeaturedItemsProvider).valueOrNull ?? const [];
     final noLeidas = ref.watch(notificacionesNoLeidasProvider);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: UpdateChecker(
-        child: Scaffold(
-          backgroundColor: AppColors.background,
-          body: Column(
-            children: [
-              const OfflineBanner(),
-              _HeaderPerfil(
-                perfil: perfil,
-                menuAbierto: _menuCuentaAbierto,
-                featuredItems: featuredItems,
-                noLeidas: noLeidas,
-                onNotificaciones: () => context.push(RoutePaths.notificaciones),
-                onToggleMenu: () =>
-                    setState(() => _menuCuentaAbierto = !_menuCuentaAbierto),
-                onMiPerfil: () {
-                  setState(() => _menuCuentaAbierto = false);
-                  context.push(RoutePaths.perfil);
-                },
-                onActualizaciones: () {
-                  setState(() => _menuCuentaAbierto = false);
-                  context.push(RoutePaths.actualizaciones);
-                },
-                onDesinstalar: canUninstallApp ? _desinstalar : null,
-                onCerrarSesion: () =>
-                    ref.read(authRepositoryProvider).cerrarSesion(),
-              ),
-              Expanded(
-                child: RefreshIndicator(
-                  color: AppColors.primary,
-                  onRefresh: () async {
-                    ref.invalidate(homeDashboardProvider);
-                    ref.invalidate(homeFeaturedItemsProvider);
-                    ref.invalidate(eventosFijadosProvider);
-                    ref.invalidate(campanasFijadasProvider);
-                    ref.invalidate(currentPerfilProvider);
+    return BrowserThemeColor(
+      color: AppColors.primaryDeep,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.light,
+        child: UpdateChecker(
+          child: Scaffold(
+            backgroundColor: AppColors.background,
+            body: Column(
+              children: [
+                const OfflineBanner(),
+                _HeaderPerfil(
+                  perfil: perfil,
+                  menuAbierto: _menuCuentaAbierto,
+                  featuredItems: featuredItems,
+                  noLeidas: noLeidas,
+                  onNotificaciones: () =>
+                      context.push(RoutePaths.notificaciones),
+                  onToggleMenu: () =>
+                      setState(() => _menuCuentaAbierto = !_menuCuentaAbierto),
+                  onMiPerfil: () {
+                    setState(() => _menuCuentaAbierto = false);
+                    context.push(RoutePaths.perfil);
                   },
-                  child: ListView(
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-                    children: [
-                      Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 760),
-                          child: perfilAsync.when(
-                            loading: () => const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 48),
-                              child: LoadingView(),
+                  onActualizaciones: () {
+                    setState(() => _menuCuentaAbierto = false);
+                    context.push(RoutePaths.actualizaciones);
+                  },
+                  onDesinstalar: canUninstallApp ? _desinstalar : null,
+                  onCerrarSesion: () =>
+                      ref.read(authRepositoryProvider).cerrarSesion(),
+                ),
+                Expanded(
+                  child: RefreshIndicator(
+                    color: AppColors.primary,
+                    onRefresh: () async {
+                      ref.invalidate(homeDashboardProvider);
+                      ref.invalidate(homeFeaturedItemsProvider);
+                      ref.invalidate(eventosFijadosProvider);
+                      ref.invalidate(campanasFijadasProvider);
+                      ref.invalidate(currentPerfilProvider);
+                    },
+                    child: ListView(
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+                      children: [
+                        Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 760),
+                            child: perfilAsync.when(
+                              loading: () => const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 48),
+                                child: LoadingView(),
+                              ),
+                              error: (e, _) => ErrorView(
+                                message: 'No se pudo cargar tu perfil.',
+                                onRetry: () =>
+                                    ref.invalidate(currentPerfilProvider),
+                              ),
+                              data: (_) => const HomeDashboardSection(),
                             ),
-                            error: (e, _) => ErrorView(
-                              message: 'No se pudo cargar tu perfil.',
-                              onRetry: () =>
-                                  ref.invalidate(currentPerfilProvider),
-                            ),
-                            data: (_) => const HomeDashboardSection(),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

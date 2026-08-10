@@ -61,7 +61,7 @@ class WindowsInstaller {
         WindowsInstallOutcome.failed,
         message:
             'No se puede escribir en la carpeta de instalación ($installDir). '
-            'Ejecuta Nexus como administrador o instálalo en una carpeta de usuario.',
+            'Ejecuta RegisPro como administrador o instálalo en una carpeta de usuario.',
       );
     }
 
@@ -144,7 +144,7 @@ class WindowsInstaller {
         return const WindowsInstallResult(
           WindowsInstallOutcome.failed,
           message: 'El actualizador de Windows no alcanzó a iniciar. '
-              'Nexus permanecerá abierto; vuelve a intentarlo.',
+              'RegisPro permanecerá abierto; vuelve a intentarlo.',
         );
       }
 
@@ -268,12 +268,12 @@ function Start-Nexus {
   try {
     if (Test-Path -LiteralPath $exePath) {
       Start-Process -FilePath $exePath -WorkingDirectory $InstallDir
-      Write-Log ('Nexus relanzado: ' + $exePath)
+      Write-Log ('RegisPro relanzado: ' + $exePath)
     } else {
       Write-Log ('ERROR: no existe el ejecutable para relanzar: ' + $exePath)
     }
   } catch {
-    Write-Log ('ERROR al relanzar Nexus: ' + $_.Exception.Message)
+    Write-Log ('ERROR al relanzar RegisPro: ' + $_.Exception.Message)
   }
 }
 
@@ -324,7 +324,7 @@ Write-Log ('InstallDir=' + $InstallDir + ' ExeName=' + $ExeName + ' Zip=' + $Zip
 # los parámetros antes de que la app se cierre y libere sus binarios.
 try {
   Set-Content -LiteralPath $ReadyPath -Value $PID -Encoding ASCII
-  Write-Log 'Actualizador listo; esperando cierre de Nexus.'
+  Write-Log 'Actualizador listo; esperando cierre de RegisPro.'
 } catch {
   Write-Log ('ERROR creando señal de inicio: ' + $_.Exception.Message)
   exit 1

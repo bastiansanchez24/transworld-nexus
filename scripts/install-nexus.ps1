@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Instalador bootstrap de Nexus para Windows.
+  Instalador bootstrap de RegisPro para Windows.
 
 .DESCRIPTION
   Consulta la última GitHub Release, descarga windows-nexus-vX.Y.Z.zip,
@@ -22,7 +22,7 @@
   Crea un acceso directo en el escritorio.
 
 .PARAMETER Launch
-  Abre Nexus al finalizar la instalación.
+  Abre RegisPro al finalizar la instalación.
 
 .PARAMETER SkipSha256
   Omite la verificación SHA-256 del asset (solo depuración).
@@ -44,7 +44,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $ExeName = 'transworld_nexus.exe'
-$AppDisplayName = 'Nexus'
+$AppDisplayName = 'RegisPro'
 $UninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}'
 $LogPath = Join-Path $env:TEMP 'nexus-install.log'
 $UiTotalSteps = 6
@@ -74,7 +74,7 @@ function Initialize-ConsoleUi {
   } catch { }
 
   try {
-    $Host.UI.RawUI.WindowTitle = 'Nexus  ·  Instalador'
+    $Host.UI.RawUI.WindowTitle = 'RegisPro  ·  Instalador'
   } catch { }
 
   try {
@@ -232,7 +232,7 @@ function Show-InstallSuccess {
   Write-Host ((' ' * $left) + $title + (' ' * ($pad - $left))) -NoNewline -ForegroundColor Green
   Write-Host '║' -ForegroundColor DarkGreen
   Write-Host '  ║' -NoNewline -ForegroundColor DarkGreen
-  $sub = "Nexus v$Version listo para usar"
+  $sub = "RegisPro v$Version listo para usar"
   $pad2 = [math]::Max(0, ($Script:UiWidth - 2) - $sub.Length)
   $left2 = [math]::Floor($pad2 / 2)
   Write-Host ((' ' * $left2) + $sub + (' ' * ($pad2 - $left2))) -NoNewline -ForegroundColor Gray
@@ -246,7 +246,7 @@ function Show-InstallSuccess {
 
 function Write-UserError {
   param([string]$Message)
-  Write-Progress -Activity 'Instalando Nexus' -Completed -ErrorAction SilentlyContinue
+  Write-Progress -Activity 'Instalando RegisPro' -Completed -ErrorAction SilentlyContinue
   Close-UiProgressLine
   Write-Log "ERROR: $Message"
   Write-Host ''
@@ -271,7 +271,7 @@ function Start-UiProgress {
 }
 
 function Stop-UiProgress {
-  param([string]$Activity = 'Instalando Nexus')
+  param([string]$Activity = 'Instalando RegisPro')
   Write-Progress -Activity $Activity -Completed -ErrorAction SilentlyContinue
 }
 
@@ -535,7 +535,7 @@ function Remove-LegacyInstallArtifacts {
   $legacyUninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}_is1'
   $desktop = [Environment]::GetFolderPath('Desktop')
 
-  foreach ($name in @('Transworld NEXUS.lnk')) {
+  foreach ($name in @('Transworld NEXUS.lnk', 'Nexus.lnk')) {
     $shortcut = Join-Path $desktop $name
     if (Test-Path -LiteralPath $shortcut) {
       Remove-Item -LiteralPath $shortcut -Force
@@ -543,12 +543,19 @@ function Remove-LegacyInstallArtifacts {
     }
   }
 
-  foreach ($name in @('Transworld NEXUS.lnk', "$AppDisplayName.lnk")) {
+  foreach ($name in @('Transworld NEXUS.lnk', 'Nexus.lnk', "$AppDisplayName.lnk")) {
     $shortcut = Join-Path $legacyStartMenuDir $name
     if (Test-Path -LiteralPath $shortcut) {
       Remove-Item -LiteralPath $shortcut -Force
       Write-Log ('Acceso directo legacy eliminado: ' + $shortcut)
     }
+  }
+
+  $legacyNexusStartMenuDir = Join-Path ([Environment]::GetFolderPath('Programs')) 'Nexus'
+  if (($legacyNexusStartMenuDir -ne (Join-Path ([Environment]::GetFolderPath('Programs')) $AppDisplayName)) -and
+      (Test-Path -LiteralPath $legacyNexusStartMenuDir)) {
+    Remove-Item -LiteralPath $legacyNexusStartMenuDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Log ('Carpeta de menú Inicio legacy eliminada: ' + $legacyNexusStartMenuDir)
   }
 
   if (Test-Path -LiteralPath $legacyStartMenuDir) {
@@ -634,7 +641,7 @@ try {
     -Uri $asset.browser_download_url `
     -Destination $zipPath `
     -TotalBytes $assetSizeBytes `
-    -Activity 'Descargando Nexus'
+    -Activity 'Descargando RegisPro'
 
   Write-UiOk -Message ('Descarga completa · {0}' -f (Format-Megabytes $downloadedBytes))
   Write-Log ('Descarga completada: ' + $zipPath)
@@ -662,7 +669,7 @@ try {
   }
 
   Write-UiStep -Message 'Extrayendo e instalando archivos'
-  Expand-NexusPackage -ZipPath $zipPath -Destination $InstallDir -Activity 'Instalando Nexus'
+  Expand-NexusPackage -ZipPath $zipPath -Destination $InstallDir -Activity 'Instalando RegisPro'
   Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
   Write-UiOk -Message ('Archivos instalados en {0}' -f $InstallDir)
 
@@ -672,7 +679,7 @@ try {
   Install-UninstallScript -Destination $InstallDir
 
   $startMenuRoot = [Environment]::GetFolderPath('Programs')
-  $startMenuDir = Join-Path $startMenuRoot 'Nexus'
+  $startMenuDir = Join-Path $startMenuRoot $AppDisplayName
   New-Item -ItemType Directory -Path $startMenuDir -Force | Out-Null
 
   $exePath = Join-Path $InstallDir $ExeName
@@ -708,9 +715,9 @@ try {
   Write-Log 'Instalación completada.'
 
   if ($Launch) {
-    Write-UiWait -Message 'Iniciando Nexus...'
+    Write-UiWait -Message 'Iniciando RegisPro...'
     Start-Process -FilePath $exePath -WorkingDirectory $InstallDir
-    Write-Log 'Nexus iniciado.'
+    Write-Log 'RegisPro iniciado.'
   }
 
   Write-Log '--- Fin de instalación bootstrap ---'
