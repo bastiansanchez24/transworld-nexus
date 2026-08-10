@@ -172,7 +172,7 @@ class _NotificacionesScreenState extends ConsumerState<NotificacionesScreen> {
             return const EmptyStateView(
               icon: Symbols.notifications_rounded,
               message:
-                  'Sin notificaciones.',
+                  'Sin notificaciones',
             );
           }
 

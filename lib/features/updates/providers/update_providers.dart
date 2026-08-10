@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/connectivity_service.dart';
 import '../../../data/offline/sync_queue_service.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/github_release_repository.dart';
 import '../services/apk_downloader.dart';
 import '../services/apk_installer.dart';
@@ -53,6 +54,8 @@ class UpdateController extends StateNotifier<UpdateState> {
 
   Future<void> _checkAutomatic({required bool onResume}) async {
     if (!otaUpdatesSupported) return;
+    // Solo con sesión: el modal de update no debe aparecer en login/splash.
+    if (_ref.read(authRepositoryProvider).currentSession == null) return;
     if (!(_ref.read(isOnlineProvider))) return;
     if (state.isBusy) return;
     if (_dialogVisible) return;

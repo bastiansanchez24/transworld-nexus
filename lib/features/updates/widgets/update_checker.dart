@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../data/repositories/auth_repository.dart';
 import '../providers/update_providers.dart';
 import '../services/update_service.dart';
 import 'update_dialog.dart';
@@ -9,6 +10,7 @@ import 'update_dialog.dart';
 /// plano, y muestra el diálogo cuando hay una actualización disponible.
 ///
 /// Debe vivir bajo una ruta autenticada (p. ej. [HomeScreen]).
+/// El modal solo se muestra con sesión activa.
 class UpdateChecker extends ConsumerStatefulWidget {
   const UpdateChecker({super.key, required this.child});
 
@@ -23,6 +25,9 @@ class _UpdateCheckerState extends ConsumerState<UpdateChecker>
   bool _started = false;
   bool _wasBackgrounded = false;
 
+  bool get _isLoggedIn =>
+      ref.read(authRepositoryProvider).currentSession != null;
+
   @override
   void initState() {
     super.initState();
@@ -30,6 +35,7 @@ class _UpdateCheckerState extends ConsumerState<UpdateChecker>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _started) return;
       _started = true;
+      if (!_isLoggedIn) return;
       ref.read(updateControllerProvider.notifier).checkOnLaunch();
     });
   }
@@ -51,7 +57,7 @@ class _UpdateCheckerState extends ConsumerState<UpdateChecker>
         // Transición típica al salir/entrar; no dispara check.
         break;
       case AppLifecycleState.resumed:
-        if (!_wasBackgrounded || !mounted) return;
+        if (!_wasBackgrounded || !mounted || !_isLoggedIn) return;
         _wasBackgrounded = false;
         ref.read(updateControllerProvider.notifier).checkOnResume();
     }
@@ -60,6 +66,8 @@ class _UpdateCheckerState extends ConsumerState<UpdateChecker>
   @override
   Widget build(BuildContext context) {
     ref.listen<UpdateState>(updateControllerProvider, (prev, next) {
+      if (!_isLoggedIn) return;
+
       final becameAvailable = next.status == UpdateStatus.available &&
           prev?.status != UpdateStatus.available;
       final controller = ref.read(updateControllerProvider.notifier);

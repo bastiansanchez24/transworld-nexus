@@ -120,9 +120,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     (_, _) => refreshListenable.refresh(),
   );
   ref.listen(splashReadyProvider, (_, _) => refreshListenable.refresh());
+  ref.listen(
+    splashNavigationTimedOutProvider,
+    (_, _) => refreshListenable.refresh(),
+  );
 
   return GoRouter(
-    initialLocation: RoutePaths.splash,
+    initialLocation:
+        showAnimatedSplash ? RoutePaths.splash : RoutePaths.login,
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final location = state.matchedLocation;
@@ -139,38 +144,48 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final esPublica = _esRutaPublica(location);
       final enSplash = location == RoutePaths.splash;
       final splashReady = ref.read(splashReadyProvider);
+      final splashTimedOut = ref.read(splashNavigationTimedOutProvider);
 
-      // No cortar el draw-on del logo en arranques rápidos.
-      if (!splashReady) {
+      // Animación solo en Windows/Android. Web (y el resto) no montan splash.
+      if (showAnimatedSplash && !splashReady) {
         return enSplash ? null : RoutePaths.splash;
       }
 
-      if (session == null && !esPublica) {
+      if (session == null && (!esPublica || enSplash)) {
         return RoutePaths.login;
       }
 
       final perfilAsync = ref.read(currentPerfilProvider);
       final perfil = perfilAsync.valueOrNull;
 
-      // Perfil aún no resuelto: no abrir shell ni mostrar login.
-      // - isLoading: splash
-      // - hasError: sin fila / fallo de red → cerrar sesión → login
-      if (session != null && perfil == null && !esPublica && !enSplash) {
-        if (perfilAsync.hasError && !perfilAsync.isLoading) {
+      // Sesión viva sin perfil: en desktop/móvil esperar en splash; en web
+      // quedarse en login. Escapes: error de perfil o timeout del splash.
+      // No tratar AsyncData(null) inmediato como error: justo tras login
+      // currentSession puede ir un frame delante del rebuild del provider.
+      if (session != null && perfil == null && (!esPublica || enSplash)) {
+        if ((perfilAsync.hasError && !perfilAsync.isLoading) ||
+            splashTimedOut) {
           Future.microtask(() => authClient.signOut());
           return RoutePaths.login;
         }
-        return RoutePaths.splash;
+        if (showAnimatedSplash) {
+          return enSplash ? null : RoutePaths.splash;
+        }
+        // Web: no abrir shell ni splash; login mientras resuelve el perfil.
+        return RoutePaths.login;
       }
 
       if (session != null && (location == RoutePaths.login || enSplash)) {
         if (perfil == null) {
-          if (perfilAsync.hasError && !perfilAsync.isLoading) {
+          if ((perfilAsync.hasError && !perfilAsync.isLoading) ||
+              splashTimedOut) {
             Future.microtask(() => authClient.signOut());
             return RoutePaths.login;
           }
-          // Sesión viva, perfil cargando: quedarse en splash (no en login).
-          return enSplash ? null : RoutePaths.splash;
+          if (showAnimatedSplash) {
+            return enSplash ? null : RoutePaths.splash;
+          }
+          return enSplash ? RoutePaths.login : null;
         }
         if (perfil.isExterno) {
           final eventoId = ref.read(externoEventoIdProvider);

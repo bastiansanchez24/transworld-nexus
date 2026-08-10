@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../providers/update_providers.dart';
 import '../services/update_platform.dart';
 import '../services/update_service.dart';
@@ -233,6 +234,9 @@ class UpdateDialog extends StatelessWidget {
 /// [UpdateController.isDialogVisible] solo se limpia al terminar [showDialog],
 /// y [UpdateController.dismiss] se llama una sola vez al cerrar sin instalar.
 Future<void> showAppUpdateDialog(BuildContext context, WidgetRef ref) async {
+  // Nunca mostrar el modal sin sesión (login/splash/público).
+  if (ref.read(authRepositoryProvider).currentSession == null) return;
+
   final controller = ref.read(updateControllerProvider.notifier);
   if (controller.isDialogVisible) return;
   controller.markDialogVisible(true);

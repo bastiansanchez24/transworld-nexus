@@ -78,6 +78,8 @@ dependencies:
   firebase_messaging: ^16.0.1
   flutter_local_notifications: ^19.4.1
   lottie: 3.2.0
+  web: ^1.1.1
+  file_saver: ^0.4.0
 
 # Windows: skip upstream native FFI plugin (ATL + MSVC coroutine).
 # Inbox in-app is unaffected; system toasts are Android/iOS only.

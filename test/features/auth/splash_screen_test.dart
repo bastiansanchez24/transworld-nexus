@@ -21,8 +21,9 @@ void main() {
     expect(scaffold.backgroundColor, AppColors.background);
     expect(find.byType(Lottie), findsOneWidget);
 
-    // Completa el fallback timer para no dejar timers pendientes.
+    // Completa fallback + timeout de navegación para no dejar timers pendientes.
     await tester.pump(const Duration(milliseconds: 2500));
+    await tester.pump(const Duration(seconds: 8));
   });
 
   testWidgets('splashReady becomes true after fallback timeout', (tester) async {
@@ -43,5 +44,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 2500));
 
     expect(container.read(splashReadyProvider), isTrue);
+    expect(container.read(splashNavigationTimedOutProvider), isFalse);
+
+    await tester.pump(const Duration(seconds: 8));
+    expect(container.read(splashNavigationTimedOutProvider), isTrue);
   });
 }

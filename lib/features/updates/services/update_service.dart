@@ -110,9 +110,7 @@ class UpdateInstallResult {
   final String? message;
 }
 
-const _prefsLastCheckMs = 'ota_last_check_ms';
 const _prefsLastRateLimitMs = 'ota_last_rate_limit_ms';
-const _checkDebounce = Duration(hours: 6);
 const _rateLimitBackoff = Duration(hours: 1);
 /// Evita martillar GitHub si el usuario cambia de app muy seguido.
 const _resumeMinInterval = Duration(seconds: 30);
@@ -189,16 +187,10 @@ class UpdateService {
           return const UpdateCheckOutcome.skipped();
         }
       } else {
+        // Al abrir home: una consulta por sesión (sin debounce de 6h).
         if (_checkedThisSession) {
           developer.log(
             'OTA: ya se consultó en esta sesión.',
-            name: 'UpdateService',
-          );
-          return const UpdateCheckOutcome.skipped();
-        }
-        if (!_shouldCheckNow()) {
-          developer.log(
-            'OTA: dentro del debounce de 6h.',
             name: 'UpdateService',
           );
           return const UpdateCheckOutcome.skipped();
@@ -211,10 +203,6 @@ class UpdateService {
 
     try {
       final release = await _source.fetchLatest();
-      await _prefs.setInt(
-        _prefsLastCheckMs,
-        DateTime.now().millisecondsSinceEpoch,
-      );
 
       if (release.prerelease) {
         developer.log(
@@ -268,6 +256,8 @@ class UpdateService {
         return const UpdateCheckOutcome.upToDate();
       }
 
+      // Check automático (home/resume): siempre obligatoria.
+      // Check manual: respeta [FORCE_UPDATE] en el body de la Release.
       return UpdateCheckOutcome.available(
         AppUpdateInfo(
           installedVersion: installed.toString(),
@@ -276,7 +266,7 @@ class UpdateService {
               ? release.name
               : 'Nexus v${remote.toString()}',
           notes: release.notesForDisplay,
-          isForced: release.isForced,
+          isForced: manual ? release.isForced : true,
           asset: asset,
           tagName: release.tagName,
         ),
@@ -384,15 +374,6 @@ class UpdateService {
       case WindowsInstallOutcome.failed:
         return UpdateInstallOutcome.failed;
     }
-  }
-
-  bool _shouldCheckNow() {
-    final last = _prefs.getInt(_prefsLastCheckMs);
-    if (last == null) return true;
-    final elapsed = DateTime.now().difference(
-      DateTime.fromMillisecondsSinceEpoch(last),
-    );
-    return elapsed >= _checkDebounce;
   }
 
   bool _shouldCheckOnResume() {

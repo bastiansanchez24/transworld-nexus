@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/browser_theme_color.dart';
 import 'offline_banner.dart';
 import 'pressable.dart';
 
@@ -32,28 +33,31 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        floatingActionButton: floatingActionButton,
-        body: Column(
-          children: [
-            const OfflineBanner(),
-            _PushHeader(
-              title: title,
-              titleWidget: titleWidget,
-              actions: actions,
-            ),
-            if (headerBottom != null)
-              _constrained(
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: headerBottom!,
-                ),
+    return BrowserThemeColor(
+      color: AppColors.background,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          floatingActionButton: floatingActionButton,
+          body: Column(
+            children: [
+              const OfflineBanner(),
+              _PushHeader(
+                title: title,
+                titleWidget: titleWidget,
+                actions: actions,
               ),
-            Expanded(child: _constrained(body)),
-          ],
+              if (headerBottom != null)
+                _constrained(
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                    child: headerBottom!,
+                  ),
+                ),
+              Expanded(child: _constrained(body)),
+            ],
+          ),
         ),
       ),
     );

@@ -16,15 +16,30 @@ final authStateChangesProvider = StreamProvider<AuthState>((ref) {
 /// Perfil de negocio (tabla `perfiles`) del usuario autenticado, con su rol
 /// ya resuelto. `null` si no hay sesión activa.
 ///
-/// Espera el stream de auth (no solo `currentSession`) para no devolver un
-/// `AsyncData(null)` stale que el router pueda confundir con "sin perfil"
-/// justo después del login y cerrar la sesión en silencio.
+/// Se re-ejecuta en cada emisión de auth. Si el stream aún no tiene valor,
+/// se usa `currentSession` (p. ej. sesión ya restaurada en web) para no
+/// dejar el splash esperando un future que nunca completa.
 final currentPerfilProvider = FutureProvider<Perfil?>((ref) async {
-  final authState = await ref.watch(authStateChangesProvider.future);
-  if (authState.session == null) return null;
+  final authAsync = ref.watch(authStateChangesProvider);
+  final session = authAsync.valueOrNull?.session ??
+      ref.read(authRepositoryProvider).currentSession;
 
-  final perfil =
-      await ref.watch(authRepositoryProvider).obtenerPerfilActual();
+  if (session == null) {
+    // Primer frame antes de initialSession: esperar la primera emisión.
+    if (!authAsync.hasValue && !authAsync.hasError) {
+      final authState = await ref.watch(authStateChangesProvider.future);
+      if (authState.session == null) return null;
+      final perfil =
+          await ref.read(authRepositoryProvider).obtenerPerfilActual();
+      if (perfil == null) {
+        throw Exception('No se encontró el perfil del usuario.');
+      }
+      return perfil;
+    }
+    return null;
+  }
+
+  final perfil = await ref.read(authRepositoryProvider).obtenerPerfilActual();
   if (perfil == null) {
     throw Exception('No se encontró el perfil del usuario.');
   }
