@@ -9,6 +9,11 @@ class SupabaseTables {
   static const perfiles = 'perfiles';
   static const eventos = 'eventos';
   static const registrados = 'registrados';
+
+  /// Bloques horarios / cupos de un evento (formulario público de registro).
+  /// `registrados.bloque_id` apunta acá; el nombre visible es `etiqueta`.
+  static const eventoBloques = 'evento_bloques';
+
   static const usuariosEventos = 'usuarios_eventos';
 
   /// Eventos del módulo Capturador de leads (tabla independiente de [eventos]).

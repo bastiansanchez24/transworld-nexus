@@ -1,5 +1,6 @@
 import 'dart:io' show exit;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -368,8 +369,10 @@ class _MenuCuenta extends StatelessWidget {
           ),
           const Divider(height: 1, indent: 56, color: AppColors.divider),
           _CuentaTile(
-            icon: Symbols.system_update_rounded,
-            label: 'Actualizaciones',
+            icon: kIsWeb
+                ? Symbols.history_rounded
+                : Symbols.system_update_rounded,
+            label: kIsWeb ? 'Historial de versiones' : 'Actualizaciones',
             onTap: onActualizaciones,
           ),
           if (onDesinstalar != null) ...[

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -15,6 +17,16 @@ import '../../../data/repositories/github_release_repository.dart';
 import '../providers/update_providers.dart';
 import '../services/update_service.dart';
 import '../widgets/update_dialog.dart';
+
+IconData get _platformVersionIcon {
+  final desktop = defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.linux;
+  if (kIsWeb || desktop) {
+    return Symbols.desktop_windows_rounded;
+  }
+  return Symbols.smartphone_rounded;
+}
 
 class ActualizacionesScreen extends StatelessWidget {
   const ActualizacionesScreen({super.key});
@@ -207,7 +219,7 @@ class _ActualizacionesBodyState extends ConsumerState<_ActualizacionesBody> {
         : _versionLabel(_installedVersion);
 
     return AppScaffold(
-      title: 'Actualizaciones',
+      title: kIsWeb ? 'Historial de versiones' : 'Actualizaciones',
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: _loadCurrentReleaseInfo,
@@ -339,14 +351,14 @@ class _CurrentVersionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
+          Row(
             children: [
               Icon(
-                Symbols.system_update_rounded,
+                _platformVersionIcon,
                 color: AppColors.primary,
               ),
-              SizedBox(width: 10),
-              Expanded(
+              const SizedBox(width: 10),
+              const Expanded(
                 child: Text(
                   'Versión instalada',
                   style: TextStyle(
@@ -422,23 +434,25 @@ class _CurrentVersionCard extends StatelessWidget {
                 height: 1.4,
               ),
             ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: checking ? null : onBuscar,
-            icon: checking
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Symbols.search_rounded, size: 20),
-            label: Text(
-              checking ? 'Buscando…' : 'Buscar actualizaciones',
+          if (!kIsWeb) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: checking ? null : onBuscar,
+              icon: checking
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Symbols.search_rounded, size: 20),
+              label: Text(
+                checking ? 'Buscando…' : 'Buscar actualizaciones',
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

@@ -3,12 +3,25 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart' as xls;
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/excel_sheet_styler.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/offline/pending_photo_store.dart';
 
 /// Genera el `.xlsx` de leads capturados en un evento.
 class ExcelExportLeadsService {
   const ExcelExportLeadsService();
+
+  static const _cabeceras = [
+    'Nombre completo',
+    'Empresa',
+    'Cargo',
+    'Teléfono',
+    'Email',
+    'Descripción',
+    'Capturado por',
+    'Fotos (URLs)',
+    'Fecha de captura',
+  ];
 
   /// Una foto capturada sin conexión todavía no tiene URL pública: en la
   /// celda iría una ruta del dispositivo que no le sirve a nadie.
@@ -28,15 +41,7 @@ class ExcelExportLeadsService {
     final sheet = excel[tituloHoja];
 
     sheet.appendRow([
-      xls.TextCellValue('Nombre completo'),
-      xls.TextCellValue('Empresa'),
-      xls.TextCellValue('Cargo'),
-      xls.TextCellValue('Teléfono'),
-      xls.TextCellValue('Email'),
-      xls.TextCellValue('Descripción'),
-      xls.TextCellValue('Capturado por'),
-      xls.TextCellValue('Fotos (URLs)'),
-      xls.TextCellValue('Fecha de captura'),
+      for (final h in _cabeceras) xls.TextCellValue(h),
     ]);
 
     final formatoFecha = DateFormat('dd/MM/yyyy HH:mm');
@@ -56,8 +61,14 @@ class ExcelExportLeadsService {
       ]);
     }
 
+    ExcelSheetStyler.aplicar(
+      sheet: sheet,
+      cabeceras: _cabeceras,
+      filasDatos: leads.length,
+    );
+
     final bytes = excel.encode();
     if (bytes == null) throw Exception('No se pudo generar el archivo Excel.');
-    return Uint8List.fromList(bytes);
+    return ExcelSheetStyler.congelarPrimeraFila(Uint8List.fromList(bytes));
   }
 }

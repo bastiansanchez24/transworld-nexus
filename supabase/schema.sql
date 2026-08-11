@@ -150,6 +150,40 @@ CREATE TABLE IF NOT EXISTS public.registrados (
   CONSTRAINT registrados_evento_email_unique UNIQUE (evento_id, email)
 );
 
+-- Bloques de asistencia por evento (cupos / franjas del formulario público).
+-- `registrados.bloque_id` referencia esta tabla; el nombre visible es `etiqueta`.
+CREATE TABLE IF NOT EXISTS public.evento_bloques (
+  id           uuid NOT NULL DEFAULT gen_random_uuid(),
+  evento_id    uuid NOT NULL REFERENCES public.eventos (id) ON DELETE CASCADE,
+  etiqueta     text NOT NULL,
+  orden        int NOT NULL DEFAULT 0,
+  cupo_maximo  int,
+  activo       boolean NOT NULL DEFAULT true,
+  created_at   timestamptz NOT NULL DEFAULT timezone('utc', now()),
+  CONSTRAINT evento_bloques_pkey PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evento_bloques_evento_id
+  ON public.evento_bloques (evento_id, orden);
+
+-- Columna añadida después del CREATE original de registrados: idempotente
+-- para bases ya desplegadas.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'registrados'
+      AND column_name = 'bloque_id'
+  ) THEN
+    ALTER TABLE public.registrados
+      ADD COLUMN bloque_id uuid REFERENCES public.evento_bloques (id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_registrados_bloque_id
+  ON public.registrados (bloque_id);
+
 -- Autorizaciones usuario↔evento (M:N). Para rol global `externo`,
 -- `rol_evento = 'externo'` define los eventos operables; el activo/preferido
 -- sigue en perfiles.evento_asignado_id.
@@ -910,6 +944,32 @@ CREATE POLICY rpe_registrados_insert_publico ON public.registrados
     AND ingresado_por IS NULL
     AND EXISTS (SELECT 1 FROM public.eventos e WHERE e.id = evento_id AND e.activo = true)
   );
+
+-- --- evento_bloques: lectura para resolver etiqueta en listados/export;
+-- el formulario público (anon) también necesita ver los bloques activos.
+ALTER TABLE public.evento_bloques ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS rpe_evento_bloques_select ON public.evento_bloques;
+CREATE POLICY rpe_evento_bloques_select ON public.evento_bloques
+  FOR SELECT TO authenticated
+  USING (
+    public.rpe_is_internal_user()
+    OR public.rpe_externo_tiene_evento(evento_id)
+  );
+
+DROP POLICY IF EXISTS rpe_evento_bloques_select_publico ON public.evento_bloques;
+CREATE POLICY rpe_evento_bloques_select_publico ON public.evento_bloques
+  FOR SELECT TO anon
+  USING (
+    (activo = true OR activo IS NULL)
+    AND EXISTS (SELECT 1 FROM public.eventos e WHERE e.id = evento_id AND e.activo = true)
+  );
+
+DROP POLICY IF EXISTS rpe_evento_bloques_write ON public.evento_bloques;
+CREATE POLICY rpe_evento_bloques_write ON public.evento_bloques
+  FOR ALL TO authenticated
+  USING (public.rpe_can_create_content())
+  WITH CHECK (public.rpe_can_create_content());
 
 -- --- usuarios_eventos ---
 DROP POLICY IF EXISTS rpe_usuarios_eventos_select ON public.usuarios_eventos;

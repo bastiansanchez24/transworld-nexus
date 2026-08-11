@@ -17,10 +17,15 @@ class RegistradosRepository implements SyncExecutor {
   @override
   String get table => SupabaseTables.registrados;
 
+  /// Incluye el join a `evento_bloques` para resolver la etiqueta del bloque
+  /// (el Excel y la UI no deben mostrar el UUID de `bloque_id`).
+  static const _selectConBloque =
+      '*, ${SupabaseTables.eventoBloques}(etiqueta)';
+
   Future<List<Registrado>> listarPorEvento(String eventoId) async {
     final rows = await _client
         .from(SupabaseTables.registrados)
-        .select()
+        .select(_selectConBloque)
         .eq('evento_id', eventoId)
         .order('created_at', ascending: false);
     return rows.map(Registrado.fromMap).toList();
@@ -32,7 +37,7 @@ class RegistradosRepository implements SyncExecutor {
   Future<Registrado?> obtenerPorIdEnEvento(String id, String eventoId) async {
     final row = await _client
         .from(SupabaseTables.registrados)
-        .select()
+        .select(_selectConBloque)
         .eq('id', id)
         .eq('evento_id', eventoId)
         .maybeSingle();

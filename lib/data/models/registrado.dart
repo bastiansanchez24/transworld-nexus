@@ -23,6 +23,8 @@ class Registrado {
     this.empresa,
     this.cargo,
     this.telefono,
+    this.bloqueId,
+    this.bloqueEtiqueta,
     this.origen = OrigenRegistro.app,
     this.ingresadoPor,
     this.emailConfirmacionEnviado = false,
@@ -41,6 +43,13 @@ class Registrado {
   final String? cargo;
   final String? telefono;
 
+  /// FK a `public.evento_bloques`. El nombre visible para UI/Excel es
+  /// [bloqueEtiqueta] (`evento_bloques.etiqueta`), no este id.
+  final String? bloqueId;
+
+  /// Etiqueta del bloque resuelta vía join / caché. Vacía si no hay bloque.
+  final String? bloqueEtiqueta;
+
   /// Origen lógico del registro (app / excel / formulario público).
   /// Solo se persiste si la columna `origen` existe en `public.registrados`.
   final OrigenRegistro origen;
@@ -57,6 +66,16 @@ class Registrado {
   /// el id, con `esIdSoloLocal` (ver data/offline/sync_queue_service.dart).
   final bool pendienteDeSincronizar;
 
+  /// Resuelve `evento_bloques.etiqueta` desde el join de PostgREST o desde
+  /// el campo plano que guarda la caché offline.
+  static String? _etiquetaDesdeMap(Map<String, dynamic> map) {
+    final nested = map['evento_bloques'];
+    if (nested is Map) {
+      return nested['etiqueta'] as String?;
+    }
+    return map['bloque_etiqueta'] as String?;
+  }
+
   factory Registrado.fromMap(Map<String, dynamic> map) {
     return Registrado(
       id: map['id'] as String,
@@ -69,6 +88,8 @@ class Registrado {
       empresa: map['empresa'] as String?,
       cargo: map['cargo'] as String?,
       telefono: map['telefono'] as String?,
+      bloqueId: map['bloque_id'] as String?,
+      bloqueEtiqueta: _etiquetaDesdeMap(map),
       origen: OrigenRegistro.fromString(map['origen'] as String?),
       ingresadoPor: map['ingresado_por'] as String?,
       emailConfirmacionEnviado:
@@ -90,6 +111,7 @@ class Registrado {
       'empresa': empresa,
       'cargo': cargo,
       'telefono': telefono,
+      'bloque_id': bloqueId,
       'ingresado_por': ingresadoPor,
     };
   }
@@ -110,6 +132,8 @@ class Registrado {
       'empresa': empresa,
       'cargo': cargo,
       'telefono': telefono,
+      'bloque_id': bloqueId,
+      'bloque_etiqueta': bloqueEtiqueta,
       'origen': origen.name,
       'ingresado_por': ingresadoPor,
       'email_confirmacion_enviado': emailConfirmacionEnviado,
@@ -143,6 +167,8 @@ class Registrado {
       empresa: texto('empresa', empresa),
       cargo: texto('cargo', cargo),
       telefono: texto('telefono', telefono),
+      bloqueId: texto('bloque_id', bloqueId),
+      bloqueEtiqueta: texto('bloque_etiqueta', bloqueEtiqueta),
       origen: origen,
       ingresadoPor: ingresadoPor,
       emailConfirmacionEnviado: booleano(
@@ -162,6 +188,8 @@ class Registrado {
     String? telefono,
     String? rut,
     String? patente,
+    String? bloqueId,
+    String? bloqueEtiqueta,
     bool? pendienteDeSincronizar,
   }) {
     return Registrado(
@@ -175,6 +203,8 @@ class Registrado {
       empresa: empresa ?? this.empresa,
       cargo: cargo ?? this.cargo,
       telefono: telefono ?? this.telefono,
+      bloqueId: bloqueId ?? this.bloqueId,
+      bloqueEtiqueta: bloqueEtiqueta ?? this.bloqueEtiqueta,
       origen: origen,
       ingresadoPor: ingresadoPor,
       emailConfirmacionEnviado: emailConfirmacionEnviado,

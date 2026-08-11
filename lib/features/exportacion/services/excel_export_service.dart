@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart' as xls;
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/excel_sheet_styler.dart';
 import '../../../data/models/registrado.dart';
 
 /// Genera el `.xlsx` de descarga (registrados o acreditados) a partir de
@@ -14,6 +15,19 @@ import '../../../data/models/registrado.dart';
 class ExcelExportService {
   const ExcelExportService();
 
+  static const _cabeceras = [
+    'Nombre y Apellido',
+    'Email',
+    'Empresa',
+    'Cargo',
+    'Teléfono',
+    'RUT / RUC',
+    'Patente',
+    'Bloque',
+    'Acreditado',
+    'Fecha de registro',
+  ];
+
   Uint8List generar(List<Registrado> registrados, {required String tituloHoja}) {
     final excel = xls.Excel.createExcel();
     final nombreHojaOriginal = excel.getDefaultSheet()!;
@@ -21,15 +35,7 @@ class ExcelExportService {
     final sheet = excel[tituloHoja];
 
     sheet.appendRow([
-      xls.TextCellValue('Nombre y Apellido'),
-      xls.TextCellValue('Email'),
-      xls.TextCellValue('Empresa'),
-      xls.TextCellValue('Cargo'),
-      xls.TextCellValue('Teléfono'),
-      xls.TextCellValue('RUT / RUC'),
-      xls.TextCellValue('Patente'),
-      xls.TextCellValue('Acreditado'),
-      xls.TextCellValue('Fecha de registro'),
+      for (final h in _cabeceras) xls.TextCellValue(h),
     ]);
 
     final formatoFecha = DateFormat('dd/MM/yyyy HH:mm');
@@ -42,13 +48,21 @@ class ExcelExportService {
         xls.TextCellValue(r.telefono ?? ''),
         xls.TextCellValue(r.rut ?? ''),
         xls.TextCellValue(r.patente ?? ''),
+        // Nombre del bloque (`evento_bloques.etiqueta`), no el UUID.
+        xls.TextCellValue(r.bloqueEtiqueta ?? ''),
         xls.TextCellValue(r.acreditado ? 'Sí' : 'No'),
         xls.TextCellValue(r.createdAt != null ? formatoFecha.format(r.createdAt!) : ''),
       ]);
     }
 
+    ExcelSheetStyler.aplicar(
+      sheet: sheet,
+      cabeceras: _cabeceras,
+      filasDatos: registrados.length,
+    );
+
     final bytes = excel.encode();
     if (bytes == null) throw Exception('No se pudo generar el archivo Excel.');
-    return Uint8List.fromList(bytes);
+    return ExcelSheetStyler.congelarPrimeraFila(Uint8List.fromList(bytes));
   }
 }

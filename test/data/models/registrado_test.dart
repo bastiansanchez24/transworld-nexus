@@ -15,6 +15,8 @@ void main() {
     empresa: 'Transworld',
     cargo: 'Jefe de operaciones',
     telefono: '+56 9 8765 4321',
+    bloqueId: 'bloque-1',
+    bloqueEtiqueta: 'Bloque 1: Talleres y Feria',
     origen: OrigenRegistro.excel,
     ingresadoPor: 'perfil-9',
     emailConfirmacionEnviado: true,
@@ -41,11 +43,29 @@ void main() {
       expect(revivido.empresa, registrado.empresa);
       expect(revivido.cargo, registrado.cargo);
       expect(revivido.telefono, registrado.telefono);
+      expect(revivido.bloqueId, registrado.bloqueId);
+      expect(revivido.bloqueEtiqueta, registrado.bloqueEtiqueta);
       expect(revivido.origen, OrigenRegistro.excel);
       expect(revivido.ingresadoPor, registrado.ingresadoPor);
       expect(revivido.emailConfirmacionEnviado, isTrue);
       expect(revivido.createdAt, registrado.createdAt);
       expect(revivido.pendienteDeSincronizar, isFalse);
+    });
+  });
+
+  group('Registrado.fromMap con join de bloque', () {
+    test('lee la etiqueta anidada de evento_bloques', () {
+      final desdeJoin = Registrado.fromMap({
+        'id': 'id-1',
+        'evento_id': 'evento-1',
+        'nombre_completo': 'Ana Díaz',
+        'email': 'ana@empresa.cl',
+        'bloque_id': 'bloque-9',
+        'evento_bloques': {'etiqueta': 'Bloques 1 y 2'},
+      });
+
+      expect(desdeJoin.bloqueId, 'bloque-9');
+      expect(desdeJoin.bloqueEtiqueta, 'Bloques 1 y 2');
     });
   });
 
