@@ -127,7 +127,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       physics: const BouncingScrollPhysics(
                         parent: AlwaysScrollableScrollPhysics(),
                       ),
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        20,
+                        20,
+                        GlassNavTokens.contentBottomInset(context),
+                      ),
                       children: [
                         Center(
                           child: ConstrainedBox(

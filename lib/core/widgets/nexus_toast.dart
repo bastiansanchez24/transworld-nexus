@@ -18,7 +18,8 @@ class NexusToast {
     final reduce = AppMotion.reduceMotion(context);
 
     _entry = OverlayEntry(
-      builder: (context) => _ToastBanner(message: message, reduceMotion: reduce),
+      builder: (context) =>
+          _ToastBanner(message: message, reduceMotion: reduce),
     );
     overlay.insert(_entry!);
     _timer = Timer(AppMotion.toast, hide);
@@ -63,8 +64,10 @@ class _ToastBannerState extends State<_ToastBanner>
 
     _opacity = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1)
-            .chain(CurveTween(curve: AppMotion.ease)),
+        tween: Tween<double>(
+          begin: 0,
+          end: 1,
+        ).chain(CurveTween(curve: AppMotion.ease)),
         weight: enterEnd * 100,
       ),
       TweenSequenceItem(
@@ -72,16 +75,20 @@ class _ToastBannerState extends State<_ToastBanner>
         weight: (exitStart - enterEnd) * 100,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0)
-            .chain(CurveTween(curve: AppMotion.ease)),
+        tween: Tween<double>(
+          begin: 1,
+          end: 0,
+        ).chain(CurveTween(curve: AppMotion.ease)),
         weight: (1 - exitStart) * 100,
       ),
     ]).animate(_ctrl);
 
     _offset = TweenSequence<Offset>([
       TweenSequenceItem(
-        tween: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
-            .chain(CurveTween(curve: AppMotion.ease)),
+        tween: Tween<Offset>(
+          begin: const Offset(0, 0.3),
+          end: Offset.zero,
+        ).chain(CurveTween(curve: AppMotion.ease)),
         weight: enterEnd * 100,
       ),
       TweenSequenceItem(
@@ -92,8 +99,10 @@ class _ToastBannerState extends State<_ToastBanner>
 
     _scale = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.96, end: 1)
-            .chain(CurveTween(curve: AppMotion.ease)),
+        tween: Tween<double>(
+          begin: 0.96,
+          end: 1,
+        ).chain(CurveTween(curve: AppMotion.ease)),
         weight: enterEnd * 100,
       ),
       TweenSequenceItem(
@@ -113,7 +122,10 @@ class _ToastBannerState extends State<_ToastBanner>
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom + 72;
+    final bottom =
+        MediaQuery.paddingOf(context).bottom +
+        GlassNavTokens.occupiedHeight +
+        AppSpacing.sm;
     return Positioned(
       left: 20,
       right: 20,
@@ -129,7 +141,10 @@ class _ToastBannerState extends State<_ToastBanner>
                 color: Colors.transparent,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.ink,
                       borderRadius: BorderRadius.circular(AppRadius.pill),

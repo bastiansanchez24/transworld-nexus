@@ -48,43 +48,23 @@ class AppColors {
   );
 
   static const shadowRest = [
-    BoxShadow(
-      color: Color(0x0D14253F),
-      offset: Offset(0, 1),
-      blurRadius: 2,
-    ),
+    BoxShadow(color: Color(0x0D14253F), offset: Offset(0, 1), blurRadius: 2),
   ];
 
   static const shadowLifted = [
-    BoxShadow(
-      color: Color(0x1A14253F),
-      offset: Offset(0, 6),
-      blurRadius: 18,
-    ),
+    BoxShadow(color: Color(0x1A14253F), offset: Offset(0, 6), blurRadius: 18),
   ];
 
   static const shadowFab = [
-    BoxShadow(
-      color: Color(0x66203E6D),
-      offset: Offset(0, 10),
-      blurRadius: 24,
-    ),
+    BoxShadow(color: Color(0x66203E6D), offset: Offset(0, 10), blurRadius: 24),
   ];
 
   static const shadowHero = [
-    BoxShadow(
-      color: Color(0x4714253F),
-      offset: Offset(0, 10),
-      blurRadius: 26,
-    ),
+    BoxShadow(color: Color(0x4714253F), offset: Offset(0, 10), blurRadius: 26),
   ];
 
   static const shadowToast = [
-    BoxShadow(
-      color: Color(0x5914253F),
-      offset: Offset(0, 12),
-      blurRadius: 28,
-    ),
+    BoxShadow(color: Color(0x5914253F), offset: Offset(0, 12), blurRadius: 28),
   ];
 
   static const avatarPairs = <(Color, Color)>[
@@ -94,6 +74,54 @@ class AppColors {
     (Color(0xFFF0EBF8), Color(0xFF6A4FA3)),
     (Color(0xFFFAE9E6), Color(0xFFC03A2B)),
   ];
+}
+
+/// Tokens de la bottom navbar Liquid Glass (ver `flutter_liquid_glass_navbar_specs.md`).
+///
+/// El acento activo usa navy corporativo en lugar del violeta de la referencia.
+abstract final class GlassNavTokens {
+  static const height = 72.0;
+  static const radius = 26.0;
+
+  static const horizontalMargin = 14.0;
+
+  /// Aire extra bajo el panel, **además** del home indicator / safe area.
+  static const bottomMargin = 16.0;
+  static const innerPaddingH = 6.0;
+  static const innerPaddingV = 6.0;
+
+  static const blurSigma = 20.0;
+
+  static const iconSize = 24.0;
+  static const iconLabelGap = 3.0;
+  static const labelSize = 12.0;
+
+  static const transitionDuration = Duration(milliseconds: 180);
+  static const transitionCurve = Curves.easeOutCubic;
+
+  /// Panel + margen de flotación, sin safe area.
+  static const occupiedHeight = height + bottomMargin;
+
+  /// Espacio al final del contenido para que no quede bajo la barra flotante.
+  static double contentBottomInset(BuildContext context) =>
+      occupiedHeight + MediaQuery.viewPaddingOf(context).bottom + AppSpacing.xl;
+
+  static Color activeColor(Brightness brightness) =>
+      brightness == Brightness.dark ? AppColors.accent : AppColors.primary;
+
+  static Color inactiveColor(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? const Color.fromRGBO(255, 255, 255, 0.90)
+      : AppColors.ink;
+
+  static Color glassTint(Brightness brightness) => brightness == Brightness.dark
+      ? const Color.fromRGBO(22, 43, 76, 0.38)
+      : const Color.fromRGBO(255, 255, 255, 0.36);
+
+  static Color borderColor(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? const Color.fromRGBO(255, 255, 255, 0.10)
+      : const Color.fromRGBO(20, 37, 63, 0.08);
 }
 
 class AppSpacing {
@@ -113,12 +141,12 @@ class AppSpacing {
   static const sectionGap = 22.0;
   static const cardGap = 10.0;
 
-  /// Altura del contenido de la tab bar del shell (sin safe area).
-  static const shellTabBarHeight = 64.0;
+  /// Altura visual del panel de vidrio de la tab bar (sin márgenes ni safe area).
+  static const shellTabBarHeight = GlassNavTokens.height;
 
   /// Holgura inferior del FAB en pantallas dentro del shell anidado.
   /// El Scaffold interno no ve el [bottomNavigationBar] del padre.
-  static const shellFabBottom = shellTabBarHeight + sm;
+  static const shellFabBottom = GlassNavTokens.occupiedHeight + sm;
 }
 
 class AppRadius {
@@ -285,9 +313,15 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.input),
-          borderSide: const BorderSide(color: AppColors.primaryLight, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryLight,
+            width: 1.5,
+          ),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 15,
+          vertical: 13,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -351,9 +385,7 @@ class AppTheme {
         ),
         margin: EdgeInsets.zero,
       ),
-      listTileTheme: const ListTileThemeData(
-        iconColor: AppColors.primary,
-      ),
+      listTileTheme: const ListTileThemeData(iconColor: AppColors.primary),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AppColors.primary,
       ),
@@ -365,21 +397,22 @@ class AppTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.surface.withValues(alpha: 0.94),
+        backgroundColor: Colors.transparent,
         indicatorColor: Colors.transparent,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final active = states.contains(WidgetState.selected);
           return TextStyle(
-            fontSize: 10.5,
-            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-            color: active ? AppColors.primaryDeep : AppColors.textTertiary,
+            fontSize: GlassNavTokens.labelSize,
+            fontWeight: active ? FontWeight.w500 : FontWeight.w400,
+            height: 1.1,
+            color: active ? AppColors.primary : AppColors.ink,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final active = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: active ? AppColors.primary : AppColors.textTertiary,
-            size: 24,
+            color: active ? AppColors.primary : AppColors.ink,
+            size: GlassNavTokens.iconSize,
           );
         }),
       ),

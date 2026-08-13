@@ -46,6 +46,7 @@ class CollapsingNavOverlay extends StatelessWidget {
     this.leading,
     this.trailing,
     this.alwaysShowActions = false,
+
     /// Distancia de scroll hasta que el buscador toca el título colapsado.
     /// Alinea fade del título/blur con ese momento.
     this.collapseExtent = 48,
@@ -116,9 +117,7 @@ class CollapsingNavOverlay extends StatelessWidget {
               // Bloquea taps en toda la zona de la navbar; sin esto el scroll
               // recibe toques en áreas sin widget interactivo (título, blur, etc.).
               Positioned.fill(
-                child: AbsorbPointer(
-                  child: const SizedBox.expand(),
-                ),
+                child: AbsorbPointer(child: const SizedBox.expand()),
               ),
               if (showBlur)
                 Positioned.fill(
@@ -284,10 +283,7 @@ class PinnedSearchActionButton extends StatelessWidget {
 /// Ancla al inicio del bloque fijable; reporta la extensión del título grande
 /// (scroll necesario para que el buscador toque la navbar colapsada).
 class _PinThresholdAnchor extends StatefulWidget {
-  const _PinThresholdAnchor({
-    required this.topSpacer,
-    required this.onExtent,
-  });
+  const _PinThresholdAnchor({required this.topSpacer, required this.onExtent});
 
   final double topSpacer;
   final ValueChanged<double> onExtent;
@@ -330,8 +326,7 @@ class _PinThresholdAnchorState extends State<_PinThresholdAnchor> {
     final viewport = RenderAbstractViewport.maybeOf(ro);
     if (viewport == null) return;
 
-    final offsetToViewportTop =
-        viewport.getOffsetToReveal(ro, 0.0).offset;
+    final offsetToViewportTop = viewport.getOffsetToReveal(ro, 0.0).offset;
     final extent = (offsetToViewportTop - widget.topSpacer).clamp(0.0, 400.0);
     if (_lastReported != null && (extent - _lastReported!).abs() <= 0.5) {
       return;
@@ -364,6 +359,7 @@ class CollapsingScrollScaffold extends StatefulWidget {
     this.alwaysShowActions = false,
     this.topBanner,
     this.onRefresh,
+
     /// Si cambia (p. ej. query/filtro), el scroll vuelve arriba para no dejar
     /// filas “volando” con el offset anterior.
     this.scrollResetToken,
@@ -456,8 +452,9 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
     }
-    _scrollY.value =
-        _scrollController.hasClients ? _scrollController.offset : 0;
+    _scrollY.value = _scrollController.hasClients
+        ? _scrollController.offset
+        : 0;
   }
 
   void _onCollapseExtent(double extent) {
@@ -484,9 +481,7 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
       ),
       // Solo reserva espacio: el buscador real vive en el Stack para no
       // recrear el TextField al fijar/desfijar (y al resetear el scroll).
-      SliverToBoxAdapter(
-        child: SizedBox(height: widget.pinnedContentHeight),
-      ),
+      SliverToBoxAdapter(child: SizedBox(height: widget.pinnedContentHeight)),
     ];
   }
 
@@ -506,8 +501,10 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
     final topSpacer = [
       SliverToBoxAdapter(child: SizedBox(height: metrics.barHeight)),
     ];
-    final bottomSpacer = const [
-      SliverToBoxAdapter(child: SizedBox(height: 120)),
+    final bottomSpacer = [
+      SliverToBoxAdapter(
+        child: SizedBox(height: GlassNavTokens.contentBottomInset(context)),
+      ),
     ];
 
     // Un único CustomScrollView (sin NestedScrollView): con contenido más corto
@@ -518,20 +515,13 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
     if (!hasPinnedContent) {
       contentSlivers = widget.slivers;
     } else {
-      contentSlivers = [
-        ..._pinnedHeaderSlivers(metrics),
-        ..._listSlivers(),
-      ];
+      contentSlivers = [..._pinnedHeaderSlivers(metrics), ..._listSlivers()];
     }
 
     final scrollView = CustomScrollView(
       controller: _scrollController,
       physics: _scrollPhysics,
-      slivers: [
-        ...topSpacer,
-        ...contentSlivers,
-        ...bottomSpacer,
-      ],
+      slivers: [...topSpacer, ...contentSlivers, ...bottomSpacer],
     );
 
     if (widget.onRefresh != null) {
@@ -581,10 +571,8 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
                       valueListenable: _scrollY,
                       builder: (context, scrollY, _) {
                         final overlayH =
-                            hasPinnedContent &&
-                                scrollY >= _collapseExtent
-                            ? metrics.barHeight +
-                                  widget.pinnedContentHeight
+                            hasPinnedContent && scrollY >= _collapseExtent
+                            ? metrics.barHeight + widget.pinnedContentHeight
                             : metrics.barHeight;
                         return CollapsingNavOverlay(
                           scrollOffset: scrollY,
@@ -609,9 +597,12 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
                         // Sin tope superior: en overscroll (pull-to-refresh,
                         // scrollY negativo) acompaña al contenido hacia abajo en
                         // vez de quedarse clavado mientras el resto hace rubber-band.
-                        final top = metrics.barHeight +
-                            (_collapseExtent - scrollY)
-                                .clamp(0.0, double.infinity);
+                        final top =
+                            metrics.barHeight +
+                            (_collapseExtent - scrollY).clamp(
+                              0.0,
+                              double.infinity,
+                            );
                         return Stack(
                           children: [
                             Positioned(
