@@ -114,12 +114,33 @@ class AuthRepository {
   /// ID del usuario autenticado (`auth.users.id`).
   String? get currentUserId => _client.auth.currentUser?.id;
 
-  /// Cambia el rol de otro usuario. Usa el RPC `rpe_actualizar_rol_usuario`
-  /// (`SECURITY DEFINER`) en vez de un `UPDATE` directo sobre `perfiles.rol`.
+  /// Cambia el rol de otro usuario. Se conserva para clientes antiguos; la
+  /// edición actual usa [configurarAccesoUsuario] para cambiar rol y eventos
+  /// de manera atómica.
   Future<void> actualizarRolUsuario(String usuarioId, String nuevoRol) async {
     await _client.rpc(
       SupabaseRpc.actualizarRolUsuario,
       params: {'usuario_id': usuarioId, 'nuevo_rol': nuevoRol},
+    );
+  }
+
+  /// Configura en una sola transacción el rol global y sus eventos asignados.
+  ///
+  /// `user` admite una lista vacía (acceso operativo suspendido); `externo`
+  /// exige al menos un evento. Admin y organizador conservan acceso global y
+  /// el backend elimina cualquier asignación residual.
+  Future<void> configurarAccesoUsuario({
+    required String usuarioId,
+    required String nuevoRol,
+    required List<String> eventoIds,
+  }) async {
+    await _client.rpc(
+      SupabaseRpc.configurarAccesoUsuario,
+      params: {
+        'p_usuario_id': usuarioId,
+        'p_nuevo_rol': nuevoRol,
+        'p_evento_ids': eventoIds,
+      },
     );
   }
 
@@ -192,6 +213,9 @@ class AuthRepository {
         if (eventoId != null && eventoId.isNotEmpty) eventoId,
       }.toList();
 
+      // Asegura access token fresco antes de Edge Functions con verify_jwt.
+      await _client.auth.refreshSession();
+
       final response = await _client.functions.invoke(
         SupabaseFunctions.crearUsuario,
         body: {
@@ -233,6 +257,35 @@ class AuthRepository {
     }
   }
 
+  /// IDs de usuarios (`user` / `externo`) autorizados en un evento.
+  Future<List<String>> listarUsuariosAutorizadosEvento(String eventoId) async {
+    final rows = await _client
+        .from(SupabaseTables.usuariosEventos)
+        .select('usuario_id')
+        .eq('evento_id', eventoId);
+    return rows
+        .map((r) => r['usuario_id'] as String?)
+        .whereType<String>()
+        .toList();
+  }
+
+  /// Reemplaza el set de usuarios autorizados de un evento.
+  ///
+  /// Solo admite roles `user` y `externo`. Admin y organizador conservan
+  /// acceso global y no se listan aquí.
+  Future<void> configurarAccesoEvento({
+    required String eventoId,
+    required List<String> usuarioIds,
+  }) async {
+    await _client.rpc(
+      SupabaseRpc.configurarAccesoEvento,
+      params: {
+        'p_evento_id': eventoId,
+        'p_usuario_ids': usuarioIds,
+      },
+    );
+  }
+
   /// IDs de eventos autorizados para un usuario (tabla `usuarios_eventos`).
   Future<List<String>> listarEventosAutorizadosUsuario(String usuarioId) async {
     final rows = await _client
@@ -245,7 +298,18 @@ class AuthRepository {
         .toList();
   }
 
-  /// Reemplaza el set de eventos autorizados de un externo (RPC admin).
+  /// Reemplaza el set de eventos autorizados del rol actual `user`/`externo`.
+  Future<void> sincronizarEventosUsuario(
+    String usuarioId,
+    List<String> eventoIds,
+  ) async {
+    await _client.rpc(
+      SupabaseRpc.sincronizarEventosUsuario,
+      params: {'p_usuario_id': usuarioId, 'p_evento_ids': eventoIds},
+    );
+  }
+
+  /// Wrapper legado para clientes que aún sincronizan solo externos.
   Future<void> sincronizarEventosExterno(
     String usuarioId,
     List<String> eventoIds,
@@ -270,26 +334,36 @@ class AuthRepository {
   Future<RegenerarPasswordResultado> regenerarPasswordUsuario(
     String usuarioId,
   ) async {
-    final response = await _client.functions.invoke(
-      SupabaseFunctions.regenerarPasswordUsuario,
-      body: {'user_id': usuarioId},
-    );
+    try {
+      await _client.auth.refreshSession();
 
-    if (response.status != 200) {
-      final data = response.data;
-      final message = data is Map && data['error'] != null
-          ? data['error'].toString()
-          : 'No se pudo regenerar la contraseña.';
-      throw Exception(message);
+      final response = await _client.functions.invoke(
+        SupabaseFunctions.regenerarPasswordUsuario,
+        body: {'user_id': usuarioId},
+      );
+
+      if (response.status != 200) {
+        final data = response.data;
+        final message = data is Map && data['error'] != null
+            ? data['error'].toString()
+            : 'No se pudo regenerar la contraseña.';
+        throw Exception(message);
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      return RegenerarPasswordResultado(
+        userId: data['user_id'] as String,
+        email: data['email'] as String,
+        password: data['password'] as String,
+        nombreCompleto: data['nombre_completo'] as String? ?? '',
+      );
+    } on FunctionException catch (e) {
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        throw Exception(details['error'].toString());
+      }
+      rethrow;
     }
-
-    final data = response.data as Map<String, dynamic>;
-    return RegenerarPasswordResultado(
-      userId: data['user_id'] as String,
-      email: data['email'] as String,
-      password: data['password'] as String,
-      nombreCompleto: data['nombre_completo'] as String? ?? '',
-    );
   }
 }
 

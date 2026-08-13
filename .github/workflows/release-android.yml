@@ -90,7 +90,7 @@ jobs:
             echo "GITHUB_OWNER=bastiansanchez24"
             echo "GITHUB_REPO=transworld_project_nexus"
             echo "UPDATE_CHANNEL=stable"
-            echo "APP_PUBLIC_BASE_URL=https://intranet.transworld.cl"
+            echo "APP_PUBLIC_BASE_URL=https://eventos.transworld.cl"
           } > .env
 
       - name: Build APK (release)
@@ -169,7 +169,7 @@ jobs:
             echo "GITHUB_OWNER=bastiansanchez24"
             echo "GITHUB_REPO=transworld_project_nexus"
             echo "UPDATE_CHANNEL=stable"
-            echo "APP_PUBLIC_BASE_URL=https://intranet.transworld.cl"
+            echo "APP_PUBLIC_BASE_URL=https://eventos.transworld.cl"
           } > .env
 
       - name: Build Windows (release)
@@ -253,7 +253,7 @@ jobs:
             echo "GITHUB_OWNER=bastiansanchez24"
             echo "GITHUB_REPO=transworld_project_nexus"
             echo "UPDATE_CHANNEL=stable"
-            echo "APP_PUBLIC_BASE_URL=https://intranet.transworld.cl"
+            echo "APP_PUBLIC_BASE_URL=https://eventos.transworld.cl"
           } > .env
 
       - name: Build Web (release)

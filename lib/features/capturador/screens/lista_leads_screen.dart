@@ -9,6 +9,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -19,13 +20,14 @@ import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
+import '../../../data/models/lead_write_result.dart';
 import '../../../data/offline/pending_photo_store.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/leads_repository.dart';
-import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capturador_providers.dart';
 import '../widgets/avatar_lead.dart';
+import '../widgets/foto_lead_identidad.dart';
 
 enum _FiltroLead { todos, mios, deOtros }
 
@@ -38,7 +40,16 @@ class ListaLeadsScreen extends ConsumerStatefulWidget {
   ConsumerState<ListaLeadsScreen> createState() => _ListaLeadsScreenState();
 }
 
-class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen> {
+class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
+    with RefreshOnVisible {
+  @override
+  String get refreshWhenLocation => RoutePaths.verLeads(widget.eventoId);
+
+  @override
+  void onBecomeVisible() {
+    ref.invalidate(leadsPorEventoProvider(widget.eventoId));
+  }
+
   static const _filtroLabels = {
     _FiltroLead.todos: 'Todos',
     _FiltroLead.mios: 'Mis leads',
@@ -113,43 +124,50 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen> {
     );
   }
 
-  Widget _buildPinnedControls() {
+  Widget _buildPinnedControls({required bool canViewAllLeads}) {
     return Column(
       children: [
         SizedBox(height: 48, child: _buildSearchField()),
-        const SizedBox(height: 4),
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: FilterChipBar(
-                options: _filtroLabels.values.toList(),
-                selected: _filtroLabels[_filtro]!,
-                onSelected: (label) {
-                  final filtro = _filtroLabels.entries
-                      .firstWhere((entry) => entry.value == label)
-                      .key;
-                  setState(() => _filtro = filtro);
-                },
+        if (canViewAllLeads) ...[
+          const SizedBox(height: 4),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: FilterChipBar(
+                  options: _filtroLabels.values.toList(),
+                  selected: _filtroLabels[_filtro]!,
+                  onSelected: (label) {
+                    final filtro = _filtroLabels.entries
+                        .firstWhere((entry) => entry.value == label)
+                        .key;
+                    setState(() => _filtro = filtro);
+                  },
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }
 
-  Widget _buildHeader({int? total, int? mios}) {
+  Widget _buildHeader({int? total, int? mios, bool canViewAllLeads = true}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Leads', style: Theme.of(context).textTheme.displaySmall),
+        Text(
+          canViewAllLeads ? 'Leads' : 'Mis leads',
+          style: Theme.of(context).textTheme.displaySmall,
+        ),
         const SizedBox(height: 2),
         Text(
           total == null
               ? 'Leads capturados del evento'
-              : '$total ${total == 1 ? 'lead' : 'leads'} · $mios míos',
+              : canViewAllLeads
+              ? '$total ${total == 1 ? 'lead' : 'leads'} · $mios míos'
+              : '$total ${total == 1 ? 'lead propio' : 'leads propios'}',
           style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
         ),
       ],
@@ -160,17 +178,18 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen> {
   Widget build(BuildContext context) {
     final leadsAsync = ref.watch(leadsPorEventoProvider(widget.eventoId));
     final perfilId = ref.watch(currentPerfilProvider).valueOrNull?.id;
+    final canViewAllLeads = ref.watch(canViewAllLeadsProvider);
 
     return CollapsingScrollScaffold(
-      title: 'Leads',
+      title: canViewAllLeads ? 'Leads' : 'Mis leads',
       topBanner: const OfflineBanner(),
       alwaysShowActions: true,
       overlayLeading: CollapsingNavButton(
         icon: Symbols.arrow_back_ios_new_rounded,
         onTap: () => context.pop(),
       ),
-      pinnedContent: _buildPinnedControls(),
-      pinnedContentHeight: 112,
+      pinnedContent: _buildPinnedControls(canViewAllLeads: canViewAllLeads),
+      pinnedContentHeight: canViewAllLeads ? 112 : 60,
       scrollResetToken: '$_busqueda|$_filtro',
       onRefresh: () async =>
           ref.invalidate(leadsPorEventoProvider(widget.eventoId)),
@@ -179,18 +198,21 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: leadsAsync.when(
-              loading: () => _buildHeader(),
-              error: (_, _) => _buildHeader(),
+              skipLoadingOnReload: true,
+              loading: () => _buildHeader(canViewAllLeads: canViewAllLeads),
+              error: (_, _) => _buildHeader(canViewAllLeads: canViewAllLeads),
               data: (leads) => _buildHeader(
                 total: leads.length,
                 mios: perfilId == null
                     ? 0
                     : leads.where((lead) => lead.perfilId == perfilId).length,
+                canViewAllLeads: canViewAllLeads,
               ),
             ),
           ),
         ),
         ...leadsAsync.when(
+          skipLoadingOnReload: true,
           loading: () => [const SliverFillRemaining(child: LoadingView())],
           error: (_, _) => [
             SliverFillRemaining(
@@ -203,11 +225,14 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen> {
           ],
           data: (leads) {
             final filtrados = leads.where((lead) {
-              if (_filtro == _FiltroLead.mios &&
+              if (!canViewAllLeads && lead.perfilId != perfilId) return false;
+              if (canViewAllLeads &&
+                  _filtro == _FiltroLead.mios &&
                   (perfilId == null || lead.perfilId != perfilId)) {
                 return false;
               }
-              if (_filtro == _FiltroLead.deOtros &&
+              if (canViewAllLeads &&
+                  _filtro == _FiltroLead.deOtros &&
                   perfilId != null &&
                   lead.perfilId == perfilId) {
                 return false;
@@ -414,8 +439,7 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     _fotos = lead.fotosUrls;
   }
 
-  String? get _urlFotoGuardada =>
-      _fotos.firstWhereOrNull((u) => !esFotoLocal(u));
+  String? get _fotoGuardada => _fotos.firstWhereOrNull((u) => !esFotoLocal(u));
 
   /// Marcador de la foto que todavía vive en disco, si la hay.
   String? get _marcadorPendiente => _fotos.firstWhereOrNull(esFotoLocal);
@@ -443,15 +467,23 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     final nueva = _fotoNueva;
     if (nueva == null) return _fotos;
 
-    if (isOnline) {
-      return [
-        await ref.read(storageRepositoryProvider).subirFotoLead(nueva, 'jpg'),
-      ];
-    }
-
     final store = ref.read(pendingPhotoStoreProvider);
-    if (!store.disponible) return const [];
-    return [await store.guardar(nueva)];
+    if (store.disponible) return [await store.guardar(nueva)];
+    return const [];
+  }
+
+  String? _validarEmail(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return 'Requerido';
+    final partes = value.split('@');
+    if (partes.length != 2 ||
+        partes.first.isEmpty ||
+        !partes.last.contains('.') ||
+        partes.last.startsWith('.') ||
+        partes.last.endsWith('.')) {
+      return 'Ingresa un email válido';
+    }
+    return null;
   }
 
   /// Borra del disco las fotos pendientes que la edición dejó fuera, para no
@@ -474,12 +506,16 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
 
     final email = valorOpcional(_emailController);
     final isOnline = ref.read(isOnlineProvider);
+    var fotosPreparadas = const <String>[];
+    Map<String, dynamic>? cambiosPreparados;
 
     try {
-      final fotoDescartada = _fotoNueva != null &&
+      final fotoDescartada =
+          _fotoNueva != null &&
           !isOnline &&
           !ref.read(pendingPhotoStoreProvider).disponible;
       final fotos = await _resolverFotos(isOnline: isOnline);
+      fotosPreparadas = fotos;
 
       final cambios = <String, dynamic>{
         'nombre_completo': _nombreController.text.trim(),
@@ -488,37 +524,127 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
         'telefono': valorOpcional(_telefonoController),
         'email': email?.toLowerCase(),
         'descripcion': valorOpcional(_descripcionController),
-        'fotos_urls': fotos,
+        if (_fotoNueva != null &&
+            ref.read(pendingPhotoStoreProvider).disponible)
+          'fotos_urls': fotos,
+        if (_fotoNueva == null && _fotos.isEmpty)
+          'fotos_urls': const <String>[],
       };
+      cambiosPreparados = cambios;
 
       // Un lead que solo existe en la cola todavía no tiene fila en el
       // servidor: su edición se fusiona en el insert pendiente (lo resuelve
       // `enqueueUpdate`) en vez de intentar un UPDATE que fallaría.
+      LeadWriteResult? result;
+      var fotoPendienteDeSync = false;
       if (isOnline && !esIdSoloLocal(widget.leadId)) {
-        await ref
-            .read(leadsRepositoryProvider)
-            .actualizar(widget.leadId, cambios);
+        try {
+          result = await ref
+              .read(leadsRepositoryProvider)
+              .actualizar(widget.leadId, cambios);
+        } on LeadPhotoPendingException catch (error) {
+          result = error.result;
+          await ref
+              .read(syncQueueServiceProvider.notifier)
+              .enqueueUpdate(
+                table: SupabaseTables.leads,
+                entityId: widget.leadId,
+                changes: {'fotos_urls': error.fotosPendientes},
+              );
+          fotoPendienteDeSync = true;
+        }
       } else {
-        await ref.read(syncQueueServiceProvider.notifier).enqueueUpdate(
+        await ref
+            .read(syncQueueServiceProvider.notifier)
+            .enqueueUpdate(
               table: SupabaseTables.leads,
               entityId: widget.leadId,
               changes: cambios,
             );
+      }
+      if (result?.esDuplicado == true) {
+        final store = ref.read(pendingPhotoStoreProvider);
+        for (final foto in fotos.where(esFotoLocal)) {
+          if (!_fotos.contains(foto)) await store.borrar(foto);
+        }
+        if (mounted) {
+          showAppSnackBar(context, result!.mensajeDuplicado, isError: true);
+        }
+        return;
+      }
+
+      if (result?.guardado == true &&
+          _fotoNueva != null &&
+          !ref.read(pendingPhotoStoreProvider).disponible &&
+          isOnline) {
+        try {
+          await ref
+              .read(leadsRepositoryProvider)
+              .adjuntarFotoBytes(result!.leadId, _fotoNueva!);
+        } catch (_) {
+          if (mounted) {
+            showAppSnackBar(
+              context,
+              'Cambios guardados; foto pendiente, reintenta',
+              isError: true,
+            );
+          }
+          return;
+        }
       }
       await _borrarFotosLocalesHuerfanas(fotos);
       ref.invalidate(leadsPorEventoProvider(widget.eventoId));
       if (mounted) {
         showAppSnackBar(
           context,
-          fotoDescartada
+          fotoPendienteDeSync
+              ? 'Cambios guardados. La foto se sincronizará automáticamente.'
+              : fotoDescartada
               ? 'Cambios guardados, pero sin la foto: se necesita conexión '
-                  'para adjuntarla.'
+                    'para adjuntarla.'
               : 'Cambios guardados.',
           isError: fotoDescartada,
         );
-        context.pop();
+        volverALista(context, RoutePaths.verLeads(widget.eventoId));
       }
     } catch (e) {
+      if (isOnline &&
+          cambiosPreparados != null &&
+          !esIdSoloLocal(widget.leadId) &&
+          isNetworkTransportError(e)) {
+        try {
+          await ref
+              .read(syncQueueServiceProvider.notifier)
+              .enqueueUpdate(
+                table: SupabaseTables.leads,
+                entityId: widget.leadId,
+                changes: cambiosPreparados,
+              );
+          ref.invalidate(leadsPorEventoProvider(widget.eventoId));
+          if (mounted) {
+            final fotoNoPersistible =
+                _fotoNueva != null &&
+                !ref.read(pendingPhotoStoreProvider).disponible;
+            showAppSnackBar(
+              context,
+              fotoNoPersistible
+                  ? 'Sin conexión real. Los cambios quedaron guardados '
+                        'localmente, pero la foto requiere conexión.'
+                  : 'Sin conexión real. Los cambios quedaron guardados '
+                        'localmente.',
+              isError: fotoNoPersistible,
+            );
+            volverALista(context, RoutePaths.verLeads(widget.eventoId));
+          }
+          return;
+        } catch (_) {
+          // Conserva el error de transporte original y limpia la foto nueva.
+        }
+      }
+      final store = ref.read(pendingPhotoStoreProvider);
+      for (final foto in fotosPreparadas.where(esFotoLocal)) {
+        if (!_fotos.contains(foto)) await store.borrar(foto);
+      }
       if (mounted) {
         showAppSnackBar(
           context,
@@ -543,14 +669,12 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     try {
       await ref.read(leadsRepositoryProvider).eliminar(widget.leadId);
       ref.invalidate(leadsPorEventoProvider(widget.eventoId));
-      if (mounted) context.pop();
+      if (mounted) {
+        volverALista(context, RoutePaths.verLeads(widget.eventoId));
+      }
     } catch (_) {
       if (mounted) {
-        showAppSnackBar(
-          context,
-          'No se pudo eliminar el lead.',
-          isError: true,
-        );
+        showAppSnackBar(context, 'No se pudo eliminar el lead.', isError: true);
       }
     }
   }
@@ -599,8 +723,15 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
           final marcadorPendiente = _marcadorPendiente;
           final bytesPendientes = marcadorPendiente == null
               ? null
-              : ref.watch(fotoPendienteBytesProvider(marcadorPendiente))
-                  .valueOrNull;
+              : ref
+                    .watch(fotoPendienteBytesProvider(marcadorPendiente))
+                    .valueOrNull;
+          final fotoGuardada = _fotoGuardada;
+          final urlFotoGuardada = fotoGuardada == null
+              ? null
+              : fotoGuardada.startsWith('leads/')
+              ? ref.watch(fotoLeadUrlProvider(fotoGuardada)).valueOrNull
+              : fotoGuardada;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(
@@ -614,71 +745,52 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      AvatarInitials(name: lead.nombreCompleto, size: 56),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              lead.nombreCompleto,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.ink,
-                              ),
-                            ),
-                            if ((lead.vendedorNombre ?? '').isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                'Capturado por ${lead.vendedorNombre}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  const SectionLabel('Foto'),
-                  const SizedBox(height: 10),
-                  SelectorImagen(
-                    bytes: _fotoNueva ?? bytesPendientes,
-                    urlExistente: _urlFotoGuardada,
-                    enabled: !_guardando,
-                    aspectRatio: kProporcionFotoLead,
-                    anchoMaximo: kAnchoSelectorFotoLead,
-                    circular: true,
-                    etiquetaVacio: 'Agregar foto del lead',
-                    onElegir: _elegirFoto,
-                    onQuitar: (_fotoNueva == null && _fotos.isEmpty)
-                        ? null
-                        : _quitarFoto,
-                    pieDeFoto: _fotoNueva == null && marcadorPendiente != null
-                        ? const StatusChip(
-                            label: 'Foto pendiente de subir',
-                            variant: StatusChipVariant.warning,
-                          )
-                        : null,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  TextFormField(
-                    controller: _nombreController,
-                    enabled: !_guardando,
-                    decoration:
-                        const InputDecoration(labelText: 'Nombre completo'),
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
+                  ListenableBuilder(
+                    listenable: _emailController,
+                    builder: (context, _) {
+                      return PersonaIdentityBanner(
+                        nombre: _nombreController.text,
+                        email: _emailController.text,
+                        nombreController: _nombreController,
+                        nombreHint: 'Ej. María González',
+                        nombreEnabled: !_guardando,
+                        nombreValidator: (value) =>
+                            (value == null || value.trim().isEmpty)
                             ? 'Requerido'
                             : null,
+                        leading: FotoLeadAvatar(
+                          bytes: _fotoNueva ?? bytesPendientes,
+                          urlExistente: urlFotoGuardada,
+                          enabled: !_guardando,
+                          onElegir: _elegirFoto,
+                          onQuitar: (_fotoNueva == null && _fotos.isEmpty)
+                              ? null
+                              : _quitarFoto,
+                        ),
+                      );
+                    },
                   ),
-                  AppSpacing.field,
+                  if (_fotoNueva == null && marcadorPendiente != null) ...[
+                    const SizedBox(height: 10),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: StatusChip(
+                        label: 'Foto pendiente de subir',
+                        variant: StatusChipVariant.warning,
+                      ),
+                    ),
+                  ],
+                  if ((lead.vendedorNombre ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Capturado por ${lead.vendedorNombre}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.lg),
                   TextFormField(
                     controller: _empresaController,
                     enabled: !_guardando,
@@ -703,6 +815,7 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
                     enabled: !_guardando,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(labelText: 'Email'),
+                    validator: _validarEmail,
                   ),
                   AppSpacing.field,
                   TextFormField(

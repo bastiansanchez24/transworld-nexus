@@ -30,6 +30,37 @@ void main() {
     expect(find.text('Summit 2026'), findsOneWidget);
   });
 
+  testWidgets('EventRow muestra acciones fuera de la fila principal', (
+    tester,
+  ) async {
+    var acceso = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('es'),
+        home: Scaffold(
+          body: EventRow(
+            date: DateTime(2026, 8, 10),
+            title: 'Summit 2026',
+            place: 'Santiago',
+            onTap: () {},
+            actions: [
+              IconButton(
+                icon: const Icon(Symbols.group_rounded),
+                onPressed: () => acceso = true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Symbols.group_rounded));
+    await tester.pump();
+
+    expect(acceso, isTrue);
+  });
+
   testWidgets('menú contextual respeta permisos RBAC', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

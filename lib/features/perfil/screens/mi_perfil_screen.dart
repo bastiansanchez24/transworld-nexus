@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/password_policy.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
@@ -41,31 +42,51 @@ class _MiPerfilBody extends ConsumerStatefulWidget {
 class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   bool _leadsExpandido = false;
   bool _datosExpandido = false;
   bool _nombreCargado = false;
   bool _guardando = false;
   bool _subiendoFoto = false;
+  bool _mostrarPassword = false;
 
   @override
   void dispose() {
     _nombreController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _guardarNombre() async {
+  Future<void> _guardarDatos() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // En blanco significa "no cambiar la contraseña".
+    final nuevaPassword = _passwordController.text;
 
     setState(() => _guardando = true);
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .actualizarNombrePropio(_nombreController.text.trim());
+      final auth = ref.read(authRepositoryProvider);
+      // Primero la contraseña: es el paso que más suele fallar (Supabase
+      // rechaza repetir la actual), así un error no deja el nombre a medias.
+      if (nuevaPassword.isNotEmpty) {
+        // `forzarNuevaContrasena` además limpia `cambiar_pass`, para que el
+        // router no vuelva a exigir /recrear-pass a quien acaba de elegirla.
+        await auth.forzarNuevaContrasena(nuevaPassword);
+        _passwordController.clear();
+      }
+      await auth.actualizarNombrePropio(_nombreController.text.trim());
       ref.invalidate(currentPerfilProvider);
       if (mounted) {
-        showAppSnackBar(context, 'Nombre actualizado.');
+        showAppSnackBar(
+          context,
+          nuevaPassword.isEmpty
+              ? 'Nombre actualizado.'
+              : 'Datos y contraseña actualizados.',
+        );
       }
+    } on AuthException catch (e) {
+      if (mounted) showAppSnackBar(context, e.message, isError: true);
     } on PostgrestException catch (e) {
       if (mounted) showAppSnackBar(context, e.message, isError: true);
     } catch (e) {
@@ -200,17 +221,21 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
                 PerfilExpandableSection(
                   icon: Symbols.badge_rounded,
                   title: 'Mis Datos de Usuario',
-                  subtitle: 'Nombre, correo y tipo de cuenta',
+                  subtitle: 'Nombre, correo, contraseña y tipo de cuenta',
                   expanded: _datosExpandido,
                   onToggle: () =>
                       setState(() => _datosExpandido = !_datosExpandido),
                   child: _DatosUsuarioForm(
                     formKey: _formKey,
                     nombreController: _nombreController,
+                    passwordController: _passwordController,
                     email: email,
                     rolLabel: perfil.rol.label,
                     guardando: _guardando,
-                    onGuardar: _guardarNombre,
+                    mostrarPassword: _mostrarPassword,
+                    onToggleMostrarPassword: () =>
+                        setState(() => _mostrarPassword = !_mostrarPassword),
+                    onGuardar: _guardarDatos,
                   ),
                 ),
               ],
@@ -516,17 +541,23 @@ class _DatosUsuarioForm extends StatelessWidget {
   const _DatosUsuarioForm({
     required this.formKey,
     required this.nombreController,
+    required this.passwordController,
     required this.email,
     required this.rolLabel,
     required this.guardando,
+    required this.mostrarPassword,
+    required this.onToggleMostrarPassword,
     required this.onGuardar,
   });
 
   final GlobalKey<FormState> formKey;
   final TextEditingController nombreController;
+  final TextEditingController passwordController;
   final String email;
   final String rolLabel;
   final bool guardando;
+  final bool mostrarPassword;
+  final VoidCallback onToggleMostrarPassword;
   final VoidCallback onGuardar;
 
   @override
@@ -542,7 +573,7 @@ class _DatosUsuarioForm extends StatelessWidget {
             controller: nombreController,
             enabled: !guardando,
             decoration: const InputDecoration(hintText: 'Tu nombre completo'),
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.next,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Requerido' : null,
           ),
@@ -558,6 +589,34 @@ class _DatosUsuarioForm extends StatelessWidget {
               helperText:
                   'El correo pertenece a tu cuenta y no se puede cambiar.',
             ),
+          ),
+          const SizedBox(height: 14),
+          const _FieldLabel('Contraseña'),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: passwordController,
+            enabled: !guardando,
+            obscureText: !mostrarPassword,
+            autofillHints: const [AutofillHints.newPassword],
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              hintText: 'Escribe una nueva contraseña',
+              helperText:
+                  'Déjalo en blanco para mantener la actual. $kPasswordHelperText',
+              helperMaxLines: 3,
+              suffixIcon: IconButton(
+                tooltip: mostrarPassword ? 'Ocultar' : 'Mostrar',
+                onPressed: guardando ? null : onToggleMostrarPassword,
+                icon: Icon(
+                  mostrarPassword
+                      ? Symbols.visibility_off_rounded
+                      : Symbols.visibility_rounded,
+                ),
+              ),
+            ),
+            // Vacío = no se cambia la contraseña; con contenido, debe ser fuerte.
+            validator: (v) =>
+                (v == null || v.isEmpty) ? null : validarContrasenaFuerte(v),
           ),
           const SizedBox(height: 14),
           const _FieldLabel('Tipo de usuario'),

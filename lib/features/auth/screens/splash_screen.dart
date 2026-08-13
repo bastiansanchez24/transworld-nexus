@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lottie/lottie.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../providers/splash_providers.dart';
 
 /// Pantalla de arranque: draw-on del mark Transworld mientras se restaura
@@ -41,7 +42,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ..addListener(_onTick)
       ..addStatusListener(_onStatus);
     if (!showAnimatedSplash) {
-      // Web / iOS / etc.: el router no debería montar esto; si llega, no bloquear.
+      // Web / iOS: espera de perfil sin Lottie; no bloquear el redirect.
       WidgetsBinding.instance.addPostFrameCallback((_) => _markReady());
       return;
     }
@@ -69,7 +70,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _markedReady = true;
     _fallbackTimer?.cancel();
     ref.read(splashReadyProvider.notifier).state = true;
-    if (!showAnimatedSplash) return;
     // Si el redirect se queda esperando el perfil, forzar escape a login.
     ref.read(splashNavigationTimedOutProvider.notifier).state = false;
     _navigationTimeoutTimer = Timer(_navigationTimeout, () {
@@ -91,6 +91,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (!showAnimatedSplash) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: LoadingView(),
+      );
+    }
+
     final width = MediaQuery.sizeOf(context).width * 0.54;
 
     return Scaffold(

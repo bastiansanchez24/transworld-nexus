@@ -24,7 +24,7 @@ void main() {
   );
 
   group('Registrado.toCacheMap', () {
-    // toInsertMap no sirve para la caché: omite id, origen, created_at y
+    // toInsertMap no sirve para la caché: omite id, created_at y
     // email_confirmacion_enviado porque los completa la base de datos.
     test('sobrevive el viaje de ida y vuelta por la caché', () {
       final revivido = Registrado.fromMap(
@@ -50,6 +50,29 @@ void main() {
       expect(revivido.emailConfirmacionEnviado, isTrue);
       expect(revivido.createdAt, registrado.createdAt);
       expect(revivido.pendienteDeSincronizar, isFalse);
+    });
+  });
+
+  group('Registrado.toInsertMap', () {
+    test('persiste el origen para RLS e importaciones', () {
+      final map = registrado.toInsertMap();
+
+      expect(map['origen'], 'excel');
+      expect(map.containsKey('id'), isFalse);
+      expect(map.containsKey('created_at'), isFalse);
+      expect(map.containsKey('email_confirmacion_enviado'), isFalse);
+    });
+
+    test('incluye origen publico para el formulario anónimo', () {
+      const publico = Registrado(
+        id: '',
+        eventoId: 'evento-1',
+        nombreCompleto: 'Ana Díaz',
+        email: 'ana@empresa.cl',
+        origen: OrigenRegistro.publico,
+      );
+
+      expect(publico.toInsertMap()['origen'], 'publico');
     });
   });
 

@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/app_role.dart';
+import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -56,6 +57,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   AppRole? _rolOriginal;
   bool _cargado = false;
   bool _eventosCargados = false;
+  bool _eventosCargaError = false;
   bool _guardando = false;
   bool _eliminando = false;
   bool _regenerando = false;
@@ -64,6 +66,8 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   Uint8List? _fotoBytes;
   bool _quitarFoto = false;
   final Set<String> _eventoIds = {};
+
+  bool get _asignaEventos => _rol.requiresEventAssignment;
 
   /// Roles editables vía RPC (no incluye externo: solo al crear).
   List<AppRole> get _rolesDisponibles {
@@ -95,7 +99,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   }
 
   Future<void> _cargarEventosAutorizados() async {
-    if (_eventosCargados) return;
+    if (_eventosCargados && !_eventosCargaError) return;
     try {
       final ids = await ref
           .read(authRepositoryProvider)
@@ -106,10 +110,14 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
           ..clear()
           ..addAll(ids);
         _eventosCargados = true;
+        _eventosCargaError = false;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _eventosCargados = true);
+      setState(() {
+        _eventosCargados = true;
+        _eventosCargaError = true;
+      });
     }
   }
 
@@ -156,6 +164,17 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   }
 
   Future<void> _regenerarPassword() async {
+    final esCuentaPropia =
+        ref.read(currentPerfilProvider).valueOrNull?.id == widget.usuarioId ||
+        ref.read(authRepositoryProvider).currentUserId == widget.usuarioId;
+    if (esCuentaPropia) {
+      NexusToast.show(
+        context,
+        'No puedes regenerar tu propia contraseña. Usa el menú de cambio de contraseña en tu perfil.',
+      );
+      return;
+    }
+
     setState(() => _regenerando = true);
     try {
       final resultado = await ref
@@ -193,8 +212,15 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
       );
       return;
     }
-    if (_rolOriginal == AppRole.externo && _eventoIds.isEmpty) {
+    if (_rol == AppRole.externo && _eventoIds.isEmpty) {
       NexusToast.show(context, 'Selecciona al menos un evento.');
+      return;
+    }
+    if (_asignaEventos && (!_eventosCargados || _eventosCargaError)) {
+      NexusToast.show(
+        context,
+        'No se pudieron verificar los eventos autorizados. Intenta nuevamente.',
+      );
       return;
     }
 
@@ -207,6 +233,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
       return;
     }
 
+    final router = GoRouter.of(context);
     setState(() => _guardando = true);
     try {
       final repo = ref.read(authRepositoryProvider);
@@ -214,20 +241,13 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
         widget.usuarioId,
         _nombreController.text.trim(),
       );
-      if (!esCuentaPropia &&
-          _rolOriginal != null &&
-          _rol != _rolOriginal &&
-          _rol != AppRole.externo) {
-        await repo.actualizarRolUsuario(widget.usuarioId, _rol.value);
-      }
       if (!esCuentaPropia) {
-        await repo.establecerActivo(widget.usuarioId, _activo);
-      }
-      if (_rolOriginal == AppRole.externo && _rol == AppRole.externo) {
-        await repo.sincronizarEventosExterno(
-          widget.usuarioId,
-          _eventoIds.toList(),
+        await repo.configurarAccesoUsuario(
+          usuarioId: widget.usuarioId,
+          nuevoRol: _rol.value,
+          eventoIds: _asignaEventos ? _eventoIds.toList() : const [],
         );
+        await repo.establecerActivo(widget.usuarioId, _activo);
       }
       if (_fotoBytes != null) {
         final fotoUrl = await ref
@@ -238,16 +258,15 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
         await repo.actualizarFotoUsuario(widget.usuarioId, null);
       }
 
-      ref.invalidate(usuariosListProvider);
-      ref.invalidate(usuarioPorIdProvider(widget.usuarioId));
-      if (esCuentaPropia) {
-        ref.invalidate(currentPerfilProvider);
-      }
-
       if (mounted) {
+        ref.invalidate(usuariosListProvider);
+        ref.invalidate(usuarioPorIdProvider(widget.usuarioId));
+        if (esCuentaPropia) {
+          ref.invalidate(currentPerfilProvider);
+        }
         showAppSnackBar(context, 'Usuario actualizado.');
-        context.pop();
       }
+      router.go(RoutePaths.usuarios);
     } on PostgrestException catch (e) {
       if (mounted) showAppSnackBar(context, e.message, isError: true);
     } catch (e) {
@@ -282,13 +301,14 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
     );
     if (!confirmado || !mounted) return;
 
+    final router = GoRouter.of(context);
     setState(() => _eliminando = true);
     try {
       final eliminado = await ref
           .read(authRepositoryProvider)
           .eliminarUsuario(widget.usuarioId);
-      ref.invalidate(usuariosListProvider);
       if (mounted) {
+        ref.invalidate(usuariosListProvider);
         showAppSnackBar(
           context,
           eliminado
@@ -296,8 +316,8 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
               : 'La cuenta quedó desactivada: otra aplicación de la base '
                     'compartida aún referencia sus datos, pero perdió el acceso.',
         );
-        context.pop();
       }
+      router.go(RoutePaths.usuarios);
     } on PostgrestException catch (e) {
       if (mounted) showAppSnackBar(context, e.message, isError: true);
     } catch (_) {
@@ -316,9 +336,12 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   @override
   Widget build(BuildContext context) {
     final usuarioAsync = ref.watch(usuarioPorIdProvider(widget.usuarioId));
+    final sesionId = ref.watch(authRepositoryProvider).currentUserId;
     final esCuentaPropia =
-        ref.watch(currentPerfilProvider).valueOrNull?.id == widget.usuarioId;
-    final ocupado = _guardando || _eliminando || _regenerando;
+        ref.watch(currentPerfilProvider).valueOrNull?.id == widget.usuarioId ||
+        sesionId == widget.usuarioId;
+    // Regenerar solo bloquea el campo de contraseña; el resto del form sigue usable.
+    final ocupado = _guardando || _eliminando;
     final bloquearActivoPropio = esCuentaPropia;
 
     return AppScaffold(
@@ -354,12 +377,13 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
             _cargado = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _cargarEmail();
-              if (usuario.isExterno) _cargarEventosAutorizados();
+              _cargarEventosAutorizados();
             });
           }
 
           final esExterno = _rol == AppRole.externo;
-          final eventosAsync = esExterno
+          final asignaEventos = _asignaEventos;
+          final eventosAsync = asignaEventos
               ? ref.watch(eventosListProvider)
               : null;
 
@@ -422,19 +446,27 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                     obscureText: _passwordGenerada == null,
                     decoration: InputDecoration(
                       hintText: 'No visible',
-                      suffixIcon: IconButton(
-                        tooltip: 'Generar nueva y enviar por correo',
-                        onPressed: ocupado ? null : _regenerarPassword,
-                        icon: _regenerando
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Symbols.refresh_rounded),
-                      ),
+                      helperText: esCuentaPropia
+                          ? 'Para cambiar tu contraseña usa Mi perfil.'
+                          : null,
+                      helperMaxLines: 2,
+                      suffixIcon: esCuentaPropia
+                          ? null
+                          : IconButton(
+                              tooltip: 'Generar nueva y enviar por correo',
+                              onPressed: (ocupado || _regenerando)
+                                  ? null
+                                  : _regenerarPassword,
+                              icon: _regenerando
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Symbols.refresh_rounded),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -456,12 +488,17 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                         ? null
                         : (v) {
                             if (v == null) return;
-                            setState(() => _rol = v);
+                            setState(() {
+                              _rol = v;
+                              if (v != AppRole.user && v != AppRole.externo) {
+                                _eventoIds.clear();
+                              }
+                            });
                           },
                     validator: (v) =>
                         v == null ? 'Selecciona el tipo de usuario' : null,
                   ),
-                  if (esExterno) ...[
+                  if (asignaEventos) ...[
                     const SizedBox(height: 14),
                     const _FieldLabel('Eventos autorizados'),
                     const SizedBox(height: 6),
@@ -469,6 +506,29 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 12),
                         child: LinearProgressIndicator(),
+                      )
+                    else if (_eventosCargaError)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'No se pudieron cargar las asignaciones actuales.',
+                            style: TextStyle(color: AppColors.danger),
+                          ),
+                          TextButton.icon(
+                            onPressed: ocupado
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _eventosCargados = false;
+                                      _eventosCargaError = false;
+                                    });
+                                    _cargarEventosAutorizados();
+                                  },
+                            icon: const Icon(Symbols.refresh_rounded),
+                            label: const Text('Reintentar'),
+                          ),
+                        ],
                       )
                     else
                       eventosAsync!.when(
@@ -485,8 +545,14 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                             eventos: eventos,
                             seleccionados: _eventoIds,
                             enabled: !ocupado,
-                            soloActivosDisponibles: true,
-                            errorText: _intentoGuardar && _eventoIds.isEmpty
+                            soloActivosDisponibles: esExterno,
+                            emptyHelperText: esExterno
+                                ? 'Selecciona al menos un evento.'
+                                : 'Sin eventos asignados: el usuario no podrá operar eventos.',
+                            errorText:
+                                esExterno &&
+                                    _intentoGuardar &&
+                                    _eventoIds.isEmpty
                                 ? 'Selecciona al menos un evento'
                                 : null,
                             onChanged: (ids) => setState(() {

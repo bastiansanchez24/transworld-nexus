@@ -24,7 +24,12 @@ class Perfil {
   bool get isAdmin => rol.isAdmin;
   bool get canManageUsers => rol.canManageUsers;
   bool get canCreateContent => rol.canCreateContent;
+  bool get canRegisterAttendees => rol.canRegisterAttendees;
+  bool get canAccessNotifications => rol.canAccessNotifications;
+  bool get canExportData => rol.canExportData;
+  bool get canViewAllLeads => rol.canViewAllLeads;
   bool get isExterno => rol.isExterno;
+  bool get requiresEventAssignment => rol.requiresEventAssignment;
   bool get usesFullShell => rol.usesFullShell;
 
   factory Perfil.fromMap(Map<String, dynamic> map) {

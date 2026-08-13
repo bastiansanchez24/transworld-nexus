@@ -8,10 +8,17 @@ class PermissionsOnboarding {
   final SharedPreferences _prefs;
 
   static String _key(String userId) => 'permissions_requested_$userId';
+  static String _notificationsKey(String userId) =>
+      'notification_permission_requested_$userId';
 
-  bool yaSolicitados(String userId) =>
-      _prefs.getBool(_key(userId)) ?? false;
+  bool yaSolicitados(String userId) => _prefs.getBool(_key(userId)) ?? false;
 
   Future<void> marcarSolicitados(String userId) =>
       _prefs.setBool(_key(userId), true);
+
+  bool notificacionesYaSolicitadas(String userId) =>
+      _prefs.getBool(_notificationsKey(userId)) ?? false;
+
+  Future<void> marcarNotificacionesSolicitadas(String userId) =>
+      _prefs.setBool(_notificationsKey(userId), true);
 }

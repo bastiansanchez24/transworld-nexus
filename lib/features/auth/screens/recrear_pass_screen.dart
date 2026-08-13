@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/password_policy.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
@@ -78,11 +79,12 @@ class _RecrearPassScreenState extends ConsumerState<RecrearPassScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration:
-                        const InputDecoration(labelText: 'Nueva contraseña'),
-                    validator: (value) => (value == null || value.length < 6)
-                        ? 'Mínimo 6 caracteres'
-                        : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Nueva contraseña',
+                      helperText: kPasswordHelperText,
+                      helperMaxLines: 3,
+                    ),
+                    validator: validarContrasenaFuerte,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(

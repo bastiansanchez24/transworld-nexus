@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/widgets/sync_conflict_listener.dart';
 import 'data/offline/sync_coordinator.dart';
 import 'features/notificaciones/providers/notificaciones_providers.dart';
 import 'features/notificaciones/services/push_notification_service.dart';
@@ -31,15 +32,15 @@ class TransworldNexusApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       locale: const Locale('es'),
-      supportedLocales: const [
-        Locale('es'),
-      ],
+      supportedLocales: const [Locale('es')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: router,
+      builder: (context, child) =>
+          SyncConflictListener(child: child ?? const SizedBox.shrink()),
     );
   }
 }

@@ -6,6 +6,7 @@ import '../../core/constants/supabase_tables.dart';
 import '../../core/network/connectivity_service.dart';
 import '../repositories/leads_repository.dart';
 import '../repositories/registrados_repository.dart';
+import '../supabase/supabase_client_provider.dart';
 import 'sync_queue_service.dart';
 
 /// Punto único donde se registran los [SyncExecutor] de cada dominio y se
@@ -21,6 +22,12 @@ class SyncCoordinator {
     _ref.listen<AsyncValue<bool>>(connectivityStreamProvider, (_, next) {
       final online = next.valueOrNull;
       if (online != null) _observarConexion(online);
+    });
+    _ref.listen(syncQueueActiveOwnerIdProvider, (previous, next) {
+      if (next != null && next.isNotEmpty && next != previous) {
+        final online = _ref.read(connectivityStreamProvider).valueOrNull;
+        if (online == true) sincronizarAhora();
+      }
     });
 
     // Si al construirse el estado de red ya estaba resuelto, el listener no
@@ -52,22 +59,33 @@ class SyncCoordinator {
   }
 
   Map<String, SyncExecutor> get _executors => {
-        SupabaseTables.registrados: _ref.read(registradosRepositoryProvider),
-        SupabaseTables.leads: _ref.read(leadsRepositoryProvider),
-      };
+    SupabaseTables.registrados: _ref.read(registradosRepositoryProvider),
+    SupabaseTables.leads: _ref.read(leadsRepositoryProvider),
+  };
 
   Future<int> sincronizarAhora() async {
     final queue = _ref.read(syncQueueServiceProvider.notifier);
+    final sessionOwner = _ref.read(syncQueueActiveOwnerIdProvider);
+    if (sessionOwner == null || sessionOwner != queue.ownerId) return 0;
     try {
-      final synced = await queue.processPending(_executors);
+      final synced = await queue.processPending(
+        _executors,
+        canContinue: () =>
+            _ref.read(supabaseClientProvider).auth.currentUser?.id ==
+            queue.ownerId,
+      );
       if (synced > 0) {
-        developer.log('Sincronizados $synced ítems pendientes.',
-            name: 'SyncCoordinator');
+        developer.log(
+          'Sincronizados $synced ítems pendientes.',
+          name: 'SyncCoordinator',
+        );
       }
       return synced;
     } catch (e) {
-      developer.log('Error sincronizando cola offline: $e',
-          name: 'SyncCoordinator');
+      developer.log(
+        'Error sincronizando cola offline: $e',
+        name: 'SyncCoordinator',
+      );
       return 0;
     }
   }

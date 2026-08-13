@@ -1,12 +1,17 @@
 /** Comprueba email vía RPC (evita auth.admin.listUsers, que falla con "Database error finding users"). */
 export async function emailYaRegistrado(
   // deno-lint-ignore no-explicit-any
-  adminClient: { rpc: (fn: string, args: Record<string, unknown>) => Promise<any> },
+  adminClient: {
+    rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<any>;
+  },
   email: string,
 ): Promise<boolean> {
-  const { data, error } = await adminClient.rpc("verificar_usuario_registrado", {
-    email_check: email.trim().toLowerCase(),
-  });
+  const { data, error } = await adminClient.rpc(
+    "verificar_usuario_registrado",
+    {
+      email_check: email.trim().toLowerCase(),
+    },
+  );
   if (error) throw error;
   return data === true;
 }
@@ -18,7 +23,7 @@ export async function emailYaRegistrado(
 export async function findAuthUserByEmail(
   // deno-lint-ignore no-explicit-any
   adminClient: {
-    rpc: (fn: string, args: Record<string, unknown>) => Promise<any>;
+    rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<any>;
     auth: { admin: { getUserById: (id: string) => Promise<any> } };
   },
   email: string,

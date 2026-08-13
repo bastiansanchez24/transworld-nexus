@@ -5,8 +5,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_role.dart';
+import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/password_generator.dart';
+import '../../../core/utils/password_policy.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
@@ -23,9 +25,7 @@ class NuevoUsuarioScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RequireAdmin(
-      builder: (context) => const _NuevoUsuarioForm(),
-    );
+    return RequireAdmin(builder: (context) => const _NuevoUsuarioForm());
   }
 }
 
@@ -64,6 +64,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
   }
 
   bool get _esExterno => _rol == AppRole.externo;
+  bool get _asignaEventos => _rol?.requiresEventAssignment ?? false;
 
   String _textoCompartir({List<String> eventoNombres = const []}) {
     final buffer = StringBuffer()
@@ -103,6 +104,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
       return;
     }
 
+    final router = GoRouter.of(context);
     setState(() => _guardando = true);
     try {
       final repo = ref.read(authRepositoryProvider);
@@ -123,17 +125,17 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
         email: email,
         password: _passwordController.text,
         rol: _rol!.value,
-        eventoIds: _esExterno ? _eventoIds.toList() : null,
+        eventoIds: _asignaEventos ? _eventoIds.toList() : null,
       );
 
-      ref.invalidate(usuariosListProvider);
       if (mounted) {
+        ref.invalidate(usuariosListProvider);
         NexusToast.show(
           context,
           'Usuario creado. Credenciales enviadas por correo.',
         );
-        context.pop();
       }
+      router.go(RoutePaths.usuarios);
     } catch (e) {
       if (mounted) {
         showAppSnackBar(
@@ -162,19 +164,14 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
             children: [
               const Text(
                 'Crea una cuenta y envía las credenciales al correo del usuario.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 18),
               const _FieldLabel('Nombre completo'),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _nombreController,
-                decoration: const InputDecoration(
-                  hintText: 'Ej. Juan Pérez',
-                ),
+                decoration: const InputDecoration(hintText: 'Ej. Juan Pérez'),
                 textInputAction: TextInputAction.next,
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
@@ -203,6 +200,8 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
                 controller: _passwordController,
                 decoration: InputDecoration(
                   hintText: 'Autogenerada',
+                  helperText: kPasswordHelperText,
+                  helperMaxLines: 3,
                   suffixIcon: IconButton(
                     tooltip: 'Regenerar',
                     onPressed: _guardando
@@ -216,8 +215,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
                     icon: const Icon(Symbols.refresh_rounded),
                   ),
                 ),
-                validator: (v) =>
-                    (v == null || v.length < 8) ? 'Mínimo 8 caracteres' : null,
+                validator: validarContrasenaFuerte,
               ),
               const SizedBox(height: 14),
               const _FieldLabel('Tipo de usuario'),
@@ -230,24 +228,21 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
                 ),
                 items: AppRole.creatableRoles
                     .map(
-                      (r) => DropdownMenuItem(
-                        value: r,
-                        child: Text(r.label),
-                      ),
+                      (r) => DropdownMenuItem(value: r, child: Text(r.label)),
                     )
                     .toList(),
                 onChanged: _guardando
                     ? null
                     : (v) => setState(() {
-                          _rol = v;
-                          if (v != AppRole.externo) {
-                            _eventoIds.clear();
-                          }
-                        }),
+                        _rol = v;
+                        if (v != AppRole.user && v != AppRole.externo) {
+                          _eventoIds.clear();
+                        }
+                      }),
                 validator: (v) =>
                     v == null ? 'Selecciona el tipo de usuario' : null,
               ),
-              if (_esExterno) ...[
+              if (_asignaEventos) ...[
                 const SizedBox(height: 14),
                 const _FieldLabel('Eventos autorizados'),
                 const SizedBox(height: 6),
@@ -265,8 +260,12 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
                       eventos: eventos,
                       seleccionados: _eventoIds,
                       enabled: !_guardando,
-                      soloActivosDisponibles: true,
-                      errorText: _intentoGuardar && _eventoIds.isEmpty
+                      soloActivosDisponibles: _esExterno,
+                      emptyHelperText: _esExterno
+                          ? 'Selecciona al menos un evento.'
+                          : 'Sin eventos asignados: el usuario no podrá operar eventos.',
+                      errorText:
+                          _esExterno && _intentoGuardar && _eventoIds.isEmpty
                           ? 'Selecciona al menos un evento'
                           : null,
                       onChanged: (ids) => setState(() {

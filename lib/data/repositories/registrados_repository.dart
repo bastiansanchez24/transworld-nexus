@@ -86,16 +86,22 @@ class RegistradosRepository implements SyncExecutor {
       unicosDelArchivo.add(r);
     }
 
-    if (unicosDelArchivo.isEmpty) return (insertados: 0, omitidos: registros.length);
+    if (unicosDelArchivo.isEmpty) {
+      return (insertados: 0, omitidos: registros.length);
+    }
 
     final existentesRows = await _client
         .from(SupabaseTables.registrados)
         .select('email')
         .eq('evento_id', eventoId)
-        .inFilter('email', unicosDelArchivo.map((r) => r.email.trim().toLowerCase()).toList());
+        .inFilter(
+          'email',
+          unicosDelArchivo.map((r) => r.email.trim().toLowerCase()).toList(),
+        );
 
-    final emailsExistentes =
-        existentesRows.map((r) => r['email'] as String).toSet();
+    final emailsExistentes = existentesRows
+        .map((r) => r['email'] as String)
+        .toSet();
 
     final aInsertar = unicosDelArchivo
         .where((r) => !emailsExistentes.contains(r.email.trim().toLowerCase()))
@@ -116,10 +122,7 @@ class RegistradosRepository implements SyncExecutor {
   }
 
   Future<void> actualizar(String id, Map<String, dynamic> changes) async {
-    await _client
-        .from(SupabaseTables.registrados)
-        .update(changes)
-        .eq('id', id);
+    await _client.from(SupabaseTables.registrados).update(changes).eq('id', id);
   }
 
   Future<void> acreditar(String id, {required String acreditadoPorId}) async {
@@ -176,7 +179,6 @@ class RegistradosRepository implements SyncExecutor {
   Future<void> onInsert(Map<String, dynamic> payload) async {
     final data = Map<String, dynamic>.from(payload)
       ..remove('id')
-      ..remove('origen')
       ..remove('acreditado_en');
     try {
       await _client.from(SupabaseTables.registrados).insert(data);
@@ -196,32 +198,31 @@ class RegistradosRepository implements SyncExecutor {
     await _client.from(SupabaseTables.registrados).update(changes).eq('id', id);
   }
 
-  /// Totales globales para el dashboard (solo columna `acreditado`).
+  /// Totales visibles para el dashboard. RLS acota las filas a los eventos
+  /// asignados cuando la sesión corresponde al rol `user`.
   Future<({int total, int acreditados})> obtenerResumenGlobal() async {
-    final rows = await _client
-        .from(SupabaseTables.registrados)
-        .select('acreditado');
-    var acreditados = 0;
-    for (final row in rows) {
-      if (row['acreditado'] == true) acreditados++;
-    }
-    return (total: rows.length, acreditados: acreditados);
+    final resultados = await Future.wait<int>([
+      _client.from(SupabaseTables.registrados).count(CountOption.exact),
+      _client
+          .from(SupabaseTables.registrados)
+          .count(CountOption.exact)
+          .eq('acreditado', true),
+    ]);
+    return (total: resultados[0], acreditados: resultados[1]);
   }
 
   Future<int> contarPorIngresadoPor(String perfilId) async {
-    final rows = await _client
+    return _client
         .from(SupabaseTables.registrados)
-        .select('id')
+        .count(CountOption.exact)
         .eq('ingresado_por', perfilId);
-    return rows.length;
   }
 
   Future<int> contarPorAcreditadoPor(String perfilId) async {
-    final rows = await _client
+    return _client
         .from(SupabaseTables.registrados)
-        .select('id')
+        .count(CountOption.exact)
         .eq('acreditado_por', perfilId);
-    return rows.length;
   }
 }
 

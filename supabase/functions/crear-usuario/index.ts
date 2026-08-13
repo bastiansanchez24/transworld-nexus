@@ -1,8 +1,12 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { createAdminClient } from "../_shared/admin_client.ts";
+import { resolveCallerAuth } from "../_shared/caller_auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { enviarCredenciales } from "../_shared/enviar_credenciales.ts";
 import { findAuthUserByEmail } from "../_shared/find_user.ts";
+import {
+  esContrasenaFuerte,
+  LARGO_MINIMO_PASSWORD,
+} from "../_shared/password.ts";
 
 const ROLES_VALIDOS = new Set(["admin", "organizador", "user", "externo"]);
 
@@ -23,26 +27,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return json({ error: "No autorizado" }, 401);
-    }
+    const caller = await resolveCallerAuth(req);
+    if (!caller.ok) return caller.response;
+    const { callerClient } = caller;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
     // Evita que el runtime reenvíe el JWT del usuario al Admin API.
     const adminClient = createAdminClient(supabaseUrl, serviceRoleKey);
-
-    const { data: callerData, error: callerError } =
-      await callerClient.auth.getUser();
-    if (callerError || !callerData.user) {
-      return json({ error: "Sesión inválida" }, 401);
-    }
 
     const { data: isAdmin, error: adminError } = await callerClient.rpc(
       "rpe_is_admin",
@@ -64,9 +56,13 @@ Deno.serve(async (req) => {
     if (!ROLES_VALIDOS.has(rol)) {
       return json({ error: "Rol inválido" }, 400);
     }
-    if (password.length < 8) {
+    if (!esContrasenaFuerte(password)) {
       return json(
-        { error: "La contraseña debe tener al menos 8 caracteres" },
+        {
+          error:
+            `La contraseña debe tener al menos ${LARGO_MINIMO_PASSWORD} caracteres, ` +
+            "con mayúscula, minúscula, número y símbolo (! # % $)",
+        },
         400,
       );
     }
@@ -74,8 +70,8 @@ Deno.serve(async (req) => {
     let eventoNombres: string[] = [];
     let primerEventoId: string | null = null;
 
-    if (rol === "externo") {
-      if (eventoIds.length < 1) {
+    if (rol === "externo" || (rol === "user" && eventoIds.length > 0)) {
+      if (rol === "externo" && eventoIds.length < 1) {
         return json(
           { error: "Selecciona al menos un evento para el usuario externo" },
           400,
@@ -91,29 +87,31 @@ Deno.serve(async (req) => {
         return json({ error: "Uno o más eventos no fueron encontrados" }, 404);
       }
 
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
+      if (rol === "externo") {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
 
-      for (const evento of eventos) {
-        if (!evento.activo) {
-          return json(
-            { error: `El evento "${evento.nombre}" no está activo` },
-            400,
-          );
-        }
-        const fechaEvento = new Date(`${evento.fecha}T00:00:00`);
-        if (fechaEvento < hoy) {
-          return json(
-            { error: `El evento "${evento.nombre}" ya finalizó` },
-            400,
-          );
+        for (const evento of eventos) {
+          if (!evento.activo) {
+            return json(
+              { error: `El evento "${evento.nombre}" no está activo` },
+              400,
+            );
+          }
+          const fechaEvento = new Date(`${evento.fecha}T00:00:00`);
+          if (fechaEvento < hoy) {
+            return json(
+              { error: `El evento "${evento.nombre}" ya finalizó` },
+              400,
+            );
+          }
         }
       }
 
       // Preservar orden solicitado.
       const porId = new Map(eventos.map((e) => [e.id as string, e]));
       eventoNombres = eventoIds.map((id) => porId.get(id)?.nombre ?? id);
-      primerEventoId = eventoIds[0];
+      if (rol === "externo") primerEventoId = eventoIds[0];
     }
 
     let existing;
@@ -134,8 +132,8 @@ Deno.serve(async (req) => {
       userMetadata.evento_id = primerEventoId;
     }
 
-    const { data: created, error: createError } =
-      await adminClient.auth.admin.createUser({
+    const { data: created, error: createError } = await adminClient.auth.admin
+      .createUser({
         email,
         password,
         email_confirm: true,
@@ -151,36 +149,25 @@ Deno.serve(async (req) => {
 
     const userId = created.user.id;
 
-    if (rol === "externo" && eventoIds.length > 0) {
-      const rows = eventoIds.map((eventoId) => ({
-        usuario_id: userId,
-        evento_id: eventoId,
-        rol_evento: "externo",
-      }));
-      const { error: ueError } = await adminClient
-        .from("usuarios_eventos")
-        .upsert(rows, { onConflict: "usuario_id,evento_id" });
-      if (ueError) {
-        await adminClient.auth.admin.deleteUser(userId);
-        return json(
-          { error: ueError.message ?? "No se pudieron asignar los eventos" },
-          500,
-        );
-      }
-    }
-
-    if (rol === "admin" || rol === "organizador") {
-      const { error: rolError } = await callerClient.rpc(
-        "rpe_actualizar_rol_usuario",
-        { usuario_id: userId, nuevo_rol: rol },
+    // Rol y eventos se persisten dentro de una única transacción SQL. Esto
+    // evita perfiles parcialmente configurados si falla una asignación.
+    const { error: accesoError } = await callerClient.rpc(
+      "rpe_configurar_acceso_usuario",
+      {
+        p_usuario_id: userId,
+        p_nuevo_rol: rol,
+        p_evento_ids: rol === "user" || rol === "externo" ? eventoIds : [],
+      },
+    );
+    if (accesoError) {
+      await adminClient.auth.admin.deleteUser(userId);
+      return json(
+        {
+          error: accesoError.message ??
+            "No se pudieron configurar el rol y los eventos",
+        },
+        500,
       );
-      if (rolError) {
-        await adminClient.auth.admin.deleteUser(userId);
-        return json(
-          { error: rolError.message ?? "No se pudo asignar el rol" },
-          500,
-        );
-      }
     }
 
     try {
@@ -194,10 +181,9 @@ Deno.serve(async (req) => {
       await adminClient.auth.admin.deleteUser(userId);
       return json(
         {
-          error:
-            mailErr instanceof Error
-              ? mailErr.message
-              : "No se pudo enviar el correo de credenciales",
+          error: mailErr instanceof Error
+            ? mailErr.message
+            : "No se pudo enviar el correo de credenciales",
         },
         500,
       );

@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/constants/supabase_tables.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/models/perfil.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/eventos_repository.dart';
 
@@ -21,7 +23,8 @@ final authStateChangesProvider = StreamProvider<AuthState>((ref) {
 /// dejar el splash esperando un future que nunca completa.
 final currentPerfilProvider = FutureProvider<Perfil?>((ref) async {
   final authAsync = ref.watch(authStateChangesProvider);
-  final session = authAsync.valueOrNull?.session ??
+  final session =
+      authAsync.valueOrNull?.session ??
       ref.read(authRepositoryProvider).currentSession;
 
   if (session == null) {
@@ -29,10 +32,16 @@ final currentPerfilProvider = FutureProvider<Perfil?>((ref) async {
     if (!authAsync.hasValue && !authAsync.hasError) {
       final authState = await ref.watch(authStateChangesProvider.future);
       if (authState.session == null) return null;
-      final perfil =
-          await ref.read(authRepositoryProvider).obtenerPerfilActual();
+      final perfil = await ref
+          .read(authRepositoryProvider)
+          .obtenerPerfilActual();
       if (perfil == null) {
         throw Exception('No se encontró el perfil del usuario.');
+      }
+      if (!perfil.canViewAllLeads) {
+        await ref
+            .read(offlineReadCacheProvider)
+            .retenerFilasPropias('${SupabaseTables.leads}__own', perfil.id);
       }
       return perfil;
     }
@@ -42,6 +51,11 @@ final currentPerfilProvider = FutureProvider<Perfil?>((ref) async {
   final perfil = await ref.read(authRepositoryProvider).obtenerPerfilActual();
   if (perfil == null) {
     throw Exception('No se encontró el perfil del usuario.');
+  }
+  if (!perfil.canViewAllLeads) {
+    await ref
+        .read(offlineReadCacheProvider)
+        .retenerFilasPropias('${SupabaseTables.leads}__own', perfil.id);
   }
   return perfil;
 });
@@ -55,7 +69,47 @@ final canManageUsersProvider = Provider<bool>((ref) {
 });
 
 final canCreateContentProvider = Provider<bool>((ref) {
-  return ref.watch(currentPerfilProvider).valueOrNull?.canCreateContent ?? false;
+  return ref.watch(currentPerfilProvider).valueOrNull?.canCreateContent ??
+      false;
+});
+
+final canExportDataProvider = Provider<bool>((ref) {
+  return ref.watch(currentPerfilProvider).valueOrNull?.canExportData ?? false;
+});
+
+final canViewAllLeadsProvider = Provider<bool>((ref) {
+  return ref.watch(currentPerfilProvider).valueOrNull?.canViewAllLeads ?? false;
+});
+
+/// IDs de eventos que el rol interno `user` puede operar. Admin y organizador
+/// no usan este provider porque conservan alcance global por RLS.
+final usuarioEventosAutorizadosProvider = FutureProvider<Set<String>>((
+  ref,
+) async {
+  ref.watch(authStateChangesProvider);
+  final perfil = await ref.watch(currentPerfilProvider.future);
+  if (perfil == null || !perfil.rol.isUsuario) return const {};
+
+  final ids = await ref
+      .watch(authRepositoryProvider)
+      .listarEventosAutorizadosUsuario(perfil.id);
+  final autorizados = ids.toSet();
+  await ref
+      .read(offlineReadCacheProvider)
+      .retenerEventos(SupabaseTables.registrados, autorizados);
+  return autorizados;
+});
+
+/// `null` mientras carga; ante error queda vacío para que el router falle
+/// cerrado y RLS siga siendo la autoridad final.
+final usuarioEventosAutorizadosIdsProvider = Provider<Set<String>?>((ref) {
+  final perfil = ref.watch(currentPerfilProvider).valueOrNull;
+  if (perfil == null || !perfil.rol.isUsuario) return const {};
+
+  final async = ref.watch(usuarioEventosAutorizadosProvider);
+  if (async.isLoading && !async.hasValue) return null;
+  if (async.hasError) return const {};
+  return async.valueOrNull ?? const {};
 });
 
 final isExternoProvider = Provider<bool>((ref) {
@@ -72,8 +126,9 @@ final externoEventoActivoOverrideProvider = StateProvider<String?>((ref) {
 });
 
 /// Eventos autorizados del externo (`usuarios_eventos`).
-final externoEventosAutorizadosProvider =
-    FutureProvider<List<Evento>>((ref) async {
+final externoEventosAutorizadosProvider = FutureProvider<List<Evento>>((
+  ref,
+) async {
   ref.watch(authStateChangesProvider);
   final perfil = await ref.watch(currentPerfilProvider.future);
   if (perfil == null || !perfil.isExterno) return const [];
@@ -81,6 +136,9 @@ final externoEventosAutorizadosProvider =
   final ids = await ref
       .watch(authRepositoryProvider)
       .listarEventosAutorizadosUsuario(perfil.id);
+  await ref
+      .read(offlineReadCacheProvider)
+      .retenerEventos(SupabaseTables.registrados, ids.toSet());
   if (ids.isEmpty) return const [];
 
   final eventosRepo = ref.watch(eventosRepositoryProvider);
@@ -208,10 +266,7 @@ final externoPrimerEventoOperableIdProvider = Provider<String?>((ref) {
 });
 
 /// Cambia el evento activo del externo, persiste y refresca providers.
-Future<void> cambiarEventoActivoExterno(
-  WidgetRef ref,
-  String eventoId,
-) async {
+Future<void> cambiarEventoActivoExterno(WidgetRef ref, String eventoId) async {
   final autorizados = ref.read(externoEventosAutorizadosIdsProvider);
   if (autorizados == null) {
     throw Exception('Aún se están cargando tus eventos autorizados.');
@@ -222,17 +277,19 @@ Future<void> cambiarEventoActivoExterno(
     }
   } else {
     // Legacy sin filas en usuarios_eventos: solo el preferido del perfil.
-    final preferido =
-        ref.read(currentPerfilProvider).valueOrNull?.eventoAsignadoId;
-    if (preferido == null ||
-        preferido.isEmpty ||
-        preferido != eventoId) {
+    final preferido = ref
+        .read(currentPerfilProvider)
+        .valueOrNull
+        ?.eventoAsignadoId;
+    if (preferido == null || preferido.isEmpty || preferido != eventoId) {
       throw Exception('No estás autorizado para ese evento.');
     }
   }
 
   ref.read(externoEventoActivoOverrideProvider.notifier).state = eventoId;
-  await ref.read(authRepositoryProvider).actualizarEventoActivoExterno(eventoId);
+  await ref
+      .read(authRepositoryProvider)
+      .actualizarEventoActivoExterno(eventoId);
   ref.invalidate(currentPerfilProvider);
   ref.invalidate(externoEventosAutorizadosProvider);
 }

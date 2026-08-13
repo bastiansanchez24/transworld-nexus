@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/route_paths.dart';
-import '../../../core/widgets/app_widgets.dart';
 import '../../../data/models/capturar_lead_route_extra.dart';
 import '../../../data/models/lead_prefill.dart';
 import '../../../data/models/registrado.dart';
@@ -36,6 +35,7 @@ class AcreditarQrScreen extends ConsumerStatefulWidget {
 class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     with WidgetsBindingObserver {
   late final ScannerController _scanner;
+  final Set<String> _acreditadosEnSesion = <String>{};
 
   @override
   void initState() {
@@ -75,8 +75,9 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     if (async.hasValue) return async.requireValue;
     if (async.isLoading) {
       try {
-        return await ref
-            .read(registradosPorEventoProvider(widget.eventoId).future);
+        return await ref.read(
+          registradosPorEventoProvider(widget.eventoId).future,
+        );
       } catch (_) {
         return [];
       }
@@ -98,36 +99,41 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
         .obtenerPorIdEnEvento(registradoId, widget.eventoId);
   }
 
+  bool _yaEstaAcreditado(Registrado registrado) {
+    return registrado.acreditado ||
+        _acreditadosEnSesion.contains(registrado.id.toLowerCase());
+  }
+
   Future<void> _acreditar(Registrado registrado) async {
-    final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
+    final userId = ref.read(currentPerfilProvider).valueOrNull?.id.trim();
+    if (userId == null || userId.isEmpty) {
+      throw Exception(
+        'No se pudo identificar al usuario acreditador. Intenta de nuevo.',
+      );
+    }
+
     final isOnline = ref.read(isOnlineProvider);
     if (isOnline && !esIdSoloLocal(registrado.id)) {
       await ref
           .read(registradosRepositoryProvider)
-          .acreditar(registrado.id, acreditadoPorId: userId ?? '');
+          .acreditar(registrado.id, acreditadoPorId: userId);
     } else {
-      await ref.read(syncQueueServiceProvider.notifier).enqueueUpdate(
+      await ref
+          .read(syncQueueServiceProvider.notifier)
+          .enqueueUpdate(
             table: SupabaseTables.registrados,
             entityId: registrado.id,
-            changes: {'acreditado': true},
+            changes: {'acreditado': true, 'acreditado_por': userId},
           );
     }
+    // Evita repetir el UPDATE si el mismo QR sigue en cuadro antes de que el
+    // provider invalidado alcance a devolver la acreditación actualizada.
+    _acreditadosEnSesion.add(registrado.id.toLowerCase());
     ref.invalidate(registradosPorEventoProvider(widget.eventoId));
   }
 
-  Future<void> _acreditarSiConfirmaParaLead(Registrado registrado) async {
-    if (registrado.acreditado) return;
-
-    if (!mounted) return;
-    final confirmar = await confirmDialog(
-      context,
-      title: 'Acreditar asistente',
-      message:
-          '${registrado.nombreCompleto} aún no está acreditado/a.\n\n¿Deseas acreditarlo/a antes de capturar el lead?',
-      confirmLabel: 'Acreditar',
-    );
-    if (!confirmar || !mounted) return;
-
+  Future<void> _acreditarSiEsNecesarioParaLead(Registrado registrado) async {
+    if (_yaEstaAcreditado(registrado)) return;
     await _acreditar(registrado);
   }
 
@@ -139,10 +145,7 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     await _scanner.pauseCamera();
     if (!mounted) return;
     await context.push(
-      RoutePaths.capturarLead(
-        campana.id,
-        desdeEvento: widget.eventoId,
-      ),
+      RoutePaths.capturarLead(campana.id, desdeEvento: widget.eventoId),
       extra: CapturarLeadRouteExtra(
         prefill: LeadPrefill.fromRegistrado(registrado),
         eventoRegistroId: widget.eventoId,
@@ -155,24 +158,11 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
   }
 
   Future<void> _procesarAcreditar(Registrado registrado) async {
-    if (registrado.acreditado) {
+    if (_yaEstaAcreditado(registrado)) {
       _scanner.showFeedback(
         '${registrado.nombreCompleto} ya había ingresado.',
         isError: false,
       );
-      return;
-    }
-
-    if (!mounted) return;
-    final confirmar = await confirmDialog(
-      context,
-      title: 'Acreditar asistente',
-      message:
-          'Se detectó a ${registrado.nombreCompleto}.\n\n¿Deseas acreditar a esta persona?',
-      confirmLabel: 'Acreditar',
-    );
-    if (!confirmar || !mounted) {
-      _scanner.resumeScanning(delay: const Duration(seconds: 2));
       return;
     }
 
@@ -184,7 +174,7 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
   }
 
   Future<void> _procesarCapturarLead(Registrado registrado) async {
-    await _acreditarSiConfirmaParaLead(registrado);
+    await _acreditarSiEsNecesarioParaLead(registrado);
     if (!mounted) return;
     await _navegarACaptura(registrado);
   }
@@ -206,8 +196,9 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
   }
 
   Future<void> _onCodeDetected(QrScanDecode decode) async {
-    final registradosAsync =
-        ref.read(registradosPorEventoProvider(widget.eventoId));
+    final registradosAsync = ref.read(
+      registradosPorEventoProvider(widget.eventoId),
+    );
     final isOnline = ref.read(isOnlineProvider);
     if (!isOnline && registradosAsync.isLoading) {
       _scanner.showFeedback(
@@ -222,8 +213,8 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
         final preview = decode.rawText == null
             ? '(vacío)'
             : (decode.rawText!.length > 40
-                ? '${decode.rawText!.substring(0, 40)}…'
-                : decode.rawText!);
+                  ? '${decode.rawText!.substring(0, 40)}…'
+                  : decode.rawText!);
         _scanner.showFeedback(
           'No se pudo leer el QR. Datos detectados: $preview',
           isError: true,
@@ -269,10 +260,7 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: ScannerView(
-          controller: _scanner,
-          onClose: _cerrarEscaner,
-        ),
+        body: ScannerView(controller: _scanner, onClose: _cerrarEscaner),
       ),
     );
   }

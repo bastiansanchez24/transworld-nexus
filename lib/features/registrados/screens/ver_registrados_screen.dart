@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -34,7 +35,16 @@ class VerRegistradosScreen extends ConsumerStatefulWidget {
       _VerRegistradosScreenState();
 }
 
-class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen> {
+class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
+    with RefreshOnVisible {
+  @override
+  String get refreshWhenLocation => RoutePaths.verRegistrados(widget.eventoId);
+
+  @override
+  void onBecomeVisible() {
+    ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+  }
+
   _Filtro _filtro = _Filtro.todos;
   final _busquedaController = TextEditingController();
   String _busqueda = '';
@@ -160,6 +170,7 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: registradosAsync.when(
+              skipLoadingOnReload: true,
               loading: () => _buildHeader(),
               error: (_, _) => _buildHeader(),
               data: (registrados) => _buildHeader(
@@ -170,6 +181,7 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen> {
           ),
         ),
         ...registradosAsync.when(
+          skipLoadingOnReload: true,
           loading: () => [const SliverFillRemaining(child: LoadingView())],
           error: (e, _) => [
             SliverFillRemaining(

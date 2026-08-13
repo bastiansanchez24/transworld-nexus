@@ -7,10 +7,13 @@ import '../../../data/repositories/notificaciones_repository.dart';
 import '../../../data/supabase/supabase_client_provider.dart';
 import '../../auth/providers/auth_providers.dart';
 
-final notificacionesInboxProvider =
-    FutureProvider<List<NotificacionInbox>>((ref) async {
+final notificacionesInboxProvider = FutureProvider<List<NotificacionInbox>>((
+  ref,
+) async {
   ref.watch(authStateChangesProvider);
   ref.watch(notificacionesRealtimeTickProvider);
+  final perfil = await ref.watch(currentPerfilProvider.future);
+  if (perfil?.canAccessNotifications != true) return const [];
   return ref.watch(notificacionesRepositoryProvider).listar();
 });
 
@@ -49,17 +52,19 @@ final notificacionesRealtimeSubscriptionProvider = Provider<void>((ref) {
     channel = null;
   }
 
-  ref.listen(authStateChangesProvider, (_, next) {
-    if (next.valueOrNull?.session != null) {
+  void syncSubscription() {
+    final session = ref.read(authStateChangesProvider).valueOrNull?.session;
+    final perfil = ref.read(currentPerfilProvider).valueOrNull;
+    if (session != null && perfil?.canAccessNotifications == true) {
       subscribe();
     } else {
       unsubscribe();
     }
-  });
-
-  if (ref.read(authStateChangesProvider).valueOrNull?.session != null) {
-    subscribe();
   }
+
+  ref.listen(authStateChangesProvider, (_, _) => syncSubscription());
+  ref.listen(currentPerfilProvider, (_, _) => syncSubscription());
+  syncSubscription();
 
   ref.onDispose(unsubscribe);
 });

@@ -1,3 +1,8 @@
+import {
+  enviarCorreoBrevo,
+  remitenteSoporte,
+} from "./brevo.ts";
+
 /**
  * Envía correo con saludo, correo y contraseña (nada más).
  * Usa el mismo mailer que `enviar-qr` / `reset-password`: Brevo.
@@ -9,32 +14,23 @@ export async function enviarCredenciales(opts: {
   email: string;
   password: string;
 }): Promise<void> {
-  const apiKey = Deno.env.get("BREVO_API_KEY");
-  if (!apiKey) {
-    throw new Error("Falta el secreto BREVO_API_KEY en Supabase.");
-  }
-
   const html =
     `<p>Hola ${escapeHtml(opts.nombre)},</p>` +
     `<p>Correo: ${escapeHtml(opts.email)}<br/>` +
     `Contraseña: ${escapeHtml(opts.password)}</p>`;
+  const texto =
+    `Hola ${opts.nombre},\n\n` +
+    `Correo: ${opts.email}\n` +
+    `Contraseña: ${opts.password}\n`;
 
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "api-key": apiKey,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      sender: {
-        name: "Soporte Transworld",
-        email: "no-reply@transworld.cl",
-      },
-      to: [{ email: opts.to }],
-      subject: "Acceso Transworld Nexus",
-      htmlContent: html,
-    }),
+  const res = await enviarCorreoBrevo({
+    sender: remitenteSoporte,
+    replyTo: remitenteSoporte,
+    to: [{ email: opts.to, name: opts.nombre }],
+    subject: "Acceso Transworld Nexus",
+    htmlContent: html,
+    textContent: texto,
+    tags: ["credenciales"],
   });
 
   if (!res.ok) {

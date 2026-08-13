@@ -11,25 +11,22 @@ import 'package:transworld_nexus/features/exportacion/services/excel_export_serv
 void main() {
   test('exportación de registrados congela la cabecera', () {
     const service = ExcelExportService();
-    final bytes = service.generar(
-      [
-        const Registrado(
-          id: '1',
-          eventoId: 'e1',
-          nombreCompleto: 'Ana Díaz',
-          email: 'ana@empresa.cl',
-          empresa: 'Transworld',
-        ),
-        const Registrado(
-          id: '2',
-          eventoId: 'e1',
-          nombreCompleto: 'Pedro Soto',
-          email: 'pedro@empresa.cl',
-          acreditado: true,
-        ),
-      ],
-      tituloHoja: 'Registrados',
-    );
+    final bytes = service.generar([
+      const Registrado(
+        id: '1',
+        eventoId: 'e1',
+        nombreCompleto: 'Ana Díaz',
+        email: 'ana@empresa.cl',
+        empresa: 'Transworld',
+      ),
+      const Registrado(
+        id: '2',
+        eventoId: 'e1',
+        nombreCompleto: 'Pedro Soto',
+        email: 'pedro@empresa.cl',
+        acreditado: true,
+      ),
+    ], tituloHoja: 'Registrados');
 
     final archive = ZipDecoder().decodeBytes(bytes);
     final sheetXml = archive.files.firstWhere(
@@ -42,7 +39,7 @@ void main() {
 
     final reopened = xls.Excel.decodeBytes(bytes);
     expect(reopened.tables.containsKey('Registrados'), isTrue);
-    expect(reopened['Registrados']!.maxRows, greaterThanOrEqualTo(3));
+    expect(reopened['Registrados'].maxRows, greaterThanOrEqualTo(3));
   });
 
   test('congelarPrimeraFila inyecta pane en sheetView autocerrado', () {
@@ -51,7 +48,9 @@ void main() {
         '<sheetView workbookViewId="0"/>'
         '</sheetViews></worksheet>';
     final archive = Archive()
-      ..addFile(ArchiveFile('xl/worksheets/sheet1.xml', xml.length, utf8.encode(xml)))
+      ..addFile(
+        ArchiveFile('xl/worksheets/sheet1.xml', xml.length, utf8.encode(xml)),
+      )
       ..addFile(ArchiveFile('[Content_Types].xml', 2, utf8.encode('ok')));
     final zipped = Uint8List.fromList(ZipEncoder().encode(archive)!);
     final patched = ExcelSheetStyler.congelarPrimeraFila(zipped);

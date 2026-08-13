@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/fijados_limits.dart';
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/evento_list_sort.dart';
@@ -18,6 +19,7 @@ import '../../auth/providers/auth_providers.dart';
 import '../../fijados/providers/fijados_providers.dart';
 import '../../home/providers/home_featured_providers.dart';
 import '../providers/eventos_providers.dart';
+import '../widgets/evento_acceso_button.dart';
 
 class ListarEventosScreen extends ConsumerStatefulWidget {
   const ListarEventosScreen({super.key});
@@ -27,7 +29,18 @@ class ListarEventosScreen extends ConsumerStatefulWidget {
       _ListarEventosScreenState();
 }
 
-class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
+class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen>
+    with RefreshOnVisible {
+  @override
+  String get refreshWhenLocation => RoutePaths.eventos;
+
+  @override
+  void onBecomeVisible() {
+    ref.invalidate(usuarioEventosAutorizadosProvider);
+    ref.invalidate(eventosListProvider);
+    ref.invalidate(eventosFijadosProvider);
+  }
+
   final _searchController = TextEditingController();
   String _query = '';
   String _filtro = 'Todos';
@@ -126,7 +139,11 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
       ref.invalidate(eventoByIdProvider(evento.id));
     } catch (_) {
       if (mounted) {
-        showAppSnackBar(context, 'No se pudo eliminar el evento.', isError: true);
+        showAppSnackBar(
+          context,
+          'No se pudo eliminar el evento.',
+          isError: true,
+        );
       }
     }
   }
@@ -156,8 +173,10 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
           filled: true,
           fillColor: AppColors.surface,
           isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.input),
             borderSide: const BorderSide(color: AppColors.border),
@@ -168,8 +187,10 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.input),
-            borderSide:
-                const BorderSide(color: AppColors.primaryLight, width: 1.5),
+            borderSide: const BorderSide(
+              color: AppColors.primaryLight,
+              width: 1.5,
+            ),
           ),
         ),
       ),
@@ -220,10 +241,7 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
         const SizedBox(height: 2),
         const Text(
           'Registre eventos, invite a sus asistentes y acredite su entrada al evento',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
         ),
         if (total != null && proximos != null) ...[
           const SizedBox(height: 6),
@@ -245,11 +263,15 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
     final eventosAsync = ref.watch(eventosListProvider);
     final fijadosAsync = ref.watch(eventosFijadosProvider);
     final puedeCrear = ref.watch(canCreateContentProvider);
+    final esAdmin = ref.watch(isAdminProvider);
+    final esUsuario =
+        ref.watch(currentPerfilProvider).valueOrNull?.rol.isUsuario ?? false;
     final fijados = fijadosAsync.valueOrNull ?? const <String>{};
 
     return CollapsingScrollScaffold(
       title: 'Eventos',
       onRefresh: () async {
+        ref.invalidate(usuarioEventosAutorizadosProvider);
         ref.invalidate(eventosListProvider);
         ref.invalidate(eventosFijadosProvider);
       },
@@ -261,23 +283,21 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: eventosAsync.when(
+              skipLoadingOnReload: true,
               loading: () => _buildHeader(),
               error: (_, _) => _buildHeader(),
               data: (eventos) {
-                final proximos =
-                    eventos.where((e) => !e.yaOcurrio && e.activo).length;
-                return _buildHeader(
-                  total: eventos.length,
-                  proximos: proximos,
-                );
+                final proximos = eventos
+                    .where((e) => !e.yaOcurrio && e.activo)
+                    .length;
+                return _buildHeader(total: eventos.length, proximos: proximos);
               },
             ),
           ),
         ),
         ...eventosAsync.when(
-          loading: () => [
-            const SliverFillRemaining(child: LoadingView()),
-          ],
+          skipLoadingOnReload: true,
+          loading: () => [const SliverFillRemaining(child: LoadingView())],
           error: (e, _) => [
             SliverFillRemaining(
               child: ErrorView(
@@ -290,10 +310,12 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
             final filtrados = _filtrar(eventos, fijados);
             if (eventos.isEmpty) {
               return [
-                const SliverFillRemaining(
+                SliverFillRemaining(
                   child: EmptyStateView(
                     icon: Icons.event_busy_rounded,
-                    message: 'Todavía no hay eventos creados.',
+                    message: esUsuario
+                        ? 'No tienes eventos asignados. Contacta a un administrador.'
+                        : 'Todavía no hay eventos creados.',
                   ),
                 ),
               ];
@@ -333,6 +355,15 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen> {
                         onTap: () =>
                             context.push(RoutePaths.usarEvento(evento.id)),
                         onLongPress: () => _mostrarMenuEvento(evento, fijados),
+                        actions: esAdmin
+                            ? [
+                                EventoAccesoButton(
+                                  onTap: () => context.push(
+                                    RoutePaths.accesoEvento(evento.id),
+                                  ),
+                                ),
+                              ]
+                            : null,
                       ),
                     );
                   },

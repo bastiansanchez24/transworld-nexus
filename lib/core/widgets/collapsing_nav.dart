@@ -19,13 +19,18 @@ class CollapsingNavMetrics {
 
   static const double titleZone = 44;
 
-  /// Aire arriba y abajo de los botones en las cabeceras de detalle
+  /// Aire sobre los botones de la barra. Hace falta en todas las cabeceras:
+  /// en web y en Windows no hay notch ni barra de estado que empuje el
+  /// contenido, así que con [topInset] en 0 el "atrás" quedaba pegado al
+  /// borde superior de la ventana.
+  static const double gapTop = 12;
+
+  /// Aire bajo los botones en las cabeceras de detalle
   /// ([CollapsingNavStyle.detail]), que van sobre el hero del evento: sin
-  /// esto el "atrás" y el lápiz quedan pegados al borde superior y al
-  /// contenido del hero.
+  /// esto el "atrás" y el lápiz quedan pegados al contenido del hero.
   static const double gapDetail = 12;
 
-  double get barHeight => topInset + titleZone;
+  double get barHeight => topInset + gapTop + titleZone;
 
   double get barWithSearch => barHeight + 56;
 }
@@ -74,8 +79,8 @@ class CollapsingNavOverlay extends StatelessWidget {
     final metrics = CollapsingNavMetrics(context);
     final isHome = style == CollapsingNavStyle.home;
     final isDetail = style == CollapsingNavStyle.detail;
-    final gap = isDetail ? CollapsingNavMetrics.gapDetail : 0.0;
-    final height = extendedHeight ?? (metrics.barHeight + gap * 2);
+    final gapInferior = isDetail ? CollapsingNavMetrics.gapDetail : 0.0;
+    final height = extendedHeight ?? (metrics.barHeight + gapInferior);
 
     final SystemUiOverlayStyle overlayStyle;
     if (isHome) {
@@ -159,7 +164,7 @@ class CollapsingNavOverlay extends StatelessWidget {
                   ),
                 ),
               Positioned(
-                top: metrics.topInset + gap,
+                top: metrics.topInset + CollapsingNavMetrics.gapTop,
                 left: 0,
                 right: 0,
                 height: CollapsingNavMetrics.titleZone,

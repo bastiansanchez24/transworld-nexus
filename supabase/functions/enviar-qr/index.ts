@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { enviarCorreoBrevo, remitenteContacto } from "../_shared/brevo.ts";
 
 // --- 1. CABECERAS CORS (Obligatorias para llamar desde React) ---
 const corsHeaders = {
@@ -7,7 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -235,25 +235,19 @@ serve(async (req) => {
         `;
     }
 
-    // 6. Enviar correo usando BREVO API
-    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "content-type": "application/json",
+    // 6. Enviar correo usando BREVO API (prioridad alta para Outlook)
+    const res = await enviarCorreoBrevo({
+      sender: {
+        name: `Registro evento ${nombreEvento}`,
+        email: remitenteContacto.email,
       },
-      body: JSON.stringify({
-        sender: { 
-            name: `Registro evento ${nombreEvento}`, 
-            email: "contacto@transworld.cl" 
-        },
-        to: [
-            { email: registro.email, name: registro.nombre_completo }
-        ],
-        subject: `Confirmación de Registro a ${nombreEvento}`,
-        htmlContent: htmlContent,
-      }),
+      replyTo: remitenteContacto,
+      to: [
+        { email: registro.email, name: registro.nombre_completo },
+      ],
+      subject: `Confirmación de Registro a ${nombreEvento}`,
+      htmlContent: htmlContent,
+      tags: ["confirmacion-registro"],
     });
 
     if (!res.ok) {

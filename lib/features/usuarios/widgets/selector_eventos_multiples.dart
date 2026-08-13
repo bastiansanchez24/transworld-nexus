@@ -4,7 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/evento.dart';
 
-/// Selector multi-evento con búsqueda, chips de seleccionados y lista.
+/// Selector multi-evento con búsqueda y lista.
 ///
 /// En modo creación solo se ofrecen eventos activos no finalizados.
 /// En edición, los ya autorizados siguen visibles aunque hayan finalizado
@@ -17,6 +17,7 @@ class SelectorEventosMultiples extends StatefulWidget {
     required this.onChanged,
     this.enabled = true,
     this.soloActivosDisponibles = true,
+    this.emptyHelperText = 'Selecciona al menos un evento.',
     this.errorText,
   });
 
@@ -25,6 +26,7 @@ class SelectorEventosMultiples extends StatefulWidget {
   final ValueChanged<Set<String>> onChanged;
   final bool enabled;
   final bool soloActivosDisponibles;
+  final String emptyHelperText;
   final String? errorText;
 
   @override
@@ -44,12 +46,14 @@ class _SelectorEventosMultiplesState extends State<SelectorEventosMultiples> {
 
   List<Evento> get _candidatos {
     final seleccionados = widget.seleccionados;
-    final list = widget.eventos.where((e) {
-      if (seleccionados.contains(e.id)) return true;
-      if (!widget.soloActivosDisponibles) return true;
-      return e.activo && !e.yaOcurrio;
-    }).toList()
-      ..sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+    final list =
+        widget.eventos.where((e) {
+          if (seleccionados.contains(e.id)) return true;
+          if (!widget.soloActivosDisponibles) return true;
+          return e.activo && !e.yaOcurrio;
+        }).toList()..sort(
+          (a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()),
+        );
     return list;
   }
 
@@ -59,15 +63,6 @@ class _SelectorEventosMultiplesState extends State<SelectorEventosMultiples> {
     return _candidatos
         .where((e) => e.nombre.toLowerCase().contains(q))
         .toList();
-  }
-
-  List<Evento> get _seleccionadosOrdenados {
-    final byId = {for (final e in widget.eventos) e.id: e};
-    return widget.seleccionados
-        .map((id) => byId[id])
-        .whereType<Evento>()
-        .toList()
-      ..sort((a, b) => a.nombre.compareTo(b.nombre));
   }
 
   void _toggle(String id) {
@@ -81,16 +76,9 @@ class _SelectorEventosMultiplesState extends State<SelectorEventosMultiples> {
     widget.onChanged(next);
   }
 
-  void _quitar(String id) {
-    if (!widget.enabled) return;
-    final next = {...widget.seleccionados}..remove(id);
-    widget.onChanged(next);
-  }
-
   @override
   Widget build(BuildContext context) {
     final filtrados = _filtrados;
-    final seleccionados = _seleccionadosOrdenados;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -104,32 +92,10 @@ class _SelectorEventosMultiplesState extends State<SelectorEventosMultiples> {
           ),
           onChanged: (v) => setState(() => _query = v),
         ),
-        if (seleccionados.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: seleccionados
-                .map(
-                  (e) => InputChip(
-                    label: Text(
-                      e.nombre,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onDeleted: widget.enabled ? () => _quitar(e.id) : null,
-                    deleteIconColor: AppColors.textSecondary,
-                    backgroundColor: AppColors.tintNavy,
-                    side: BorderSide.none,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                )
-                .toList(),
-          ),
-        ],
         const SizedBox(height: 10),
         Container(
-          constraints: const BoxConstraints(maxHeight: 220),
+          constraints: const BoxConstraints(maxHeight: 280),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadius.md),
@@ -150,14 +116,15 @@ class _SelectorEventosMultiplesState extends State<SelectorEventosMultiples> {
                     ),
                   ),
                 )
-              : ListView.separated(
+              : Material(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: ListView.separated(
                   shrinkWrap: true,
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   itemCount: filtrados.length,
-                  separatorBuilder: (_, _) => const Divider(
-                    height: 1,
-                    color: AppColors.divider,
-                  ),
+                  separatorBuilder: (_, _) =>
+                      const Divider(height: 1, color: AppColors.divider),
                   itemBuilder: (context, index) {
                     final e = filtrados[index];
                     final checked = widget.seleccionados.contains(e.id);
@@ -165,9 +132,7 @@ class _SelectorEventosMultiplesState extends State<SelectorEventosMultiples> {
                     return CheckboxListTile(
                       dense: true,
                       value: checked,
-                      onChanged: widget.enabled
-                          ? (_) => _toggle(e.id)
-                          : null,
+                      onChanged: widget.enabled ? (_) => _toggle(e.id) : null,
                       controlAffinity: ListTileControlAffinity.leading,
                       title: Text(
                         e.nombre,
@@ -193,6 +158,7 @@ class _SelectorEventosMultiplesState extends State<SelectorEventosMultiples> {
                     );
                   },
                 ),
+              ),
         ),
         if (widget.errorText != null) ...[
           const SizedBox(height: 6),
@@ -204,10 +170,10 @@ class _SelectorEventosMultiplesState extends State<SelectorEventosMultiples> {
           const SizedBox(height: 6),
           Text(
             widget.seleccionados.isEmpty
-                ? 'Selecciona al menos un evento.'
+                ? widget.emptyHelperText
                 : '${widget.seleccionados.length} evento'
-                    '${widget.seleccionados.length == 1 ? '' : 's'} '
-                    'autorizado${widget.seleccionados.length == 1 ? '' : 's'}.',
+                      '${widget.seleccionados.length == 1 ? '' : 's'} '
+                      'autorizado${widget.seleccionados.length == 1 ? '' : 's'}.',
             style: const TextStyle(
               fontSize: 12,
               color: AppColors.textSecondary,

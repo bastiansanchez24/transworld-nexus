@@ -18,7 +18,11 @@ enum AppRole {
   ];
 
   /// Roles asignables al editar un usuario interno (externo solo vía creación).
-  static const assignableRoles = [AppRole.admin, AppRole.organizador, AppRole.user];
+  static const assignableRoles = [
+    AppRole.admin,
+    AppRole.organizador,
+    AppRole.user,
+  ];
 
   static AppRole fromString(String? raw) {
     if (raw == null || raw.isEmpty) return AppRole.user;
@@ -35,13 +39,18 @@ enum AppRole {
   bool get isExterno => this == AppRole.externo;
 
   bool get canManageUsers => isAdmin;
+  bool get requiresEventAssignment => isUsuario || isExterno;
   bool get canCreateContent => isAdmin || isOrganizador;
+  bool get canRegisterAttendees => !isExterno;
+  bool get canAccessNotifications => !isExterno;
+  bool get canExportData => isAdmin || isOrganizador;
+  bool get canViewAllLeads => isAdmin || isOrganizador;
   bool get usesFullShell => !isExterno;
 
   String get label => switch (this) {
-        AppRole.admin => 'Administrador',
-        AppRole.organizador => 'Organizador',
-        AppRole.user => 'Usuario',
-        AppRole.externo => 'Usuario Externo',
-      };
+    AppRole.admin => 'Administrador',
+    AppRole.organizador => 'Organizador',
+    AppRole.user => 'Usuario',
+    AppRole.externo => 'Usuario Externo',
+  };
 }

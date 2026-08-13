@@ -38,7 +38,31 @@ class StorageRepository {
       'heic' || 'heif' => 'image/heic',
       _ => 'image/jpeg',
     };
-    return _subir('leads/${_uuid.v4()}.$ext', bytes, contentType);
+    return _subirFotoLead('leads/${_uuid.v4()}.$ext', bytes, contentType);
+  }
+
+  /// Path estable para la única foto editable de un lead. Reintentar una
+  /// subida sobrescribe el mismo objeto y no deja archivos huérfanos.
+  Future<String> subirFotoLeadParaId(Uint8List bytes, String leadId) {
+    return _subirFotoLead('leads/$leadId.jpg', bytes, 'image/jpeg');
+  }
+
+  Future<String> _subirFotoLead(
+    String fileName,
+    Uint8List bytes,
+    String contentType,
+  ) async {
+    final bucket = _client.storage.from(Env.bucketFotosLeads);
+    try {
+      await bucket.uploadBinary(
+        fileName,
+        bytes,
+        fileOptions: FileOptions(upsert: true, contentType: contentType),
+      );
+    } on StorageException catch (e) {
+      throw Exception(_mensajeDeError(e));
+    }
+    return fileName;
   }
 
   Future<String> _subir(
@@ -57,6 +81,19 @@ class StorageRepository {
       throw Exception(_mensajeDeError(e));
     }
     return bucket.getPublicUrl(fileName);
+  }
+
+  /// Resuelve un path canónico privado justo antes de renderizar. El modelo,
+  /// la caché y la base conservan siempre `leads/<uuid>.jpg`, nunca el token
+  /// temporal de esta URL.
+  Future<String> resolverFotoLead(
+    String value, {
+    int expiresInSeconds = 60 * 60,
+  }) {
+    if (!value.startsWith('leads/')) return Future.value(value);
+    return _client.storage
+        .from(Env.bucketFotosLeads)
+        .createSignedUrl(value, expiresInSeconds);
   }
 
   /// Sin esto la UI muestra el volcado crudo de `StorageException`, que no le
@@ -94,4 +131,22 @@ final storageRepositoryProvider = Provider<StorageRepository>((ref) {
 String agregarVersionCacheImagen(String url, int version) {
   final separador = url.contains('?') ? '&' : '?';
   return '$url${separador}v=$version';
+}
+
+bool esFotoStorageLead(String value) =>
+    value.startsWith('leads/') ||
+    value.contains('/object/sign/leads-privados/leads/');
+
+String pathFotoStorageLead(String value) {
+  if (value.startsWith('leads/')) return value;
+  for (final marker in const [
+    '/object/public/imagenes/',
+    '/object/sign/leads-privados/',
+  ]) {
+    final index = value.indexOf(marker);
+    if (index < 0) continue;
+    final encoded = value.substring(index + marker.length).split('?').first;
+    return Uri.decodeComponent(encoded);
+  }
+  return value;
 }

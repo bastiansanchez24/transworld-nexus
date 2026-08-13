@@ -22,25 +22,34 @@ void main() {
     expect(AppRole.admin.isAdmin, isTrue);
     expect(AppRole.admin.canManageUsers, isTrue);
     expect(AppRole.admin.canCreateContent, isTrue);
+    expect(AppRole.admin.canRegisterAttendees, isTrue);
+    expect(AppRole.admin.canAccessNotifications, isTrue);
     expect(AppRole.admin.usesFullShell, isTrue);
 
     expect(AppRole.organizador.canManageUsers, isFalse);
     expect(AppRole.organizador.canCreateContent, isTrue);
+    expect(AppRole.organizador.canRegisterAttendees, isTrue);
+    expect(AppRole.organizador.canAccessNotifications, isTrue);
     expect(AppRole.organizador.usesFullShell, isTrue);
 
     expect(AppRole.user.canManageUsers, isFalse);
     expect(AppRole.user.canCreateContent, isFalse);
+    expect(AppRole.user.canRegisterAttendees, isTrue);
+    expect(AppRole.user.canAccessNotifications, isTrue);
     expect(AppRole.user.usesFullShell, isTrue);
 
     expect(AppRole.externo.isExterno, isTrue);
     expect(AppRole.externo.canCreateContent, isFalse);
+    expect(AppRole.externo.canRegisterAttendees, isFalse);
+    expect(AppRole.externo.canAccessNotifications, isFalse);
     expect(AppRole.externo.usesFullShell, isFalse);
   });
 
   test('AppRole.assignableRoles solo incluye roles internos', () {
-    expect(
-      AppRole.assignableRoles,
-      [AppRole.admin, AppRole.organizador, AppRole.user],
-    );
+    expect(AppRole.assignableRoles, [
+      AppRole.admin,
+      AppRole.organizador,
+      AppRole.user,
+    ]);
   });
 }

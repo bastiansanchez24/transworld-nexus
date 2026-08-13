@@ -20,6 +20,7 @@ class RoutePaths {
   static const eventos = '/eventos';
   static const crearEvento = '/eventos/crear';
   static String editarEvento(String id) => '/eventos/$id/editar';
+  static String accesoEvento(String id) => '/eventos/$id/acceso';
   static String usarEvento(String id) => '/eventos/$id/usar';
   static String registrar(String id) => '/eventos/$id/registrar';
   static String registroPorCliente(String id) => '/eventos/$id/registro-cliente';

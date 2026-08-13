@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
@@ -14,13 +15,15 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
+import '../../../data/models/lead_write_result.dart';
 import '../../../data/models/lead_prefill.dart';
 import '../../../data/offline/pending_photo_store.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/leads_repository.dart';
-import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../externo/providers/externo_dashboard_provider.dart';
 import '../providers/capturador_providers.dart';
+import '../widgets/foto_lead_identidad.dart';
 
 enum _CampoVoz { nombre, empresa, cargo, email, descripcion }
 
@@ -44,6 +47,7 @@ class CrearLeadScreen extends ConsumerStatefulWidget {
 }
 
 class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
+  static const _uuid = Uuid();
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _empresaController = TextEditingController();
@@ -59,6 +63,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
   /// Foto ya comprimida, todavía en memoria. Se sube (o se deja en disco, si
   /// no hay red) recién al guardar el lead.
   Uint8List? _fotoBytes;
+  String? _leadGuardadoPendienteFotoId;
 
   bool _guardando = false;
   bool _accesoValidado = false;
@@ -78,7 +83,9 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     super.initState();
     _aplicarPrefill();
     _initSpeech();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _validarAccesoExterno());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _validarAccesoExterno(),
+    );
   }
 
   void _validarAccesoExterno() {
@@ -95,7 +102,8 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
       return; // reintentará vía ref.listen en build
     }
 
-    final ok = eventoReg != null &&
+    final ok =
+        eventoReg != null &&
         eventoReg.isNotEmpty &&
         permitidos.contains(eventoReg);
 
@@ -221,21 +229,46 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     setState(() => _fotoBytes = bytes);
   }
 
-  /// Resuelve la foto a lo que va en `fotos_urls`: una URL pública si hay
-  /// red, o un marcador `local_foto://` que la cola subirá al reconectar.
+  /// Conserva la foto localmente hasta que el servidor confirme la fila. Así
+  /// un duplicado nunca deja archivos huérfanos en Storage.
   Future<List<String>> _resolverFotos({required bool isOnline}) async {
     final bytes = _fotoBytes;
     if (bytes == null) return const [];
 
-    if (isOnline) {
-      return [
-        await ref.read(storageRepositoryProvider).subirFotoLead(bytes, 'jpg'),
-      ];
-    }
-
     final store = ref.read(pendingPhotoStoreProvider);
-    if (!store.disponible) return const [];
-    return [await store.guardar(bytes)];
+    if (store.disponible) return [await store.guardar(bytes)];
+
+    // Web no tiene disco persistente. En línea se conserva el flujo seguro:
+    // el repositorio crea primero la fila y recién después sube estos bytes.
+    if (isOnline) return const [];
+    return const [];
+  }
+
+  String? _validarEmail(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return 'Requerido';
+    final partes = value.split('@');
+    if (partes.length != 2 ||
+        partes.first.isEmpty ||
+        !partes.last.contains('.') ||
+        partes.last.startsWith('.') ||
+        partes.last.endsWith('.')) {
+      return 'Ingresa un email válido';
+    }
+    return null;
+  }
+
+  void _finalizarFlujoGuardado() {
+    final eventoRegistroId = widget.eventoRegistroId;
+    if (eventoRegistroId != null) {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(RoutePaths.acreditarQr(eventoRegistroId));
+      }
+    } else {
+      _limpiarFormulario();
+    }
   }
 
   Future<void> _guardar() async {
@@ -249,8 +282,39 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     final isOnline = ref.read(isOnlineProvider);
     final perfil = ref.read(currentPerfilProvider).valueOrNull;
     final userId = perfil?.id;
+    Lead? leadPreparado;
+    List<String> fotosPreparadas = const [];
 
     try {
+      final pendienteFotoId = _leadGuardadoPendienteFotoId;
+      final bytesPendientes = _fotoBytes;
+      if (pendienteFotoId != null && bytesPendientes != null) {
+        try {
+          await ref
+              .read(leadsRepositoryProvider)
+              .adjuntarFotoBytes(pendienteFotoId, bytesPendientes);
+          _leadGuardadoPendienteFotoId = null;
+          if (mounted) {
+            showAppSnackBar(context, 'Lead y foto guardados.');
+            _finalizarFlujoGuardado();
+          }
+        } catch (_) {
+          if (mounted) {
+            showAppSnackBar(
+              context,
+              'Lead guardado; foto pendiente, reintenta',
+              isError: true,
+            );
+          }
+        }
+        return;
+      }
+
+      if (userId == null || userId.isEmpty) {
+        throw Exception(
+          'No se pudo identificar al usuario capturador. Intenta de nuevo.',
+        );
+      }
       if (perfil?.isExterno == true) {
         final eventoReg = widget.eventoRegistroId;
         final permitidos = _idsPermitidosExterno();
@@ -268,10 +332,12 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
 
       // En web no hay dónde dejar la foto esperando a que vuelva la red, así
       // que el lead se guarda sin ella y hay que decirlo.
-      final fotoDescartada = _fotoBytes != null &&
+      final fotoDescartada =
+          _fotoBytes != null &&
           !isOnline &&
           !ref.read(pendingPhotoStoreProvider).disponible;
       final fotos = await _resolverFotos(isOnline: isOnline);
+      fotosPreparadas = fotos;
 
       final lead = Lead(
         id: '',
@@ -293,44 +359,111 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
         fotosUrls: fotos,
         perfilId: userId,
       );
+      leadPreparado = lead;
 
+      LeadWriteResult? result;
+      var fotoPendienteDeSync = false;
       if (isOnline) {
-        await ref.read(leadsRepositoryProvider).crear(lead);
+        try {
+          result = await ref.read(leadsRepositoryProvider).crear(lead);
+        } on LeadPhotoPendingException catch (error) {
+          result = error.result;
+          await ref
+              .read(syncQueueServiceProvider.notifier)
+              .enqueueUpdate(
+                table: SupabaseTables.leads,
+                entityId: error.result.leadId,
+                changes: {'fotos_urls': error.fotosPendientes},
+              );
+          fotoPendienteDeSync = true;
+        }
       } else {
-        await ref.read(syncQueueServiceProvider.notifier).enqueueInsert(
+        await ref
+            .read(syncQueueServiceProvider.notifier)
+            .enqueueInsert(
               table: SupabaseTables.leads,
-              payload: lead.toInsertMap(),
+              payload: {
+                ...lead.toInsertMap(),
+                '_requested_lead_id': _uuid.v4(),
+              },
             );
       }
 
       ref.invalidate(leadsPorEventoProvider(widget.eventoId));
+      if (perfil?.isExterno == true) {
+        ref.invalidate(externoDashboardProvider);
+      }
 
       if (mounted) {
-        showAppSnackBar(
-          context,
-          switch ((isOnline, fotoDescartada)) {
-            (true, _) => 'Lead guardado.',
-            (false, true) =>
-              'Guardado en modo local, pero sin la foto: se necesita '
-                  'conexión para adjuntarla.',
-            (false, false) => 'Guardado en modo local. Se subirá solo.',
-          },
-          isError: fotoDescartada,
-        );
-        // Volver al escáner con pop (no go): go reemplaza el stack y deja
-        // el QR sin historial → la X no cierra y el atrás sale de la app.
-        final eventoRegistroId = widget.eventoRegistroId;
-        if (eventoRegistroId != null) {
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go(RoutePaths.acreditarQr(eventoRegistroId));
+        if (result?.esDuplicado == true) {
+          final store = ref.read(pendingPhotoStoreProvider);
+          for (final foto in fotos.where(esFotoLocal)) {
+            await store.borrar(foto);
           }
-        } else {
-          _limpiarFormulario();
+          if (!mounted) return;
+          showAppSnackBar(context, result!.mensajeDuplicado, isError: true);
+          return;
         }
+        if (result?.guardado == true &&
+            _fotoBytes != null &&
+            fotos.isEmpty &&
+            isOnline) {
+          try {
+            await ref
+                .read(leadsRepositoryProvider)
+                .adjuntarFotoBytes(result!.leadId, _fotoBytes!);
+          } catch (_) {
+            if (!mounted) return;
+            _leadGuardadoPendienteFotoId = result!.leadId;
+            showAppSnackBar(
+              context,
+              'Lead guardado; foto pendiente, reintenta',
+              isError: true,
+            );
+            return;
+          }
+        }
+        if (!mounted) return;
+        showAppSnackBar(context, switch ((isOnline, fotoDescartada)) {
+          (true, _) when fotoPendienteDeSync =>
+            'Lead guardado. La foto se sincronizará automáticamente.',
+          (true, _) => 'Lead guardado.',
+          (false, true) =>
+            'Guardado en modo local, pero sin la foto: se necesita '
+                'conexión para adjuntarla.',
+          (false, false) => 'Guardado en modo local. Se subirá solo.',
+        }, isError: fotoDescartada);
+        _finalizarFlujoGuardado();
       }
     } catch (e) {
+      if (isOnline && leadPreparado != null && isNetworkTransportError(e)) {
+        try {
+          await ref
+              .read(syncQueueServiceProvider.notifier)
+              .enqueueInsert(
+                table: SupabaseTables.leads,
+                payload: {
+                  ...leadPreparado.toInsertMap(),
+                  '_requested_lead_id': _uuid.v4(),
+                },
+              );
+          ref.invalidate(leadsPorEventoProvider(widget.eventoId));
+          if (mounted) {
+            showAppSnackBar(
+              context,
+              'Sin conexión real. El lead quedó guardado localmente.',
+            );
+            _finalizarFlujoGuardado();
+          }
+          return;
+        } catch (_) {
+          // Continúa al error original y limpia marcadores sin referencia.
+        }
+      }
+      final store = ref.read(pendingPhotoStoreProvider);
+      for (final foto in fotosPreparadas.where(esFotoLocal)) {
+        await store.borrar(foto);
+      }
       if (mounted) {
         showAppSnackBar(
           context,
@@ -343,6 +476,23 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     }
   }
 
+  /// Micrófono de dictado. Sobre la card navy el rojo de "grabando" no se
+  /// distingue, así que ahí se usa la lima del brand.
+  Widget? _botonVoz(_CampoVoz campo, {bool sobreNavy = false}) {
+    if (!_speechDisponible) return null;
+    final escuchando = _escuchandoCampo == campo;
+    return IconButton(
+      tooltip: escuchando ? 'Detener dictado' : 'Dictar',
+      onPressed: _guardando ? null : () => _toggleVoz(campo),
+      icon: Icon(
+        escuchando ? Icons.mic : Icons.mic_none_outlined,
+        color: sobreNavy
+            ? (escuchando ? AppColors.accent : Colors.white)
+            : (escuchando ? AppColors.danger : AppColors.primary),
+      ),
+    );
+  }
+
   Widget _campoTexto({
     required String label,
     required TextEditingController controller,
@@ -353,33 +503,15 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     int maxLines = 1,
   }) {
     final escuchando = campoVoz != null && _escuchandoCampo == campoVoz;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _FieldLabel(label),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          enabled: !escuchando && !_guardando,
-          keyboardType: keyboardType,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            hintText: hintText,
-            alignLabelWithHint: maxLines > 1,
-            suffixIcon: campoVoz != null && _speechDisponible
-                ? IconButton(
-                    tooltip: escuchando ? 'Detener dictado' : 'Dictar',
-                    onPressed: _guardando ? null : () => _toggleVoz(campoVoz),
-                    icon: Icon(
-                      escuchando ? Icons.mic : Icons.mic_none_outlined,
-                      color: escuchando ? AppColors.danger : AppColors.primary,
-                    ),
-                  )
-                : null,
-          ),
-          validator: validator,
-        ),
-      ],
+    return NexusFormTextField(
+      label: label,
+      controller: controller,
+      hintText: hintText,
+      enabled: !escuchando && !_guardando,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: validator,
+      suffixIcon: campoVoz == null ? null : _botonVoz(campoVoz),
     );
   }
 
@@ -393,10 +525,8 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
 
     return AppScaffold(
       titleWidget: eventoAsync.when(
-        data: (e) => Text(
-          'Capturar · ${e.nombre}',
-          overflow: TextOverflow.ellipsis,
-        ),
+        data: (e) =>
+            Text('Capturar · ${e.nombre}', overflow: TextOverflow.ellipsis),
         loading: () => const Text('Capturar lead'),
         error: (_, _) => const Text('Capturar lead'),
       ),
@@ -407,28 +537,29 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _FieldLabel('Foto'),
-              const SizedBox(height: 6),
-              SelectorImagen(
-                bytes: _fotoBytes,
-                enabled: !_guardando,
-                aspectRatio: kProporcionFotoLead,
-                anchoMaximo: kAnchoSelectorFotoLead,
-                circular: true,
-                etiquetaVacio: 'Agregar foto del lead',
-                onElegir: _elegirFoto,
-                onQuitar: _fotoBytes == null
-                    ? null
-                    : () => setState(() => _fotoBytes = null),
-              ),
-              const SizedBox(height: 14),
-              _campoTexto(
-                label: 'Nombre completo',
-                controller: _nombreController,
-                hintText: 'Ej. María González',
-                campoVoz: _CampoVoz.nombre,
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+              ListenableBuilder(
+                listenable: _emailController,
+                builder: (context, _) {
+                  return PersonaIdentityBanner(
+                    nombre: _nombreController.text,
+                    email: _emailController.text,
+                    nombreController: _nombreController,
+                    nombreHint: 'Ej. María González',
+                    nombreEnabled:
+                        !_guardando && _escuchandoCampo != _CampoVoz.nombre,
+                    nombreValidator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                    nombreSuffix: _botonVoz(_CampoVoz.nombre, sobreNavy: true),
+                    leading: FotoLeadAvatar(
+                      bytes: _fotoBytes,
+                      enabled: !_guardando,
+                      onElegir: _elegirFoto,
+                      onQuitar: _fotoBytes == null
+                          ? null
+                          : () => setState(() => _fotoBytes = null),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 14),
               _campoTexto(
@@ -460,6 +591,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                 hintText: 'correo@empresa.com',
                 campoVoz: _CampoVoz.email,
                 keyboardType: TextInputType.emailAddress,
+                validator: _validarEmail,
               ),
               const SizedBox(height: 14),
               _campoTexto(
@@ -479,24 +611,6 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        color: AppColors.textSecondary,
       ),
     );
   }

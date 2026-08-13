@@ -18,6 +18,7 @@ import '../../features/capturador/screens/listar_eventos_leads_screen.dart';
 import '../../features/capturador/screens/usar_evento_lead_screen.dart';
 import '../../data/models/capturar_lead_route_extra.dart';
 import '../../features/eventos/screens/crear_editar_evento_screen.dart';
+import '../../features/eventos/screens/gestionar_acceso_evento_screen.dart';
 import '../../features/eventos/screens/listar_eventos_screen.dart';
 import '../../features/exportacion/screens/exportar_screen.dart';
 import '../../features/home/screens/home_screen.dart';
@@ -36,9 +37,12 @@ import '../../features/usar_app/screens/usar_evento_screen.dart';
 import '../../features/usuarios/screens/editar_usuario_screen.dart';
 import '../../features/usuarios/screens/gestionar_usuarios_screen.dart';
 import '../../features/usuarios/screens/nuevo_usuario_screen.dart';
+import 'external_route_policy.dart';
 import 'go_router_refresh_stream.dart';
 import 'page_transitions.dart';
 import 'route_paths.dart';
+import 'session_boot_route.dart';
+import 'user_event_route_policy.dart';
 import '../widgets/main_shell_scaffold.dart';
 
 /// Rutas que no requieren sesión iniciada.
@@ -49,57 +53,18 @@ bool _esRutaPublica(String location) {
       location == RoutePaths.eventoFinalizado;
 }
 
-/// Captura de lead desde el escáner QR (`/capturador/:id/capturar`).
-bool _esRutaCapturarLead(String location) {
-  final parts = location.split('/');
-  // ['', 'capturador', ':id', 'capturar']
-  return parts.length == 4 &&
-      parts[1] == 'capturador' &&
-      parts[3] == 'capturar' &&
-      parts[2].isNotEmpty;
-}
-
-bool _rutaPermitidaExterno(
-  String location,
-  Set<String> eventoIds, {
-  String? desdeEventoCaptura,
-}) {
-  for (final eventoId in eventoIds) {
-    if (location == RoutePaths.externoEvento(eventoId)) return true;
-    if (location == RoutePaths.acreditarQr(eventoId)) return true;
-    if (location == RoutePaths.registrar(eventoId)) return true;
-    if (location == RoutePaths.registroPorCliente(eventoId)) return true;
-  }
-  // Solo permitir capturar lead si viene amarrado a un evento autorizado.
-  if (_esRutaCapturarLead(location)) {
-    return desdeEventoCaptura != null &&
-        desdeEventoCaptura.isNotEmpty &&
-        eventoIds.contains(desdeEventoCaptura);
-  }
-  return false;
-}
-
-/// Extrae el id de evento de rutas operativas `/externo/eventos/:id` o
-/// `/eventos/:id/...`.
-String? _eventoIdDeRutaOperativa(String location) {
-  final parts = location.split('/');
-  if (parts.length >= 4 &&
-      parts[1] == 'externo' &&
-      parts[2] == 'eventos' &&
-      parts[3].isNotEmpty) {
-    return parts[3];
-  }
-  if (parts.length >= 3 && parts[1] == 'eventos' && parts[2].isNotEmpty) {
-    return parts[2];
-  }
-  return null;
-}
-
-bool _esRutaShell(String location) {
-  return location == RoutePaths.home ||
-      location == RoutePaths.eventos ||
-      location == RoutePaths.capturador ||
-      location == RoutePaths.usuarios;
+/// La captura de leads de un externo solo puede nacer del push en memoria que
+/// hace el escáner. El query param por sí solo es falsificable y no constituye
+/// una prueba de procedencia. En web, recargar esta ruta pierde `extra` y vuelve
+/// de forma segura al evento activo.
+bool _hasTrustedScannerContext(GoRouterState state) {
+  final sourceEventId = state.uri.queryParameters['desdeEvento'];
+  final extra = state.extra;
+  return sourceEventId != null &&
+      sourceEventId.isNotEmpty &&
+      extra is CapturarLeadRouteExtra &&
+      extra.prefill != null &&
+      extra.eventoRegistroId == sourceEventId;
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -119,6 +84,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     externoEventoActivoOverrideProvider,
     (_, _) => refreshListenable.refresh(),
   );
+  ref.listen(
+    usuarioEventosAutorizadosProvider,
+    (_, _) => refreshListenable.refresh(),
+  );
   ref.listen(splashReadyProvider, (_, _) => refreshListenable.refresh());
   ref.listen(
     splashNavigationTimedOutProvider,
@@ -126,8 +95,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 
   return GoRouter(
-    initialLocation:
-        showAnimatedSplash ? RoutePaths.splash : RoutePaths.login,
+    initialLocation: (showAnimatedSplash || authClient.currentSession != null)
+        ? RoutePaths.splash
+        : RoutePaths.login,
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final location = state.matchedLocation;
@@ -146,7 +116,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final splashReady = ref.read(splashReadyProvider);
       final splashTimedOut = ref.read(splashNavigationTimedOutProvider);
 
-      // Animación solo en Windows/Android. Web (y el resto) no montan splash.
+      // Animación Lottie solo en Windows/Android. En web el splash se usa
+      // como espera de perfil cuando ya hay sesión, sin bloquear el arranque.
       if (showAnimatedSplash && !splashReady) {
         return enSplash ? null : RoutePaths.splash;
       }
@@ -158,35 +129,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final perfilAsync = ref.read(currentPerfilProvider);
       final perfil = perfilAsync.valueOrNull;
 
-      // Sesión viva sin perfil: en desktop/móvil esperar en splash; en web
-      // quedarse en login. Escapes: error de perfil o timeout del splash.
+      // Sesión viva sin perfil: esperar en splash, nunca en el formulario de
+      // login (en web eso flashaba el login y después avanzaba sola al home).
+      // Escapes: error de perfil o timeout del splash.
       // No tratar AsyncData(null) inmediato como error: justo tras login
       // currentSession puede ir un frame delante del rebuild del provider.
-      if (session != null && perfil == null && (!esPublica || enSplash)) {
-        if ((perfilAsync.hasError && !perfilAsync.isLoading) ||
-            splashTimedOut) {
+      if (session != null && perfil == null) {
+        final perfilFallido =
+            (perfilAsync.hasError && !perfilAsync.isLoading) || splashTimedOut;
+        if (perfilFallido) {
           Future.microtask(() => authClient.signOut());
-          return RoutePaths.login;
         }
-        if (showAnimatedSplash) {
-          return enSplash ? null : RoutePaths.splash;
-        }
-        // Web: no abrir shell ni splash; login mientras resuelve el perfil.
-        return RoutePaths.login;
+        return rutaMientrasCargaPerfil(
+          location: location,
+          esPublica: esPublica,
+          perfilFallido: perfilFallido,
+        );
       }
 
-      if (session != null && (location == RoutePaths.login || enSplash)) {
-        if (perfil == null) {
-          if ((perfilAsync.hasError && !perfilAsync.isLoading) ||
-              splashTimedOut) {
-            Future.microtask(() => authClient.signOut());
-            return RoutePaths.login;
-          }
-          if (showAnimatedSplash) {
-            return enSplash ? null : RoutePaths.splash;
-          }
-          return enSplash ? RoutePaths.login : null;
-        }
+      if (session != null &&
+          perfil != null &&
+          (location == RoutePaths.login || enSplash)) {
         if (perfil.isExterno) {
           final eventoId = ref.read(externoEventoIdProvider);
           if (eventoId == null || eventoId.isEmpty) {
@@ -211,29 +174,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (session != null && perfil != null && perfil.isExterno) {
+        // El cambio obligatorio es una ruta técnica y debe sobrevivir a la
+        // allowlist operativa del externo, incluso si venía desde una ruta
+        // pública como `eventoFinalizado`.
+        if (perfil.cambiarPass) {
+          return location == RoutePaths.recrearPass
+              ? null
+              : RoutePaths.recrearPass;
+        }
+
         final autorizadosIds = ref.read(externoEventosAutorizadosIdsProvider);
-        final preferidoCarga = ref.read(externoEventoIdProvider) ??
-            perfil.eventoAsignadoId;
+        final preferidoCarga =
+            ref.read(externoEventoIdProvider) ?? perfil.eventoAsignadoId;
         final holdExterno = preferidoCarga != null && preferidoCarga.isNotEmpty
             ? RoutePaths.externoEvento(preferidoCarga)
             : RoutePaths.eventoFinalizado;
 
-        // null = lista aún cargando: no abrir shell ni capturador libre.
+        // null = lista aún cargando. Se confía temporalmente solo en el evento
+        // preferido del perfil; RLS sigue validando que esté autorizado.
         if (autorizadosIds == null) {
-          if (preferidoCarga != null && preferidoCarga.isNotEmpty) {
-            if (location == RoutePaths.externoEvento(preferidoCarga) ||
-                location == RoutePaths.acreditarQr(preferidoCarga) ||
-                location == RoutePaths.registrar(preferidoCarga) ||
-                location == RoutePaths.registroPorCliente(preferidoCarga) ||
-                location == RoutePaths.notificaciones) {
-              return null;
-            }
-            if (_esRutaCapturarLead(location) &&
-                state.uri.queryParameters['desdeEvento'] == preferidoCarga) {
-              return null;
-            }
+          final idsTemporales = preferidoCarga == null || preferidoCarga.isEmpty
+              ? const <String>{}
+              : {preferidoCarga};
+          if (isExternalOperationalRouteAllowed(
+            location: location,
+            authorizedEventIds: idsTemporales,
+            captureSourceEventId: state.uri.queryParameters['desdeEvento'],
+            hasTrustedScannerContext: _hasTrustedScannerContext(state),
+          )) {
+            return null;
           }
-          if (location == RoutePaths.eventoFinalizado) return null;
+          if (idsTemporales.isEmpty &&
+              location == RoutePaths.eventoFinalizado) {
+            return null;
+          }
           return holdExterno;
         }
 
@@ -247,16 +221,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
         final sinOperables = ref.read(externoSinEventosOperablesProvider);
         if (sinOperables == null) {
-          final desdeEvento = state.uri.queryParameters['desdeEvento'];
-          if (_rutaPermitidaExterno(
-            location,
-            {eventoId},
-            desdeEventoCaptura: desdeEvento,
+          if (isExternalOperationalRouteAllowed(
+            location: location,
+            authorizedEventIds: {eventoId},
+            captureSourceEventId: state.uri.queryParameters['desdeEvento'],
+            hasTrustedScannerContext: _hasTrustedScannerContext(state),
           )) {
             return null;
-          }
-          if (location == RoutePaths.eventoFinalizado) {
-            return RoutePaths.externoEvento(eventoId);
           }
           return RoutePaths.externoEvento(eventoId);
         }
@@ -286,57 +257,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ? {eventoId}
             : autorizadosIds;
 
-        final desdeEventoCaptura =
-            state.uri.queryParameters['desdeEvento'];
-
-        // Ruta operativa con id no autorizado → activo.
-        final idEnRuta = _eventoIdDeRutaOperativa(location);
-        if (idEnRuta != null &&
-            !idsPermitidos.contains(idEnRuta) &&
-            !_esRutaCapturarLead(location)) {
-          return RoutePaths.externoEvento(eventoId);
-        }
-
-        final permitida = _rutaPermitidaExterno(
-          location,
-          idsPermitidos,
-          desdeEventoCaptura: desdeEventoCaptura,
-        );
-
-        if (permitida) {
+        if (isExternalOperationalRouteAllowed(
+          location: location,
+          authorizedEventIds: idsPermitidos,
+          captureSourceEventId: state.uri.queryParameters['desdeEvento'],
+          hasTrustedScannerContext: _hasTrustedScannerContext(state),
+        )) {
           return null;
         }
 
-        if (location.startsWith('/externo/')) {
-          return RoutePaths.externoEvento(eventoId);
-        }
+        // Fail closed: toda ruta no enumerada vuelve al evento activo. Esto
+        // cubre registro manual, autoregistro, estadísticas, perfil,
+        // notificaciones, shell interno y enlaces profundos desconocidos.
+        return RoutePaths.externoEvento(eventoId);
+      }
 
-        for (final id in idsPermitidos) {
-          if (location.startsWith('/eventos/$id/')) {
-            return RoutePaths.externoEvento(eventoId);
-          }
-        }
+      if (session != null &&
+          perfil != null &&
+          perfil.usesFullShell &&
+          !perfil.canExportData &&
+          isDataExportRoute(location)) {
+        return location.startsWith('/capturador/')
+            ? RoutePaths.capturador
+            : RoutePaths.eventos;
+      }
 
-        if (_esRutaShell(location) ||
-            location == RoutePaths.perfil ||
-            location == RoutePaths.actualizaciones ||
-            location == RoutePaths.capturador ||
-            location.startsWith('/capturador') ||
-            location.startsWith('/usuarios') ||
-            location == RoutePaths.crearEvento ||
-            location == RoutePaths.crearEventoLead) {
-          return RoutePaths.externoEvento(eventoId);
+      if (session != null && perfil != null && perfil.rol.isUsuario) {
+        final autorizados = ref.read(usuarioEventosAutorizadosIdsProvider);
+        if (!isUserEventRouteAllowed(
+          location: location,
+          authorizedEventIds: autorizados,
+          publicRegistrationEventId: state.uri.queryParameters['id'],
+        )) {
+          return RoutePaths.eventos;
         }
-
-        if (location.startsWith('/eventos/')) {
-          return RoutePaths.externoEvento(eventoId);
-        }
-
-        if (location == RoutePaths.home) {
-          return RoutePaths.externoEvento(eventoId);
-        }
-
-        return null;
       }
 
       if (session != null &&
@@ -345,6 +299,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           (location == RoutePaths.usuarios ||
               location.startsWith('/usuarios/'))) {
         return RoutePaths.home;
+      }
+
+      if (session != null &&
+          perfil != null &&
+          !perfil.canManageUsers &&
+          isEventAccessManagementRoute(location)) {
+        return RoutePaths.eventos;
       }
 
       if (session != null &&
@@ -379,9 +340,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/externo/eventos/:id',
-        builder: (context, state) => UsarEventoExternoScreen(
-          eventoId: state.pathParameters['id']!,
-        ),
+        builder: (context, state) =>
+            UsarEventoExternoScreen(eventoId: state.pathParameters['id']!),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
@@ -432,8 +392,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/eventos/:id/editar',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: CrearEditarEventoScreen(
-            eventoId: state.pathParameters['id'],
+          child: CrearEditarEventoScreen(eventoId: state.pathParameters['id']),
+        ),
+      ),
+      GoRoute(
+        path: '/eventos/:id/acceso',
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: GestionarAccesoEventoScreen(
+            eventoId: state.pathParameters['id']!,
           ),
         ),
       ),
@@ -441,9 +408,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/eventos/:id/usar',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: UsarEventoScreen(
-            eventoId: state.pathParameters['id']!,
-          ),
+          child: UsarEventoScreen(eventoId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -477,18 +442,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/eventos/:id/acreditar-qr',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: AcreditarQrScreen(
-            eventoId: state.pathParameters['id']!,
-          ),
+          child: AcreditarQrScreen(eventoId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/registrados',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: VerRegistradosScreen(
-            eventoId: state.pathParameters['id']!,
-          ),
+          child: VerRegistradosScreen(eventoId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -505,18 +466,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/eventos/:id/kpi',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: KpiScreen(
-            eventoId: state.pathParameters['id']!,
-          ),
+          child: KpiScreen(eventoId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
         path: '/eventos/:id/exportar',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: ExportarScreen(
-            eventoId: state.pathParameters['id']!,
-          ),
+          child: ExportarScreen(eventoId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -539,9 +496,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/capturador/:id/usar',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: UsarEventoLeadScreen(
-            eventoId: state.pathParameters['id']!,
-          ),
+          child: UsarEventoLeadScreen(eventoId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -554,8 +509,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             child: CrearLeadScreen(
               eventoId: state.pathParameters['id']!,
               prefill: routeExtra.prefill,
-              eventoRegistroId:
-                  routeExtra.eventoRegistroId ?? desdeEvento,
+              eventoRegistroId: routeExtra.eventoRegistroId ?? desdeEvento,
             ),
           );
         },
@@ -564,9 +518,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/capturador/:id/leads',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: ListaLeadsScreen(
-            eventoId: state.pathParameters['id']!,
-          ),
+          child: ListaLeadsScreen(eventoId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -583,17 +535,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/capturador/:id/exportar',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: ExportarLeadsScreen(
-            eventoId: state.pathParameters['id']!,
-          ),
+          child: ExportarLeadsScreen(eventoId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
         path: RoutePaths.perfil,
-        pageBuilder: (context, state) => sharedAxisPage(
-          key: state.pageKey,
-          child: const MiPerfilScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            sharedAxisPage(key: state.pageKey, child: const MiPerfilScreen()),
       ),
       GoRoute(
         path: RoutePaths.actualizaciones,
@@ -620,9 +568,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/usuarios/:id/editar',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: EditarUsuarioScreen(
-            usuarioId: state.pathParameters['id']!,
-          ),
+          child: EditarUsuarioScreen(usuarioId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(

@@ -1,11 +1,12 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/router/refresh_on_visible.dart';
+import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -45,6 +46,17 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
   /// Un insert todavía en la cola no tiene fila en el servidor: su id es el
   /// temporal que generó [SyncQueueService], no un uuid real.
   bool get _esPendiente => esIdSoloLocal(widget.registradoId);
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _empresaController.dispose();
+    _cargoController.dispose();
+    _telefonoController.dispose();
+    _rutController.dispose();
+    _patenteController.dispose();
+    super.dispose();
+  }
 
   void _precargar(Registrado r) {
     if (_cargado) return;
@@ -87,7 +99,7 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
       ref.invalidate(registradosPorEventoProvider(widget.eventoId));
       if (mounted) {
         showAppSnackBar(context, 'Cambios guardados.');
-        context.pop();
+        volverALista(context, RoutePaths.verRegistrados(widget.eventoId));
       }
     } catch (e) {
       if (mounted) showAppSnackBar(context, 'No se pudo guardar.', isError: true);
@@ -107,7 +119,9 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
     try {
       await ref.read(registradosRepositoryProvider).eliminar(widget.registradoId);
       ref.invalidate(registradosPorEventoProvider(widget.eventoId));
-      if (mounted) context.pop();
+      if (mounted) {
+        volverALista(context, RoutePaths.verRegistrados(widget.eventoId));
+      }
     } catch (e) {
       if (mounted) showAppSnackBar(context, 'No se pudo eliminar.', isError: true);
     }
@@ -145,60 +159,73 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
                 _precargar(registrado);
 
                 return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.screenH,
-                    AppSpacing.xl,
-                    AppSpacing.screenH,
-                    AppSpacing.xxxl,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
                   child: Form(
                     key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          registrado.email,
-                          style: const TextStyle(color: AppColors.textSecondary),
+                        PersonaIdentityBanner(
+                          nombre: _nombreController.text,
+                          email: registrado.email,
+                          nombreController: _nombreController,
+                          nombreHint: 'Ej. María González',
+                          nombreEnabled: !_guardando,
+                          nombreValidator: (v) =>
+                              (v == null || v.trim().isEmpty)
+                              ? 'Requerido'
+                              : null,
+                          badge: StatusChip(
+                            label: _acreditado ? 'Acreditado' : 'Pendiente',
+                            variant: _acreditado
+                                ? StatusChipVariant.success
+                                : StatusChipVariant.warning,
+                          ),
                         ),
-                        const SizedBox(height: AppSpacing.lg),
-                        TextFormField(
-                          controller: _nombreController,
-                          decoration: const InputDecoration(labelText: 'Nombre completo'),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                        ),
-                        AppSpacing.field,
-                        TextFormField(
+                        const SizedBox(height: 14),
+                        NexusFormTextField(
+                          label: 'Empresa',
                           controller: _empresaController,
-                          decoration: const InputDecoration(labelText: 'Empresa'),
+                          hintText: 'Ej. Transworld',
+                          enabled: !_guardando,
                         ),
-                        AppSpacing.field,
-                        TextFormField(
+                        const SizedBox(height: 14),
+                        NexusFormTextField(
+                          label: 'Cargo',
                           controller: _cargoController,
-                          decoration: const InputDecoration(labelText: 'Cargo'),
+                          hintText: 'Ej. Gerente comercial',
+                          enabled: !_guardando,
                         ),
-                        AppSpacing.field,
-                        TextFormField(
+                        const SizedBox(height: 14),
+                        NexusFormTextField(
+                          label: 'Teléfono',
                           controller: _telefonoController,
-                          decoration: const InputDecoration(labelText: 'Teléfono'),
+                          hintText: '+56 9 1234 5678',
+                          keyboardType: TextInputType.phone,
+                          enabled: !_guardando,
                         ),
-                        AppSpacing.field,
-                        TextFormField(
+                        const SizedBox(height: 14),
+                        NexusFormTextField(
+                          label: 'RUT / RUC',
                           controller: _rutController,
-                          decoration: const InputDecoration(labelText: 'RUT / RUC'),
+                          hintText: '12.345.678-9',
+                          enabled: !_guardando,
                         ),
-                        AppSpacing.field,
-                        TextFormField(
+                        const SizedBox(height: 14),
+                        NexusFormTextField(
+                          label: 'Patente',
                           controller: _patenteController,
-                          decoration: const InputDecoration(labelText: 'Patente'),
+                          hintText: 'ABCD12',
+                          enabled: !_guardando,
                         ),
-                        const SizedBox(height: AppSpacing.lg),
+                        const SizedBox(height: 14),
                         _ToggleRow(
                           title: 'Acreditado',
                           subtitle: 'Estado de ingreso al evento',
                           value: _acreditado,
                           onChanged: (v) => setState(() => _acreditado = v),
                         ),
-                        const SizedBox(height: AppSpacing.xl),
+                        const SizedBox(height: 24),
                         PrimaryGradientButton(
                           label: 'Guardar cambios',
                           loading: _guardando,

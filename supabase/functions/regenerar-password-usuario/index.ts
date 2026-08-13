@@ -1,5 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { createAdminClient } from "../_shared/admin_client.ts";
+import { resolveCallerAuth } from "../_shared/caller_auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { enviarCredenciales } from "../_shared/enviar_credenciales.ts";
 import { generarContrasena } from "../_shared/password.ts";
@@ -10,25 +10,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return json({ error: "No autorizado" }, 401);
-    }
+    const caller = await resolveCallerAuth(req);
+    if (!caller.ok) return caller.response;
+    const { callerClient } = caller;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
     const adminClient = createAdminClient(supabaseUrl, serviceRoleKey);
-
-    const { data: callerData, error: callerError } =
-      await callerClient.auth.getUser();
-    if (callerError || !callerData.user) {
-      return json({ error: "Sesión inválida" }, 401);
-    }
 
     const { data: isAdmin, error: adminError } = await callerClient.rpc(
       "rpe_is_admin",

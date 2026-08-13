@@ -361,6 +361,7 @@ class EventRow extends StatelessWidget {
     this.finalizado = false,
     this.fijado = false,
     this.trailing,
+    this.actions,
   });
 
   final DateTime date;
@@ -371,99 +372,118 @@ class EventRow extends StatelessWidget {
   final bool finalizado;
   final bool fijado;
   final Widget? trailing;
+  final List<Widget>? actions;
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(
-            color: fijado ? AppColors.primaryLight : AppColors.border,
-            width: fijado ? 1.5 : 1,
-          ),
-          boxShadow: AppColors.shadowRest,
+    final chevron = trailing ??
+        const Icon(
+          Symbols.chevron_right_rounded,
+          color: AppColors.chevronMuted,
+        );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: fijado ? AppColors.primaryLight : AppColors.border,
+          width: fijado ? 1.5 : 1,
         ),
-        child: Row(
-          children: [
-            DateTile(date: date, muted: finalizado),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (fijado) ...[
-                        const Icon(
-                          Symbols.push_pin_rounded,
-                          size: 14,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            height: 1.35,
-                            color: finalizado
-                                ? AppColors.textSecondary
-                                : AppColors.ink,
+        boxShadow: AppColors.shadowRest,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Pressable(
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: Padding(
+                padding: const EdgeInsets.all(13),
+                child: Row(
+                  children: [
+                    DateTile(date: date, muted: finalizado),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (fijado) ...[
+                                const Icon(
+                                  Symbols.push_pin_rounded,
+                                  size: 14,
+                                  color: AppColors.primary,
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.35,
+                                    color: finalizado
+                                        ? AppColors.textSecondary
+                                        : AppColors.ink,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (place.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(
-                          Symbols.location_on_rounded,
-                          size: 14,
-                          color: AppColors.textTertiary,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            place,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
+                          if (place.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Symbols.location_on_rounded,
+                                  size: 14,
+                                  color: AppColors.textTertiary,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    place,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ),
-                      ],
+                          ],
+                          if (finalizado) ...[
+                            const SizedBox(height: 6),
+                            const StatusChip(
+                              label: 'Evento finalizado',
+                              variant: StatusChipVariant.danger,
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
+                    if (actions == null) chevron,
                   ],
-                  if (finalizado) ...[
-                    const SizedBox(height: 6),
-                    const StatusChip(
-                      label: 'Evento finalizado',
-                      variant: StatusChipVariant.danger,
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
-            trailing ??
-                const Icon(
-                  Symbols.chevron_right_rounded,
-                  color: AppColors.chevronMuted,
-                ),
-          ],
-        ),
+          ),
+          if (actions != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: actions!,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -830,5 +850,248 @@ class StaggeredListItem extends StatelessWidget {
     // Sin animación: el stagger (Opacity + Translate) trababa el scroll a
     // 120 Hz y dejaba filas “volando” al filtrar/buscar.
     return child;
+  }
+}
+
+/// Etiqueta compacta sobre un campo de formulario (leads, registrados, etc.).
+class NexusFieldLabel extends StatelessWidget {
+  const NexusFieldLabel(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
+}
+
+/// Campo de texto con la etiqueta Nexus encima y el hint dentro del input.
+class NexusFormTextField extends StatelessWidget {
+  const NexusFormTextField({
+    super.key,
+    required this.label,
+    required this.controller,
+    required this.hintText,
+    this.validator,
+    this.keyboardType,
+    this.maxLines = 1,
+    this.enabled = true,
+    this.readOnly = false,
+    this.textInputAction,
+    this.suffixIcon,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final String hintText;
+  final String? Function(String?)? validator;
+  final TextInputType? keyboardType;
+  final int maxLines;
+  final bool enabled;
+  final bool readOnly;
+  final TextInputAction? textInputAction;
+  final Widget? suffixIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        NexusFieldLabel(label),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          enabled: enabled,
+          readOnly: readOnly,
+          keyboardType: keyboardType,
+          maxLines: maxLines,
+          textInputAction: textInputAction,
+          decoration: InputDecoration(
+            hintText: hintText,
+            alignLabelWithHint: maxLines > 1,
+            suffixIcon: suffixIcon,
+          ),
+          validator: validator,
+        ),
+      ],
+    );
+  }
+}
+
+/// Cabecera de identidad (nombre + correo) de un formulario.
+///
+/// Con [nombreController] el nombre se edita dentro de la propia card, en vez
+/// de repetirse en un campo aparte más abajo. [leading] deja colgar una foto
+/// a la izquierda (formulario de lead).
+class PersonaIdentityBanner extends StatelessWidget {
+  const PersonaIdentityBanner({
+    super.key,
+    required this.nombre,
+    required this.email,
+    this.badge,
+    this.leading,
+    this.nombreController,
+    this.nombreHint = 'Nombre completo',
+    this.nombreValidator,
+    this.nombreEnabled = true,
+    this.nombreSuffix,
+    this.margenSuperior = 12,
+  });
+
+  /// Nombre a mostrar cuando la card es de solo lectura. Se ignora si hay
+  /// [nombreController].
+  final String nombre;
+
+  final String email;
+  final Widget? badge;
+  final Widget? leading;
+
+  /// Si viene, el nombre se edita aquí dentro.
+  final TextEditingController? nombreController;
+
+  final String nombreHint;
+  final String? Function(String?)? nombreValidator;
+  final bool nombreEnabled;
+
+  /// Acción dentro del campo de nombre (p. ej. el dictado por voz del lead).
+  final Widget? nombreSuffix;
+
+  /// Aire sobre la card, para que no quede pegada a la cabecera.
+  final double margenSuperior;
+
+  static const _estiloNombre = TextStyle(
+    fontSize: 17,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.2,
+    color: Colors.white,
+    height: 1.25,
+  );
+
+  static OutlineInputBorder _borde(double opacidad, {double grosor = 1}) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide(
+        color: Colors.white.withValues(alpha: opacidad),
+        width: grosor,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final correo = email.trim();
+    final editable = nombreController != null;
+
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(top: margenSuperior),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+      decoration: BoxDecoration(
+        gradient: AppColors.headerGradient,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppColors.shadowRest,
+      ),
+      child: Row(
+        children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 14)],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _nombre()),
+                    if (badge != null) ...[
+                      const SizedBox(width: 10),
+                      // El chip se alinea con el texto del campo, no con el
+                      // borde del input.
+                      Padding(
+                        padding: EdgeInsets.only(top: editable ? 12 : 0),
+                        child: badge!,
+                      ),
+                    ],
+                  ],
+                ),
+                if (correo.isNotEmpty) ...[
+                  SizedBox(height: editable ? 8 : 4),
+                  Text(
+                    correo,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.82),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _nombre() {
+    final controller = nombreController;
+    if (controller == null) {
+      final titulo = nombre.trim().isEmpty ? 'Sin nombre' : nombre.trim();
+      return Text(
+        titulo,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: _estiloNombre,
+      );
+    }
+
+    return TextFormField(
+      controller: controller,
+      enabled: nombreEnabled,
+      style: _estiloNombre,
+      cursorColor: Colors.white,
+      textCapitalization: TextCapitalization.words,
+      validator: nombreValidator,
+      decoration: InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.10),
+        hintText: nombreHint,
+        hintStyle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Colors.white.withValues(alpha: 0.55),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+        suffixIcon: nombreSuffix,
+        border: _borde(0.28),
+        enabledBorder: _borde(0.28),
+        disabledBorder: _borde(0.14),
+        focusedBorder: _borde(0.8, grosor: 1.5),
+        // El rojo de error no se lee sobre el navy; la lima del brand sí.
+        errorBorder: _borde(0.5).copyWith(
+          borderSide: const BorderSide(color: AppColors.accent),
+        ),
+        focusedErrorBorder: _borde(0.5).copyWith(
+          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+        ),
+        errorStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: AppColors.accent,
+        ),
+      ),
+    );
   }
 }

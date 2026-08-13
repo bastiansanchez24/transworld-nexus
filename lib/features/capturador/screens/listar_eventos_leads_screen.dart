@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/fijados_limits.dart';
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/evento_list_sort.dart';
@@ -28,7 +29,17 @@ class ListarEventosLeadsScreen extends ConsumerStatefulWidget {
 }
 
 class _ListarEventosLeadsScreenState
-    extends ConsumerState<ListarEventosLeadsScreen> {
+    extends ConsumerState<ListarEventosLeadsScreen>
+    with RefreshOnVisible {
+  @override
+  String get refreshWhenLocation => RoutePaths.capturador;
+
+  @override
+  void onBecomeVisible() {
+    ref.invalidate(eventosLeadsListProvider);
+    ref.invalidate(campanasFijadasProvider);
+  }
+
   final _searchController = TextEditingController();
   String _query = '';
   String _filtro = 'Todos';
@@ -275,6 +286,7 @@ class _ListarEventosLeadsScreenState
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: eventosAsync.when(
+              skipLoadingOnReload: true,
               loading: () => _buildHeader(),
               error: (_, _) => _buildHeader(),
               data: (eventos) {
@@ -288,6 +300,7 @@ class _ListarEventosLeadsScreenState
           ),
         ),
         ...eventosAsync.when(
+          skipLoadingOnReload: true,
           loading: () => [const SliverFillRemaining(child: LoadingView())],
           error: (e, _) => [
             SliverFillRemaining(

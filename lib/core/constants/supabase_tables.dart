@@ -42,10 +42,15 @@ class SupabaseRpc {
   static const marcarRecuperacionPass = 'marcar_recuperacion_pass';
   static const verificarUsuarioRegistrado = 'verificar_usuario_registrado';
   static const actualizarRolUsuario = 'rpe_actualizar_rol_usuario';
+  static const configurarAccesoUsuario = 'rpe_configurar_acceso_usuario';
+  static const configurarAccesoEvento = 'rpe_configurar_acceso_evento';
   static const eliminarUsuario = 'rpe_eliminar_usuario';
   static const obtenerEmailUsuario = 'rpe_obtener_email_usuario';
+  static const sincronizarEventosUsuario = 'rpe_sincronizar_eventos_usuario';
   static const sincronizarEventosExterno = 'rpe_sincronizar_eventos_externo';
   static const ocultarTodasNotificaciones = 'rpe_ocultar_todas_notificaciones';
+  static const resumenCampana = 'cl_resumen_campana';
+  static const guardarLead = 'cl_guardar_lead';
 }
 
 class SupabaseFunctions {

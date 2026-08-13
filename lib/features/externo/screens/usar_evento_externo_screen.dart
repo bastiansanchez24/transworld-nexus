@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,9 +11,9 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
+import '../../../core/widgets/evento_hero_banner.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/nexus_toast.dart';
-import '../../../core/widgets/notificaciones_header_button.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/permissions_bootstrap.dart';
 import '../../../core/widgets/pressable.dart';
@@ -19,11 +21,10 @@ import '../../../data/models/evento.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
-import '../../notificaciones/providers/notificaciones_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
-import '../../usar_app/widgets/evento_operativo_sheets.dart';
+import '../providers/externo_dashboard_provider.dart';
 
-/// Vista operativa reducida para usuarios externos: hero + stats + 2 acciones.
+/// Vista operativa reducida para usuarios externos: hero, resumen propio y QR.
 class UsarEventoExternoScreen extends ConsumerStatefulWidget {
   const UsarEventoExternoScreen({super.key, required this.eventoId});
 
@@ -37,6 +38,30 @@ class UsarEventoExternoScreen extends ConsumerStatefulWidget {
 class _UsarEventoExternoScreenState
     extends ConsumerState<UsarEventoExternoScreen> {
   bool _bloqueoManejado = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_precargarPadron(widget.eventoId));
+  }
+
+  @override
+  void didUpdateWidget(covariant UsarEventoExternoScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.eventoId != widget.eventoId) {
+      unawaited(_precargarPadron(widget.eventoId));
+    }
+  }
+
+  /// Conserva disponible el padrón en la caché offline sin usarlo para
+  /// estadísticas del dashboard. El escáner comparte este mismo provider.
+  Future<void> _precargarPadron(String eventoId) async {
+    try {
+      await ref.read(registradosPorEventoProvider(eventoId).future);
+    } catch (_) {
+      // El escáner mostrará su estado offline/error si tampoco existe caché.
+    }
+  }
 
   Future<void> _manejarBloqueoTotal() async {
     if (_bloqueoManejado || !mounted) return;
@@ -59,18 +84,13 @@ class _UsarEventoExternoScreenState
     final anteriorId = widget.eventoId;
     try {
       await cambiarEventoActivoExterno(ref, destino.id);
-      ref.invalidate(registradosPorEventoProvider(anteriorId));
-      ref.invalidate(registradosPorEventoProvider(destino.id));
       ref.invalidate(eventoByIdProvider(anteriorId));
       ref.invalidate(eventoByIdProvider(destino.id));
       if (!mounted) return;
       context.go(RoutePaths.externoEvento(destino.id));
     } catch (e) {
       if (!mounted) return;
-      NexusToast.show(
-        context,
-        e.toString().replaceFirst('Exception: ', ''),
-      );
+      NexusToast.show(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -125,8 +145,9 @@ class _UsarEventoExternoScreenState
                       title: Text(
                         e.nombre,
                         style: TextStyle(
-                          fontWeight:
-                              activo ? FontWeight.w800 : FontWeight.w600,
+                          fontWeight: activo
+                              ? FontWeight.w800
+                              : FontWeight.w600,
                           color: operable || activo
                               ? AppColors.ink
                               : AppColors.textTertiary,
@@ -141,9 +162,7 @@ class _UsarEventoExternoScreenState
                               ),
                             )
                           : null,
-                      onTap: operable
-                          ? () => Navigator.of(ctx).pop(e)
-                          : null,
+                      onTap: operable ? () => Navigator.of(ctx).pop(e) : null,
                     );
                   },
                 ),
@@ -163,13 +182,9 @@ class _UsarEventoExternoScreenState
   @override
   Widget build(BuildContext context) {
     final eventoAsync = ref.watch(eventoByIdProvider(widget.eventoId));
-    final registradosAsync = ref.watch(
-      registradosPorEventoProvider(widget.eventoId),
-    );
     final autorizadosAsync = ref.watch(externoEventosAutorizadosProvider);
-    final puedeCambiar =
-        (autorizadosAsync.valueOrNull?.length ?? 0) > 1;
-    final noLeidas = ref.watch(notificacionesNoLeidasProvider);
+    final statsAsync = ref.watch(externoDashboardProvider);
+    final puedeCambiar = (autorizadosAsync.valueOrNull?.length ?? 0) > 1;
 
     ref.listen(externoEventoBloqueadoProvider, (prev, next) {
       if (next == true) _manejarBloqueoTotal();
@@ -218,13 +233,6 @@ class _UsarEventoExternoScreenState
                   error: (e, _) =>
                       const ErrorView(message: 'No se pudo cargar el evento.'),
                   data: (evento) {
-                    final registrados = registradosAsync.valueOrNull;
-                    final totalReg = registrados?.length;
-                    final totalAcred =
-                        registrados?.where((r) => r.acreditado).length;
-                    final noAcred =
-                        registrados?.where((r) => !r.acreditado).length;
-
                     return Column(
                       children: [
                         Stack(
@@ -242,138 +250,99 @@ class _UsarEventoExternoScreenState
                               right: 0,
                               child: CollapsingNavOverlay(
                                 scrollOffset: 0,
-                              title: evento.nombre,
-                              style: CollapsingNavStyle.detail,
-                              alwaysShowActions: true,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  NotificacionesHeaderButton(
-                                    noLeidas: noLeidas,
-                                    onTap: () => context.push(
-                                      RoutePaths.notificaciones,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _HeroNavButton(
-                                    icon: Symbols.logout_rounded,
-                                    onTap: _cerrarSesion,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Expanded(
-                        child: CustomScrollView(
-                          physics: const BouncingScrollPhysics(
-                            parent: AlwaysScrollableScrollPhysics(),
-                          ),
-                          slivers: [
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  20,
-                                  18,
-                                  20,
-                                  32,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _MiniStat(
-                                            value:
-                                                totalAcred?.toString() ?? '—',
-                                            label: 'Acreditados',
-                                            valueColor: AppColors.success,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: _MiniStat(
-                                            value: noAcred?.toString() ?? '—',
-                                            label: 'Pendientes',
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: _MiniStat(
-                                            value: totalReg?.toString() ?? '—',
-                                            label: 'Registrados',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 18),
-                                    StaggeredListItem(
-                                      index: 0,
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: _PrimaryActionCard(
-                                              icon: Symbols
-                                                  .qr_code_scanner_rounded,
-                                              title: 'Escanear QR',
-                                              onTap: () => context.push(
-                                                RoutePaths.acreditarQr(
-                                                  widget.eventoId,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: _PrimaryActionCard(
-                                              icon:
-                                                  Symbols.person_add_rounded,
-                                              title: 'Registrar Asistente',
-                                              onTap: () =>
-                                                  EventoOperativoSheets
-                                                      .mostrarOpcionesRegistrarAsistente(
-                                                context,
-                                                widget.eventoId,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                                title: evento.nombre,
+                                style: CollapsingNavStyle.detail,
+                                alwaysShowActions: true,
+                                trailing: _HeroNavButton(
+                                  key: const Key('externo_logout_button'),
+                                  icon: Symbols.logout_rounded,
+                                  tooltip: 'Cerrar sesión',
+                                  onTap: _cerrarSesion,
                                 ),
                               ),
-                            ),
-                            const SliverToBoxAdapter(
-                              child: SizedBox(height: 40),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  );
-                },
+                        Expanded(
+                          child: CustomScrollView(
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            slivers: [
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    18,
+                                    20,
+                                    32,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _ExternoStatsCards(
+                                        statsAsync: statsAsync,
+                                        onRetry: () => ref.invalidate(
+                                          externoDashboardProvider,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 18),
+                                      StaggeredListItem(
+                                        index: 0,
+                                        child: _PrimaryActionCard(
+                                          key: const Key(
+                                            'externo_scan_qr_button',
+                                          ),
+                                          icon: Symbols.qr_code_scanner_rounded,
+                                          title: 'Escanear QR',
+                                          subtitle:
+                                              'Acredita asistentes o captura leads',
+                                          onTap: () => context.push(
+                                            RoutePaths.acreditarQr(
+                                              widget.eventoId,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                child: SizedBox(height: 40),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
 }
 
 class _HeroNavButton extends StatelessWidget {
-  const _HeroNavButton({required this.icon, required this.onTap});
+  const _HeroNavButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
+    final button = Pressable(
       scale: 0.9,
       onTap: onTap,
       child: Container(
@@ -387,6 +356,8 @@ class _HeroNavButton extends StatelessWidget {
         child: Icon(icon, size: 18, color: Colors.white),
       ),
     );
+
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 
@@ -444,14 +415,8 @@ class _EventoExternoHero extends StatelessWidget {
       ],
     );
 
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(AppRadius.header),
-        ),
-      ),
+    return EventoHeroBanner(
+      imagenUrl: evento.imagenUrl,
       padding: EdgeInsets.fromLTRB(
         20,
         topPad +
@@ -514,94 +479,201 @@ class _EventoExternoHero extends StatelessWidget {
   }
 }
 
+class _ExternoStatsCards extends StatelessWidget {
+  const _ExternoStatsCards({required this.statsAsync, required this.onRetry});
+
+  final AsyncValue<ExternoDashboardData> statsAsync;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = statsAsync.valueOrNull;
+    final eventos = stats?.eventosAutorizados.toString() ?? '—';
+    final leads = stats == null
+        ? '—'
+        : stats.esResumenParcial
+        ? (stats.leadsCapturados == 0 ? '—' : '${stats.leadsCapturados}+')
+        : stats.leadsCapturados.toString();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          label: stats == null && statsAsync.isLoading
+              ? 'Cargando estadísticas personales'
+              : null,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: StatCard(
+                    key: const Key('externo_stat_eventos'),
+                    value: eventos,
+                    label: 'Eventos con acceso',
+                    icon: Symbols.calendar_month_rounded,
+                    tint: AppColors.tintNavy,
+                    iconColor: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: StatCard(
+                    key: const Key('externo_stat_leads'),
+                    value: leads,
+                    label: 'Leads capturados',
+                    icon: Symbols.person_search_rounded,
+                    tint: AppColors.successTint,
+                    iconColor: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (stats?.esResumenParcial == true) ...[
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              Icon(
+                Symbols.info_rounded,
+                size: 15,
+                color: AppColors.textSecondary,
+              ),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Resumen parcial: se muestran las capturas pendientes del dispositivo.',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (statsAsync.hasError) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+            decoration: BoxDecoration(
+              color: AppColors.dangerTint,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Symbols.error_rounded,
+                  size: 18,
+                  color: AppColors.danger,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'No pudimos actualizar tu resumen.',
+                    style: TextStyle(
+                      color: AppColors.danger,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                TextButton(onPressed: onRetry, child: const Text('Reintentar')),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _PrimaryActionCard extends StatelessWidget {
   const _PrimaryActionCard({
+    super.key,
     required this.icon,
     required this.title,
+    required this.subtitle,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
+  final String subtitle;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
-      scale: 0.97,
-      onTap: onTap,
-      child: Container(
-        height: 104,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          gradient: AppColors.headerGradient,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          boxShadow: AppColors.shadowFab,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Icon(icon, color: Colors.white, size: 28),
-            Text(
-              title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
-                height: 1.2,
+    return Semantics(
+      button: true,
+      label: '$title. $subtitle',
+      child: Pressable(
+        scale: 0.98,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 96),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: AppColors.headerGradient,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            boxShadow: AppColors.shadowFab,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: Colors.white, size: 27),
               ),
-            ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xCCFFFFFF),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Icon(
+                Symbols.arrow_forward_ios_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  const _MiniStat({
-    required this.value,
-    required this.label,
-    this.valueColor = AppColors.ink,
-  });
-
-  final String value;
-  final String label;
-  final Color valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.shadowRest,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-              color: valueColor,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../login_error_message.dart';
 import '../providers/auth_providers.dart';
 import '../widgets/login/login_button.dart';
 import '../widgets/login/login_form.dart';
@@ -41,8 +41,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   void initState() {
     super.initState();
-    final remembered =
-        ref.read(sharedPreferencesProvider).getString(_rememberedEmailKey);
+    final remembered = ref
+        .read(sharedPreferencesProvider)
+        .getString(_rememberedEmailKey);
     if (remembered != null && remembered.isNotEmpty) {
       _emailController.text = remembered;
       _rememberMe = true;
@@ -62,10 +63,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     setState(() => _loading = true);
     try {
       final email = _emailController.text.trim();
-      await ref.read(authRepositoryProvider).iniciarSesion(
-            email: email,
-            password: _passwordController.text,
-          );
+      await ref
+          .read(authRepositoryProvider)
+          .iniciarSesion(email: email, password: _passwordController.text);
       // Evita que el router lea un AsyncData(null) stale (pre-login) y
       // cierre la sesión antes de que el perfil se recargue.
       ref.invalidate(currentPerfilProvider);
@@ -75,21 +75,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       } else {
         await prefs.remove(_rememberedEmailKey);
       }
-      // La navegación post-login la resuelve el redirect del router,
-      // reaccionando a los cambios de sesión de Supabase.
-    } on AuthException catch (e) {
-      if (mounted) showAppSnackBar(context, e.message, isError: true);
-    } catch (e) {
-      if (mounted) {
-        showAppSnackBar(context, 'No se pudo iniciar sesión.', isError: true);
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      // La navegación post-login la resuelve el redirect del router.
+      // Se deja `_loading` en true para no re-mostrar el formulario.
+    } catch (e, st) {
+      debugPrint('Login falló: $e\n$st');
+      if (!mounted) return;
+      showAppSnackBar(context, mensajeErrorInicioSesion(e), isError: true);
+      setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final session =
+        ref.watch(authStateChangesProvider).valueOrNull?.session ??
+        ref.read(authRepositoryProvider).currentSession;
+    if (session != null && !_loading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: LoadingView(),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Theme(

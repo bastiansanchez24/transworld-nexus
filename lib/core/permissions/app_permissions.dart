@@ -40,12 +40,52 @@ class AppPermissions {
     }
   }
 
+  /// Permisos aplicables a una sesión concreta.
+  ///
+  /// Los usuarios externos no tienen acceso al módulo de notificaciones, por
+  /// lo que tampoco se les debe mostrar el prompt del sistema operativo. Del
+  /// mismo modo, no necesitan autorizar instalaciones OTA fuera de la tienda.
+  static List<Permission> requiredFor({
+    required bool includeNotifications,
+    bool includeAppUpdates = true,
+  }) {
+    return required.where((permission) {
+      if (!includeNotifications && permission == Permission.notification) {
+        return false;
+      }
+      if (!includeAppUpdates &&
+          permission == Permission.requestInstallPackages) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
   static bool _needsRequest(PermissionStatus status) =>
       !status.isGranted && !status.isLimited && !status.isRestricted;
 
   /// Pide todos los [required] que aún no estén concedidos.
-  static Future<Map<Permission, PermissionStatus>> requestAll() async {
-    if (kIsWeb || required.isEmpty) return const {};
+  static Future<Map<Permission, PermissionStatus>> requestAll({
+    bool includeNotifications = true,
+    bool includeAppUpdates = true,
+  }) => _request(
+    requiredFor(
+      includeNotifications: includeNotifications,
+      includeAppUpdates: includeAppUpdates,
+    ),
+  );
+
+  static Future<Map<Permission, PermissionStatus>> requestNotifications() =>
+      _request(
+        required
+            .where((permission) => permission == Permission.notification)
+            .toList(),
+      );
+
+  static Future<Map<Permission, PermissionStatus>> _request(
+    List<Permission> permissions,
+  ) async {
+    if (kIsWeb || permissions.isEmpty) return const {};
     if (_requestInFlight) return const {};
     _requestInFlight = true;
     try {
@@ -53,7 +93,7 @@ class AppPermissions {
       final pending = <Permission>[];
       var askInstallPackages = false;
 
-      for (final permission in required) {
+      for (final permission in permissions) {
         final status = await permission.status;
         if (!_needsRequest(status)) continue;
         if (permission == Permission.requestInstallPackages) {
@@ -69,8 +109,9 @@ class AppPermissions {
 
       // Android OTA: pantalla "Permitir de esta fuente", después del resto.
       if (askInstallPackages) {
-        results[Permission.requestInstallPackages] =
-            await Permission.requestInstallPackages.request();
+        results[Permission.requestInstallPackages] = await Permission
+            .requestInstallPackages
+            .request();
       }
 
       return results;

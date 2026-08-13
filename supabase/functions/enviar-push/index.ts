@@ -25,6 +25,19 @@ type NotificacionRecord = {
   registrado_id: string | null;
 };
 
+type DeviceTokenRow = {
+  token: string;
+  usuario_id: string;
+  perfiles: { rol: string; activo: boolean } | null;
+};
+
+function isServiceRoleRequest(req: Request): boolean {
+  const authorization = req.headers.get("authorization") ?? "";
+  const apiKey = req.headers.get("apikey") ?? "";
+  return authorization === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` ||
+    apiKey === SUPABASE_SERVICE_ROLE_KEY;
+}
+
 function base64UrlEncode(data: Uint8Array | string): string {
   const bytes = typeof data === "string"
     ? new TextEncoder().encode(data)
@@ -133,16 +146,36 @@ serve(async (req) => {
   }
 
   try {
+    // Esta función es un destino de Database Webhook, no una API de cliente.
+    // verify_jwt por sí solo también acepta JWT de usuarios autenticados.
+    if (!isServiceRoleRequest(req)) {
+      return json({ ok: false, error: "unauthorized" }, 401);
+    }
+
     if (!FIREBASE_SERVICE_ACCOUNT_JSON) {
       return json({ ok: false, skipped: true, reason: "no_firebase_config" });
     }
 
     const payload = await req.json();
-    const record = (payload.record ?? payload) as NotificacionRecord;
+    const recordId = payload?.record?.id ?? payload?.id;
 
-    if (!record?.id || !record.titulo || !record.cuerpo) {
+    if (typeof recordId !== "string" || !recordId) {
       return json({ ok: false, error: "invalid_payload" }, 400);
     }
+
+    // No confiar en título/cuerpo recibidos: el webhook solo aporta el id y el
+    // contenido real se vuelve a leer desde la tabla con service role.
+    const { data: notification, error: notificationError } = await supabase
+      .from("notificaciones")
+      .select("id, tipo, titulo, cuerpo, evento_id, registrado_id")
+      .eq("id", recordId)
+      .maybeSingle();
+
+    if (notificationError) throw notificationError;
+    if (!notification) {
+      return json({ ok: false, error: "notification_not_found" }, 404);
+    }
+    const record = notification as NotificacionRecord;
 
     const account = JSON.parse(
       FIREBASE_SERVICE_ACCOUNT_JSON,
@@ -150,18 +183,56 @@ serve(async (req) => {
 
     const { data: tokens, error } = await supabase
       .from("device_tokens")
-      .select("token");
+      .select("token, usuario_id, perfiles!inner(rol, activo)")
+      .in("perfiles.rol", ["admin", "organizador", "user"])
+      .eq("perfiles.activo", true);
 
     if (error) throw error;
     if (!tokens?.length) {
       return json({ ok: true, sent: 0, reason: "no_tokens" });
     }
 
+    const tokenRows = tokens as unknown as DeviceTokenRow[];
+    const userIds = [
+      ...new Set(
+        tokenRows
+          .filter((row) => row.perfiles?.rol === "user")
+          .map((row) => row.usuario_id),
+      ),
+    ];
+    const usersAutorizados = new Set<string>();
+
+    // Admin/organizador reciben el inbox global. `user` solo recibe push del
+    // evento que tiene asignado; una notificación sin evento no se distribuye
+    // a users. La consulta usa service role porque esta función es privada.
+    if (record.evento_id && userIds.length > 0) {
+      const { data: asignaciones, error: asignacionesError } = await supabase
+        .from("usuarios_eventos")
+        .select("usuario_id")
+        .eq("evento_id", record.evento_id)
+        .in("usuario_id", userIds);
+
+      if (asignacionesError) throw asignacionesError;
+      for (const row of asignaciones ?? []) {
+        usersAutorizados.add(row.usuario_id as string);
+      }
+    }
+
+    const tokensAutorizados = tokenRows.filter((row) =>
+      row.perfiles?.rol === "admin" ||
+      row.perfiles?.rol === "organizador" ||
+      (row.perfiles?.rol === "user" && usersAutorizados.has(row.usuario_id))
+    );
+
+    if (tokensAutorizados.length === 0) {
+      return json({ ok: true, sent: 0, reason: "no_authorized_tokens" });
+    }
+
     const accessToken = await getAccessToken(account);
     const invalidTokens: string[] = [];
     let sent = 0;
 
-    for (const row of tokens) {
+    for (const row of tokensAutorizados) {
       const result = await sendFcmMessage(
         accessToken,
         account.project_id,

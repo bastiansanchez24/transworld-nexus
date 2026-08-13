@@ -21,17 +21,18 @@ class Env {
   static String get bucketImagenes =>
       dotenv.env['SUPABASE_BUCKET_IMAGENES'] ?? 'imagenes';
 
+  static String get bucketFotosLeads =>
+      dotenv.env['SUPABASE_BUCKET_FOTOS_LEADS'] ?? 'leads-privados';
+
   static String get bucketPlantillas =>
       dotenv.env['SUPABASE_BUCKET_PLANTILLAS'] ?? 'plantillas';
 
-  /// Base URL donde queda publicado el build web de esta misma app, usada
-  /// para armar el enlace de autoregistro público (ver
-  /// features/registro/screens/registro_por_cliente_screen.dart). Reemplaza
-  /// al formulario externo "Transworld" del proyecto legado (fuera de
-  /// ambos ZIP, ver Sección 17.5 de la auditoría): ahora el autoregistro
-  /// vive dentro de esta misma app.
+  /// Base URL del subdominio de eventos, usada para armar el enlace de
+  /// autoregistro público (ver
+  /// features/registro/screens/registro_por_cliente_screen.dart).
+  /// La app de administración vive en https://regispro.transworld.cl/.
   static String get appPublicBaseUrl =>
-      dotenv.env['APP_PUBLIC_BASE_URL'] ?? 'https://intranet.transworld.cl/';
+      dotenv.env['APP_PUBLIC_BASE_URL'] ?? 'https://eventos.transworld.cl/';
 
   /// Owner del repo GitHub usado como fuente OTA (`/releases/latest`).
   static String get githubOwner =>
@@ -42,8 +43,7 @@ class Env {
       dotenv.env['GITHUB_REPO'] ?? 'transworld_project_nexus';
 
   /// Canal de actualizaciones (reservado; v1 solo usa `stable`).
-  static String get updateChannel =>
-      dotenv.env['UPDATE_CHANNEL'] ?? 'stable';
+  static String get updateChannel => dotenv.env['UPDATE_CHANNEL'] ?? 'stable';
 
   static String _require(String key) {
     final value = dotenv.env[key];

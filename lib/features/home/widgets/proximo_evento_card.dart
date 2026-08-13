@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -25,6 +27,21 @@ class _ProximoEventoCardState extends State<ProximoEventoCard> {
   bool get _esSlider =>
       widget.items.length > 1 ||
       (widget.items.isNotEmpty && widget.items.first.esFijado);
+
+  /// En web y Windows no hay gesto de swipe natural: sin flechas el resto de
+  /// las cards fijadas quedaba escondido detrás de un arrastre con el mouse.
+  static bool get _usaFlechas =>
+      kIsWeb || defaultTargetPlatform == TargetPlatform.windows;
+
+  void _irAPagina(int pagina) {
+    if (pagina < 0 || pagina >= widget.items.length) return;
+    if (!_pageController.hasClients) return;
+    _pageController.animateToPage(
+      pagina,
+      duration: AppMotion.toggle,
+      curve: AppMotion.ease,
+    );
+  }
 
   @override
   void initState() {
@@ -79,27 +96,52 @@ class _ProximoEventoCardState extends State<ProximoEventoCard> {
     final cardHeight =
         32 + (contentHeight > dateHeight ? contentHeight : dateHeight);
 
+    final carrusel = SizedBox(
+      height: cardHeight,
+      child: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.items.length,
+        onPageChanged: (page) => setState(() => _page = page),
+        itemBuilder: (context, index) {
+          final item = widget.items[index];
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: _FeaturedSlide(
+              key: ValueKey('${item.kind.name}-${item.id}'),
+              item: item,
+              showPin: item.esFijado,
+            ),
+          );
+        },
+      ),
+    );
+
+    final conFlechas = _usaFlechas && widget.items.length > 1;
+
     return Column(
       children: [
-        SizedBox(
-          height: cardHeight,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: widget.items.length,
-            onPageChanged: (page) => setState(() => _page = page),
-            itemBuilder: (context, index) {
-              final item = widget.items[index];
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                child: _FeaturedSlide(
-                  key: ValueKey('${item.kind.name}-${item.id}'),
-                  item: item,
-                  showPin: item.esFijado,
-                ),
-              );
-            },
-          ),
-        ),
+        if (conFlechas)
+          Row(
+            children: [
+              _FlechaCarrusel(
+                key: const Key('proximo_evento_anterior'),
+                icon: Symbols.chevron_left_rounded,
+                tooltip: 'Anterior',
+                onTap: _page > 0 ? () => _irAPagina(_page - 1) : null,
+              ),
+              Expanded(child: carrusel),
+              _FlechaCarrusel(
+                key: const Key('proximo_evento_siguiente'),
+                icon: Symbols.chevron_right_rounded,
+                tooltip: 'Siguiente',
+                onTap: _page < widget.items.length - 1
+                    ? () => _irAPagina(_page + 1)
+                    : null,
+              ),
+            ],
+          )
+        else
+          carrusel,
         if (widget.items.length > 1) ...[
           const SizedBox(height: 10),
           Row(
@@ -124,6 +166,52 @@ class _ProximoEventoCardState extends State<ProximoEventoCard> {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Control lateral del carrusel del header (solo web y Windows).
+class _FlechaCarrusel extends StatelessWidget {
+  const _FlechaCarrusel({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final habilitado = onTap != null;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        enabled: habilitado,
+        label: tooltip,
+        child: Pressable(
+          scale: 0.9,
+          enabled: habilitado,
+          onTap: onTap,
+          child: Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: habilitado ? 0.18 : 0.06),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: Colors.white.withValues(alpha: habilitado ? 0.95 : 0.35),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

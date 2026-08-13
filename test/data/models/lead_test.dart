@@ -4,6 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transworld_nexus/data/models/lead.dart';
 
 void main() {
+  test('capturador_nombre tiene prioridad sobre el embed legacy', () {
+    final lead = Lead.fromMap({
+      'id': 'lead-1',
+      'evento_id': 'evento-1',
+      'nombre_completo': 'María González',
+      'capturador_nombre': 'Ana Pérez',
+      'perfiles': {'nombre_completo': 'Nombre legacy'},
+    });
+
+    expect(lead.vendedorNombre, 'Ana Pérez');
+    expect(lead.toCacheMap()['capturador_nombre'], 'Ana Pérez');
+  });
+
   final lead = Lead(
     id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     eventoId: 'evento-1',

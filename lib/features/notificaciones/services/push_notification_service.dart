@@ -16,7 +16,9 @@ import '../../auth/providers/auth_providers.dart';
 const _androidChannelId = 'nexus_registros';
 const _androidChannelName = 'Registros de eventos';
 
-final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
+final pushNotificationServiceProvider = Provider<PushNotificationService>((
+  ref,
+) {
   final service = PushNotificationService(ref);
   ref.onDispose(service.dispose);
   return service;
@@ -35,6 +37,16 @@ final pushNotificationsBootstrapProvider = Provider<void>((ref) {
       return;
     }
     await service.syncToken();
+  });
+
+  ref.listen(currentPerfilProvider, (_, next) async {
+    final perfil = next.valueOrNull;
+    if (perfil == null) return;
+    if (perfil.canAccessNotifications) {
+      await service.syncToken();
+    } else {
+      await service.disableNotifications();
+    }
   });
 
   final sesionInicial = ref.read(authStateChangesProvider).valueOrNull?.session;
@@ -96,6 +108,18 @@ class PushNotificationService {
   /// Registra o actualiza el token FCM tras autenticarse.
   /// El permiso de notificaciones lo pide [AppPermissions] en el bootstrap.
   Future<void> syncToken() async {
+    // El perfil llega después de auth; esperar su resolución evita registrar
+    // tokens durante esa ventana para un usuario externo.
+    try {
+      final perfil = await _ref.read(currentPerfilProvider.future);
+      if (perfil == null || !perfil.canAccessNotifications) {
+        await disableNotifications();
+        return;
+      }
+    } catch (_) {
+      return; // fail closed si el perfil no pudo verificarse
+    }
+
     await initialize();
     if (!_inicializado) return;
 
@@ -114,23 +138,26 @@ class PushNotificationService {
 
       _tokenActual = token;
       final plataforma = Platform.isIOS ? 'ios' : 'android';
-      await _ref.read(notificacionesRepositoryProvider).guardarDeviceToken(
-            token: token,
-            plataforma: plataforma,
-          );
+      await _ref
+          .read(notificacionesRepositoryProvider)
+          .guardarDeviceToken(token: token, plataforma: plataforma);
 
       await _tokenRefreshSub?.cancel();
       _tokenRefreshSub = messaging.onTokenRefresh.listen((nuevo) async {
+        final perfil = _ref.read(currentPerfilProvider).valueOrNull;
+        if (perfil?.canAccessNotifications != true) {
+          await disableNotifications();
+          return;
+        }
         if (_tokenActual != null && _tokenActual != nuevo) {
           await _ref
               .read(notificacionesRepositoryProvider)
               .eliminarDeviceToken(_tokenActual!);
         }
         _tokenActual = nuevo;
-        await _ref.read(notificacionesRepositoryProvider).guardarDeviceToken(
-              token: nuevo,
-              plataforma: plataforma,
-            );
+        await _ref
+            .read(notificacionesRepositoryProvider)
+            .guardarDeviceToken(token: nuevo, plataforma: plataforma);
       });
     } catch (e) {
       debugPrint('Push syncToken falló: $e');
@@ -150,6 +177,18 @@ class PushNotificationService {
     }
   }
 
+  /// Retira tokens persistidos y listeners cuando el rol no tiene acceso.
+  Future<void> disableNotifications() async {
+    await _tokenRefreshSub?.cancel();
+    _tokenRefreshSub = null;
+    _tokenActual = null;
+    try {
+      await _ref
+          .read(notificacionesRepositoryProvider)
+          .eliminarTokensDelUsuario();
+    } catch (_) {}
+  }
+
   void dispose() {
     unawaited(_tokenRefreshSub?.cancel());
     _tokenRefreshSub = null;
@@ -165,11 +204,15 @@ class PushNotificationService {
     );
     await _localNotifications
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
   }
 
   Future<void> _mostrarForeground(RemoteMessage message) async {
+    final perfil = _ref.read(currentPerfilProvider).valueOrNull;
+    if (perfil?.canAccessNotifications != true) return;
+
     final notification = message.notification;
     if (notification == null) return;
 
@@ -192,6 +235,8 @@ class PushNotificationService {
   }
 
   void _abrirInbox() {
+    final perfil = _ref.read(currentPerfilProvider).valueOrNull;
+    if (perfil?.canAccessNotifications != true) return;
     _router?.push(RoutePaths.notificaciones);
   }
 }

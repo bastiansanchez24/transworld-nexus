@@ -186,7 +186,7 @@ packages:
     source: hosted
     version: "2.0.0"
   cross_file:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: cross_file
       sha256: "92c9c43c383bfa1c32079d3bc492d55d6d4318044b7b47edaff8971cbb555c51"
@@ -506,14 +506,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.1"
-  flutter_staggered_animations:
-    dependency: "direct main"
-    description:
-      name: flutter_staggered_animations
-      sha256: "81d3c816c9bb0dca9e8a5d5454610e21ffb068aedb2bde49d2f8d04f75538351"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.1"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -1053,7 +1045,7 @@ packages:
     source: hosted
     version: "3.1.2"
   riverpod:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: riverpod
       sha256: "59062512288d3056b2321804332a13ffdd1bf16df70dcc8e506e411280a72959"

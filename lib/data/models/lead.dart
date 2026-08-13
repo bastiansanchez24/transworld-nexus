@@ -54,7 +54,9 @@ class Lead {
       fotosUrls: SupabaseRowParsers.parseStringList(map['fotos_urls']),
       perfilId: SupabaseRowParsers.asStringOrNull(map['perfil_id']),
       createdAt: SupabaseRowParsers.parseDateTimeOrNull(map['created_at']),
-      vendedorNombre: SupabaseRowParsers.nombrePerfilEmbed(map['perfiles']),
+      vendedorNombre:
+          SupabaseRowParsers.asStringOrNull(map['capturador_nombre']) ??
+          SupabaseRowParsers.nombrePerfilEmbed(map['perfiles']),
       pendienteDeSincronizar:
           (map['pendiente_de_sincronizar'] as bool?) ?? false,
     );
@@ -90,7 +92,9 @@ class Lead {
       'fotos_urls': fotosUrls,
       'perfil_id': perfilId,
       'created_at': createdAt?.toIso8601String(),
-      if (vendedorNombre != null) 'perfiles': {'nombre_completo': vendedorNombre},
+      if (vendedorNombre != null) 'capturador_nombre': vendedorNombre,
+      if (vendedorNombre != null)
+        'perfiles': {'nombre_completo': vendedorNombre},
     };
   }
 
@@ -108,7 +112,8 @@ class Lead {
     return Lead(
       id: id,
       eventoId: eventoId,
-      nombreCompleto: texto('nombre_completo', nombreCompleto) ?? nombreCompleto,
+      nombreCompleto:
+          texto('nombre_completo', nombreCompleto) ?? nombreCompleto,
       empresa: texto('empresa', empresa),
       cargo: texto('cargo', cargo),
       telefono: texto('telefono', telefono),

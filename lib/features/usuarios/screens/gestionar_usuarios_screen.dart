@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/supabase_tables.dart';
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -31,8 +32,16 @@ class _GestionarUsuariosBody extends ConsumerStatefulWidget {
       _GestionarUsuariosBodyState();
 }
 
-class _GestionarUsuariosBodyState
-    extends ConsumerState<_GestionarUsuariosBody> {
+class _GestionarUsuariosBodyState extends ConsumerState<_GestionarUsuariosBody>
+    with RefreshOnVisible {
+  @override
+  String get refreshWhenLocation => RoutePaths.usuarios;
+
+  @override
+  void onBecomeVisible() {
+    ref.invalidate(usuariosListProvider);
+  }
+
   final _searchController = TextEditingController();
   String _query = '';
 
@@ -135,6 +144,7 @@ class _GestionarUsuariosBodyState
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: usuariosAsync.when(
+              skipLoadingOnReload: true,
               loading: () => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -185,6 +195,7 @@ class _GestionarUsuariosBodyState
           ),
         ),
         ...usuariosAsync.when(
+          skipLoadingOnReload: true,
           loading: () => [const SliverFillRemaining(child: LoadingView())],
           error: (e, _) => [
             SliverFillRemaining(

@@ -97,10 +97,10 @@ docs/
 - **Persistencia offline**: `shared_preferences` como almacenamiento del
   motor de sincronización (`SyncQueueService`), que funciona igual en
   Android, iOS, Web y escritorio.
-- **Backend**: Supabase (Postgres + Auth + Storage + Edge Functions),
+- **  Backend**: Supabase (Postgres + Auth + Storage + Edge Functions),
   esquema `public`. Ver `supabase/schema.sql` para el modelo completo,
   políticas RLS, triggers y funciones RPC. Las migraciones incrementales
-  en `supabase/migracion_*.sql` documentan cambios aplicados sobre
+  en `supabase/migrations/` documentan cambios aplicados sobre
   entornos ya existentes; el schema es la fuente de verdad consolidada.
 
 ## Cómo correr el proyecto
@@ -122,7 +122,7 @@ docs/
    `supabase db push` si usas el CLI). Es idempotente: puede ejecutarse
    varias veces sin duplicar objetos. Si el proyecto ya tenía un schema
    anterior, también puedes aplicar solo las migraciones pendientes en
-   `supabase/migracion_*.sql`.
+   `supabase/migrations/`.
 
 4. (Opcional — push FCM) Copia el stub y genera opciones reales:
    `cp lib/firebase_options.stub.dart lib/firebase_options.dart` y luego
@@ -161,7 +161,9 @@ docs/
 | `enviar-push` | Envía FCM al insertar en `notificaciones` (secret `FIREBASE_SERVICE_ACCOUNT_JSON`) |
 
 Desplegar con `supabase functions deploy`. El secret `BREVO_API_KEY` lo
-comparten las funciones de correo. Detalle del webhook y Firebase:
+comparten las funciones de correo. Remitentes: `soporte@transworld.cl`
+(credenciales / reset) y `contacto@transworld.cl` (QR y comunicaciones
+de evento). Detalle del webhook y Firebase:
 [`docs/NOTIFICACIONES_PUSH.md`](docs/NOTIFICACIONES_PUSH.md).
 
 ## Pendiente / próximos pasos

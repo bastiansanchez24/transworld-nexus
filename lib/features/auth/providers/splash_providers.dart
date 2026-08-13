@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Splash animado (Lottie) solo en Windows y Android.
 ///
-/// En web (y demás plataformas) el router va directo a login/home sin
-/// montar `/splash`.
+/// En web el router no espera la animación: va a login si no hay sesión, o
+/// monta `/splash` como espera de perfil si el token ya está restaurado.
 bool get showAnimatedSplash {
   if (kIsWeb) return false;
   return defaultTargetPlatform == TargetPlatform.android ||

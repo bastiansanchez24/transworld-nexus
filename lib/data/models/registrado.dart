@@ -51,7 +51,7 @@ class Registrado {
   final String? bloqueEtiqueta;
 
   /// Origen lógico del registro (app / excel / formulario público).
-  /// Solo se persiste si la columna `origen` existe en `public.registrados`.
+  /// Se envía en el insert: la RLS anónima exige `origen = 'publico'`.
   final OrigenRegistro origen;
   final String? ingresadoPor;
   final bool emailConfirmacionEnviado;
@@ -112,13 +112,14 @@ class Registrado {
       'cargo': cargo,
       'telefono': telefono,
       'bloque_id': bloqueId,
+      'origen': origen.name,
       'ingresado_por': ingresadoPor,
     };
   }
 
   /// Serializa la fila completa para la caché offline, de modo que
   /// [Registrado.fromMap] la reconstruya sin pérdidas. No sirve `toInsertMap`:
-  /// ese omite `id`, `origen`, `created_at` y `email_confirmacion_enviado`
+  /// ese omite `id`, `created_at` y `email_confirmacion_enviado`
   /// porque los pone la base de datos al insertar.
   Map<String, dynamic> toCacheMap() {
     return {

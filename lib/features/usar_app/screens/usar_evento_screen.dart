@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
+import '../../../core/widgets/evento_hero_banner.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
@@ -30,14 +31,26 @@ class UsarEventoScreen extends ConsumerStatefulWidget {
   ConsumerState<UsarEventoScreen> createState() => _UsarEventoScreenState();
 }
 
-class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
+class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
+    with RefreshOnVisible {
+  @override
+  String get refreshWhenLocation => RoutePaths.usarEvento(widget.eventoId);
+
+  /// Al volver al menú (tras registrar, editar, eliminar o acreditar) se
+  /// recarga la lista para que las tarjetas no queden con los conteos viejos.
+  @override
+  void onBecomeVisible() {
+    ref.invalidate(eventoByIdProvider(widget.eventoId));
+    ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+  }
+
   @override
   Widget build(BuildContext context) {
     final eventoAsync = ref.watch(eventoByIdProvider(widget.eventoId));
     final puedeEditar = ref.watch(canCreateContentProvider);
-    final registradosAsync = ref.watch(
-      registradosPorEventoProvider(widget.eventoId),
-    );
+    final puedeExportar = ref.watch(canExportDataProvider);
+    final esAdmin = ref.watch(isAdminProvider);
+    final resumen = ref.watch(registradosResumenProvider(widget.eventoId));
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -52,12 +65,9 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
                 error: (e, _) =>
                     const ErrorView(message: 'No se pudo cargar el evento.'),
                 data: (evento) {
-                  final registrados = registradosAsync.valueOrNull;
-                  final totalReg = registrados?.length;
-                  final totalAcred =
-                      registrados?.where((r) => r.acreditado).length;
-                  final noAcred =
-                      registrados?.where((r) => !r.acreditado).length;
+                  final totalReg = resumen?.total;
+                  final totalAcred = resumen?.acreditados;
+                  final noAcred = resumen?.pendientes;
 
                   return Column(
                     children: [
@@ -141,7 +151,8 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
                                         children: [
                                           Expanded(
                                             child: _PrimaryActionCard(
-                                              icon: Symbols.qr_code_scanner_rounded,
+                                              icon: Symbols
+                                                  .qr_code_scanner_rounded,
                                               title: 'Escanear QR',
                                               onTap: () => context.push(
                                                 RoutePaths.acreditarQr(
@@ -156,8 +167,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
                                               icon: Symbols.person_add_rounded,
                                               title: 'Registrar Asistente',
                                               onTap: () =>
-                                                  EventoOperativoSheets
-                                                      .mostrarOpcionesRegistrarAsistente(
+                                                  EventoOperativoSheets.mostrarOpcionesRegistrarAsistente(
                                                     context,
                                                     widget.eventoId,
                                                   ),
@@ -169,7 +179,11 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
                                     const SizedBox(height: 18),
                                     const SectionLabel('Acciones del evento'),
                                     const SizedBox(height: 10),
-                                    ..._acciones(context).asMap().entries.map(
+                                    ..._acciones(
+                                      context,
+                                      puedeExportar: puedeExportar,
+                                      esAdmin: esAdmin,
+                                    ).asMap().entries.map(
                                       (entry) => Padding(
                                         padding: const EdgeInsets.only(
                                           bottom: 10,
@@ -201,9 +215,19 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
     );
   }
 
-  List<Widget> _acciones(BuildContext context) {
+  List<Widget> _acciones(
+    BuildContext context, {
+    required bool puedeExportar,
+    required bool esAdmin,
+  }) {
     final id = widget.eventoId;
     return [
+      if (esAdmin)
+        NexusActionRow(
+          icon: Symbols.group_rounded,
+          title: 'Gestionar acceso',
+          onTap: () => context.push(RoutePaths.accesoEvento(id)),
+        ),
       NexusActionRow(
         icon: Symbols.list_alt_rounded,
         title: 'Lista de asistentes registrados',
@@ -214,11 +238,12 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen> {
         title: 'KPI del evento',
         onTap: () => context.push(RoutePaths.kpi(id)),
       ),
-      NexusActionRow(
-        icon: Symbols.download_rounded,
-        title: 'Exportar a Excel',
-        onTap: () => context.push(RoutePaths.exportar(id)),
-      ),
+      if (puedeExportar)
+        NexusActionRow(
+          icon: Symbols.download_rounded,
+          title: 'Exportar a Excel',
+          onTap: () => context.push(RoutePaths.exportar(id)),
+        ),
     ];
   }
 }
@@ -253,10 +278,6 @@ class _EventoHero extends StatelessWidget {
 
   final Evento evento;
 
-  static const _borderRadius = BorderRadius.vertical(
-    bottom: Radius.circular(AppRadius.header),
-  );
-
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
@@ -269,9 +290,6 @@ class _EventoHero extends StatelessWidget {
       if (evento.lugar != null && evento.lugar!.isNotEmpty) evento.lugar,
       if (evento.pais != null && evento.pais!.isNotEmpty) evento.pais,
     ].join(' · ');
-    final imagenUrl = evento.imagenUrl;
-    final tieneImagen = imagenUrl != null && imagenUrl.isNotEmpty;
-
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,80 +356,10 @@ class _EventoHero extends StatelessWidget {
       24,
     );
 
-    if (!tieneImagen) {
-      return Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-          borderRadius: _borderRadius,
-        ),
-        padding: padding,
-        child: content,
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: _borderRadius,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: _EventoHeroFoto(imagenUrl: imagenUrl),
-          ),
-          Padding(
-            padding: padding,
-            child: content,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EventoHeroFoto extends StatefulWidget {
-  const _EventoHeroFoto({required this.imagenUrl});
-
-  final String imagenUrl;
-
-  @override
-  State<_EventoHeroFoto> createState() => _EventoHeroFotoState();
-}
-
-class _EventoHeroFotoState extends State<_EventoHeroFoto> {
-  bool _imagenLista = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        CachedNetworkImage(
-          imageUrl: widget.imagenUrl,
-          fit: BoxFit.cover,
-          placeholder: (_, _) => const _EventoHeroGradiente(),
-          errorWidget: (_, _, _) => const _EventoHeroGradiente(),
-          imageBuilder: (context, imageProvider) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && !_imagenLista) {
-                setState(() => _imagenLista = true);
-              }
-            });
-            return Image(image: imageProvider, fit: BoxFit.cover);
-          },
-        ),
-        if (_imagenLista)
-          ColoredBox(color: Colors.black.withValues(alpha: 0.40)),
-      ],
-    );
-  }
-}
-
-class _EventoHeroGradiente extends StatelessWidget {
-  const _EventoHeroGradiente();
-
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(gradient: AppColors.headerGradient),
+    return EventoHeroBanner(
+      imagenUrl: evento.imagenUrl,
+      padding: padding,
+      child: content,
     );
   }
 }

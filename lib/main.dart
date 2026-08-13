@@ -24,7 +24,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) usePathUrlStrategy();
 
-  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS) &&
+  if (!kIsWeb &&
+      (Platform.isAndroid || Platform.isIOS) &&
       DefaultFirebaseOptions.isConfigured) {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }

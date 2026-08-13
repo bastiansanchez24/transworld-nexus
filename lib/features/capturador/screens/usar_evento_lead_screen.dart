@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -12,7 +13,9 @@ import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
+import '../../../core/widgets/sync_conflict_listener.dart';
 import '../../../data/models/evento_lead.dart';
+import '../../../data/offline/sync_queue_service.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capturador_providers.dart';
 
@@ -27,12 +30,24 @@ class UsarEventoLeadScreen extends ConsumerStatefulWidget {
       _UsarEventoLeadScreenState();
 }
 
-class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen> {
+class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
+    with RefreshOnVisible {
+  @override
+  String get refreshWhenLocation => RoutePaths.usarEventoLead(widget.eventoId);
+
+  @override
+  void onBecomeVisible() {
+    ref.invalidate(eventoLeadByIdProvider(widget.eventoId));
+    ref.invalidate(leadsResumenRemotoProvider(widget.eventoId));
+  }
+
   @override
   Widget build(BuildContext context) {
     final eventoAsync = ref.watch(eventoLeadByIdProvider(widget.eventoId));
     final puedeEditar = ref.watch(canCreateContentProvider);
-    final leadsAsync = ref.watch(leadsPorEventoProvider(widget.eventoId));
+    final puedeExportar = ref.watch(canExportDataProvider);
+    final conflictos = ref.watch(syncConflictsProvider).length;
+    final resumen = ref.watch(leadsResumenLocalProvider(widget.eventoId));
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -47,11 +62,8 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen> {
                 error: (e, _) =>
                     const ErrorView(message: 'No se pudo cargar el evento.'),
                 data: (evento) {
-                  final leads = leadsAsync.valueOrNull;
-                  final totalLeads = leads?.length;
-                  final empresas = leads
-                      ?.where((l) => (l.empresa ?? '').trim().isNotEmpty)
-                      .length;
+                  final totalLeads = resumen?.total;
+                  final empresas = resumen?.empresas;
 
                   return Column(
                     children: [
@@ -102,30 +114,50 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _MiniStat(
-                                            value: totalLeads?.toString() ??
-                                                '—',
-                                            label: 'Leads Capturados',
-                                            valueColor: AppColors.success,
+                                    IntrinsicHeight(
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Expanded(
+                                            child: StatCard(
+                                              key: const Key(
+                                                'campana_stat_leads',
+                                              ),
+                                              value:
+                                                  totalLeads?.toString() ?? '—',
+                                              label: 'Leads capturados',
+                                              icon:
+                                                  Symbols.person_search_rounded,
+                                              tint: AppColors.successTint,
+                                              iconColor: AppColors.success,
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: _MiniStat(
-                                            value:
-                                                empresas?.toString() ?? '—',
-                                            label: 'Empresas',
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: StatCard(
+                                              key: const Key(
+                                                'campana_stat_empresas',
+                                              ),
+                                              value:
+                                                  empresas?.toString() ?? '—',
+                                              label: 'Empresas',
+                                              icon: Symbols.apartment_rounded,
+                                              tint: AppColors.tintNavy,
+                                              iconColor: AppColors.primary,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                     const SizedBox(height: 18),
                                     const SectionLabel('Acciones del evento'),
                                     const SizedBox(height: 10),
-                                    ..._acciones(context).asMap().entries.map(
+                                    ..._acciones(
+                                      context,
+                                      puedeExportar: puedeExportar,
+                                      conflictos: conflictos,
+                                    ).asMap().entries.map(
                                       (entry) => Padding(
                                         padding: const EdgeInsets.only(
                                           bottom: 10,
@@ -157,7 +189,11 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen> {
     );
   }
 
-  List<Widget> _acciones(BuildContext context) {
+  List<Widget> _acciones(
+    BuildContext context, {
+    required bool puedeExportar,
+    required int conflictos,
+  }) {
     final id = widget.eventoId;
     return [
       NexusActionRow(
@@ -172,12 +208,20 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen> {
         subtitle: 'Listado de clientes capturados',
         onTap: () => context.push(RoutePaths.verLeads(id)),
       ),
-      NexusActionRow(
-        icon: Symbols.download_rounded,
-        title: 'Exportar a Excel',
-        subtitle: 'Descargar leads del evento',
-        onTap: () => context.push(RoutePaths.exportarLeads(id)),
-      ),
+      if (puedeExportar)
+        NexusActionRow(
+          icon: Symbols.download_rounded,
+          title: 'Exportar a Excel',
+          subtitle: 'Descargar leads del evento',
+          onTap: () => context.push(RoutePaths.exportarLeads(id)),
+        ),
+      if (conflictos > 0)
+        NexusActionRow(
+          icon: Symbols.warning_rounded,
+          title: 'Conflictos de sincronización',
+          subtitle: '$conflictos pendiente(s) de revisar',
+          onTap: () => showSyncConflictsSheet(context, ref),
+        ),
     ];
   }
 }
@@ -295,52 +339,6 @@ class _EventoLeadHero extends StatelessWidget {
               ],
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  const _MiniStat({
-    required this.value,
-    required this.label,
-    this.valueColor = AppColors.ink,
-  });
-
-  final String value;
-  final String label;
-  final Color valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.shadowRest,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-              color: valueColor,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: AppColors.textSecondary,
-            ),
-          ),
         ],
       ),
     );

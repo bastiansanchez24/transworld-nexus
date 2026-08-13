@@ -27,7 +27,12 @@ class RequirePermission extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final perfilAsync = ref.watch(currentPerfilProvider);
 
+    // skipLoadingOnReload: un refreshSession (p. ej. antes de Edge Functions)
+    // re-dispara currentPerfilProvider. Sin esto, el loading desmonta el form
+    // hijo (pierde estado / cancela pop tras crear usuario, o reemplaza
+    // editar-usuario por un spinner al regenerar contraseña).
     return perfilAsync.when(
+      skipLoadingOnReload: true,
       loading: () => const Scaffold(body: LoadingView()),
       error: (e, _) => const Scaffold(
         body: ErrorView(message: 'No se pudo verificar tu perfil.'),

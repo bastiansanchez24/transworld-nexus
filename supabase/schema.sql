@@ -4,7 +4,8 @@
 --  Esquema: public (según definición del proyecto).
 --
 --  Este archivo es la FUSIÓN de todas las migraciones sueltas que
---  antes vivían en supabase/migracion_*.sql. Refleja el estado final
+--  antes vivían en supabase/migrations/ (y, históricamente, en
+--  supabase/migracion_*.sql). Refleja el estado final
 --  acordado (la política más reciente gana ante conflictos), en orden
 --  de dependencias, y es válido tanto en una base de datos NUEVA como
 --  sobre la de producción ya existente.
@@ -139,6 +140,10 @@ CREATE TABLE IF NOT EXISTS public.registrados (
                                  CHECK (origen = ANY (ARRAY['app', 'excel', 'publico'])),
   ingresado_por               uuid,
   email_confirmacion_enviado  boolean NOT NULL DEFAULT false,
+  utm_source                  text,
+  utm_medium                  text,
+  utm_campaign                text,
+  utm_content                 text,
   created_at                  timestamptz NOT NULL DEFAULT timezone('utc', now()),
   updated_at                  timestamptz NOT NULL DEFAULT timezone('utc', now()),
   CONSTRAINT registrados_pkey PRIMARY KEY (id),
@@ -181,6 +186,16 @@ BEGIN
   END IF;
 END $$;
 
+-- UTM (migración 20260729172353): opcionales; la app aún no las escribe.
+ALTER TABLE public.registrados
+  ADD COLUMN IF NOT EXISTS utm_source text;
+ALTER TABLE public.registrados
+  ADD COLUMN IF NOT EXISTS utm_medium text;
+ALTER TABLE public.registrados
+  ADD COLUMN IF NOT EXISTS utm_campaign text;
+ALTER TABLE public.registrados
+  ADD COLUMN IF NOT EXISTS utm_content text;
+
 CREATE INDEX IF NOT EXISTS idx_registrados_bloque_id
   ON public.registrados (bloque_id);
 
@@ -197,6 +212,16 @@ CREATE TABLE IF NOT EXISTS public.usuarios_eventos (
   created_at  timestamptz NOT NULL DEFAULT timezone('utc', now()),
   PRIMARY KEY (usuario_id, evento_id)
 );
+
+-- Compatibilidad con perfiles externos creados antes de la relación M:N.
+-- La app y RLS usan usuarios_eventos como fuente de autorización; por eso el
+-- evento preferido legado debe materializarse una vez en esa tabla.
+INSERT INTO public.usuarios_eventos (usuario_id, evento_id, rol_evento)
+SELECT p.id, p.evento_asignado_id, 'externo'
+FROM public.perfiles p
+WHERE p.rol = 'externo'
+  AND p.evento_asignado_id IS NOT NULL
+ON CONFLICT (usuario_id, evento_id) DO NOTHING;
 
 -- Módulo Capturador de leads (app hermana fusionada). Independiente de
 -- public.eventos (registro/acreditación); leads.evento_id NUNCA apunta a eventos.
@@ -215,23 +240,100 @@ CREATE TABLE IF NOT EXISTS public.eventos_leads (
 );
 
 CREATE TABLE IF NOT EXISTS public.leads (
-  id              uuid NOT NULL DEFAULT gen_random_uuid(),
-  evento_id       uuid NOT NULL,
-  nombre_completo text NOT NULL,
-  empresa         text,
-  cargo           text,
-  telefono        text,
-  email           text,
-  descripcion     text,
-  fotos_urls      text[] NOT NULL DEFAULT '{}'::text[],
-  perfil_id       uuid,
-  created_at      timestamptz DEFAULT now(),
+  id                 uuid NOT NULL DEFAULT gen_random_uuid(),
+  evento_id          uuid NOT NULL,
+  nombre_completo    text NOT NULL,
+  empresa            text,
+  cargo              text,
+  telefono           text,
+  email              text,
+  email_normalizado  text,
+  descripcion        text,
+  fotos_urls         text[] NOT NULL DEFAULT '{}'::text[],
+  perfil_id          uuid,
+  capturador_nombre  text NOT NULL DEFAULT 'Sin identificar',
+  created_at         timestamptz DEFAULT now(),
   CONSTRAINT leads_pkey PRIMARY KEY (id),
   CONSTRAINT leads_evento_id_fkey FOREIGN KEY (evento_id)
     REFERENCES public.eventos_leads (id),
   CONSTRAINT leads_perfil_id_fkey FOREIGN KEY (perfil_id)
     REFERENCES public.perfiles (id)
 );
+
+-- Columnas agregadas de forma explícita porque CREATE TABLE IF NOT EXISTS no
+-- modifica instalaciones previas. `capturador_nombre` evita abrir la RLS de
+-- perfiles para mostrar quién capturó un lead.
+ALTER TABLE public.leads
+  ADD COLUMN IF NOT EXISTS email_normalizado text;
+ALTER TABLE public.leads
+  ADD COLUMN IF NOT EXISTS capturador_nombre text;
+
+-- Al reprovisionar sobre una base existente se retiran temporalmente las
+-- defensas para poder completar el backfill de filas legacy; se reinstalan
+-- más abajo en esta misma transacción/script.
+DROP TRIGGER IF EXISTS trg_leads_server_fields ON public.leads;
+ALTER TABLE public.leads
+  DROP CONSTRAINT IF EXISTS leads_email_formato_check;
+
+UPDATE public.leads l
+SET capturador_nombre = COALESCE(
+  NULLIF(btrim(p.nombre_completo), ''),
+  'Sin identificar'
+)
+FROM public.perfiles p
+WHERE p.id = l.perfil_id
+  AND NULLIF(btrim(l.capturador_nombre), '') IS NULL;
+
+UPDATE public.leads
+SET capturador_nombre = 'Sin identificar'
+WHERE NULLIF(btrim(capturador_nombre), '') IS NULL;
+
+ALTER TABLE public.leads
+  ALTER COLUMN capturador_nombre SET DEFAULT 'Sin identificar';
+ALTER TABLE public.leads
+  ALTER COLUMN capturador_nombre SET NOT NULL;
+
+-- No se eliminan ni mezclan duplicados históricos. El primero por campaña
+-- recibe la clave normalizada; los demás conservan íntegro su email y quedan
+-- con email_normalizado NULL. El trigger/RPC de más abajo detecta también esos
+-- legados mediante lower(trim(email)).
+WITH normalizados AS (
+  SELECT
+    l.id,
+    NULLIF(lower(btrim(l.email)), '') AS email_normalizado,
+    row_number() OVER (
+      PARTITION BY l.evento_id, NULLIF(lower(btrim(l.email)), '')
+      ORDER BY l.created_at NULLS LAST, l.id
+    ) AS posicion
+  FROM public.leads l
+  WHERE NULLIF(lower(btrim(l.email)), '') IS NOT NULL
+)
+UPDATE public.leads l
+SET email_normalizado = CASE
+  WHEN n.posicion = 1 THEN n.email_normalizado
+  ELSE NULL
+END
+FROM normalizados n
+WHERE n.id = l.id
+  AND l.email_normalizado IS DISTINCT FROM CASE
+    WHEN n.posicion = 1 THEN n.email_normalizado
+    ELSE NULL
+  END;
+
+UPDATE public.leads
+SET email_normalizado = NULL
+WHERE NULLIF(lower(btrim(email)), '') IS NULL
+  AND email_normalizado IS NOT NULL;
+
+-- NOT VALID conserva históricos incompletos, pero PostgreSQL exige la regla a
+-- todo INSERT/UPDATE posterior.
+ALTER TABLE public.leads
+  ADD CONSTRAINT leads_email_formato_check
+  CHECK (
+    email IS NOT NULL
+    AND btrim(email) <> ''
+    AND email ~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
+  ) NOT VALID;
 
 -- ----------------------------------------------------------------
 -- 2. Índices
@@ -245,6 +347,9 @@ CREATE INDEX IF NOT EXISTS idx_usuarios_eventos_evento_id ON public.usuarios_eve
 CREATE INDEX IF NOT EXISTS idx_eventos_leads_perfil_id ON public.eventos_leads (perfil_id);
 CREATE INDEX IF NOT EXISTS idx_leads_evento_id ON public.leads (evento_id);
 CREATE INDEX IF NOT EXISTS idx_leads_perfil_id ON public.leads (perfil_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_evento_email_normalizado_unique
+  ON public.leads (evento_id, email_normalizado)
+  WHERE email_normalizado IS NOT NULL;
 
 -- ----------------------------------------------------------------
 -- 3. Funciones helper
@@ -326,6 +431,67 @@ AS $$
   );
 $$;
 
+-- Alcance operativo por evento. Admin y organizador conservan acceso global;
+-- user y externo requieren una asignación explícita en usuarios_eventos.
+-- Deliberadamente no hay fallback para users existentes: hasta que un admin
+-- los asigne, no pueden leer ni operar eventos.
+CREATE OR REPLACE FUNCTION public.rpe_puede_operar_evento(p_evento_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND p.activo = true
+      AND (
+        p.rol IN ('admin', 'organizador')
+        OR (
+          p.rol IN ('user', 'externo')
+          AND EXISTS (
+            SELECT 1
+            FROM public.usuarios_eventos ue
+            WHERE ue.usuario_id = p.id
+              AND ue.evento_id = p_evento_id
+          )
+        )
+      )
+  );
+$$;
+
+-- Notificaciones no forman parte de la interfaz externa. Admin/organizador
+-- ven el inbox global; user solo las asociadas a eventos asignados.
+CREATE OR REPLACE FUNCTION public.rpe_puede_ver_notificacion(p_evento_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.perfiles p
+    WHERE p.id = auth.uid()
+      AND p.activo = true
+      AND (
+        p.rol IN ('admin', 'organizador')
+        OR (
+          p.rol = 'user'
+          AND p_evento_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM public.usuarios_eventos ue
+            WHERE ue.usuario_id = p.id
+              AND ue.evento_id = p_evento_id
+          )
+        )
+      )
+  );
+$$;
+
 -- Preferido/activo del externo (compat). El alcance RLS usa rpe_externo_tiene_evento.
 CREATE OR REPLACE FUNCTION public.rpe_evento_asignado_externo()
 RETURNS uuid
@@ -373,10 +539,7 @@ AS $$
       ON lower(trim(e.nombre)) = lower(trim(el.nombre))
     WHERE el.id = p_campana_id
       AND public.rpe_is_externo()
-      AND (
-        public.rpe_externo_tiene_evento(e.id)
-        OR e.id = public.rpe_evento_asignado_externo()
-      )
+      AND public.rpe_externo_tiene_evento(e.id)
   );
 $$;
 
@@ -393,12 +556,89 @@ AS $$
     FROM public.eventos e
     WHERE lower(trim(e.nombre)) = lower(trim(p_nombre))
       AND public.rpe_is_externo()
-      AND (
-        public.rpe_externo_tiene_evento(e.id)
-        OR e.id = public.rpe_evento_asignado_externo()
-      )
+      AND public.rpe_externo_tiene_evento(e.id)
   );
 $$;
+
+-- Campos de identidad del lead controlados por servidor. El índice único
+-- resuelve carreras entre capturas nuevas y la consulta adicional detecta los
+-- duplicados históricos cuyo email_normalizado quedó NULL durante el backfill.
+CREATE OR REPLACE FUNCTION public.cl_set_lead_server_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_email_normalizado text;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF auth.uid() IS NOT NULL THEN
+      NEW.perfil_id := auth.uid();
+    END IF;
+
+    SELECT COALESCE(NULLIF(btrim(p.nombre_completo), ''), 'Sin identificar')
+    INTO NEW.capturador_nombre
+    FROM public.perfiles p
+    WHERE p.id = NEW.perfil_id;
+
+    IF NOT FOUND THEN
+      NEW.capturador_nombre := 'Sin identificar';
+    END IF;
+  ELSE
+    -- La autoría es inmutable incluso si un cliente intenta reasignarla.
+    NEW.perfil_id := OLD.perfil_id;
+    NEW.capturador_nombre := OLD.capturador_nombre;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    NEW.email := NULLIF(btrim(NEW.email), '');
+    v_email_normalizado := NULLIF(lower(NEW.email), '');
+    NEW.email_normalizado := v_email_normalizado;
+
+    IF v_email_normalizado IS NOT NULL AND EXISTS (
+      SELECT 1
+      FROM public.leads l
+      WHERE l.evento_id = NEW.evento_id
+        AND l.id IS DISTINCT FROM NEW.id
+        AND NULLIF(lower(btrim(l.email)), '') = v_email_normalizado
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23505',
+        MESSAGE = 'El email ya fue capturado en esta campaña',
+        CONSTRAINT = 'idx_leads_evento_email_normalizado_unique';
+    END IF;
+  ELSIF NEW.evento_id IS DISTINCT FROM OLD.evento_id
+        OR NEW.email IS DISTINCT FROM OLD.email THEN
+    NEW.email := NULLIF(btrim(NEW.email), '');
+    v_email_normalizado := NULLIF(lower(NEW.email), '');
+    NEW.email_normalizado := v_email_normalizado;
+
+    IF v_email_normalizado IS NOT NULL AND EXISTS (
+      SELECT 1
+      FROM public.leads l
+      WHERE l.evento_id = NEW.evento_id
+        AND l.id IS DISTINCT FROM NEW.id
+        AND NULLIF(lower(btrim(l.email)), '') = v_email_normalizado
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23505',
+        MESSAGE = 'El email ya fue capturado en esta campaña',
+        CONSTRAINT = 'idx_leads_evento_email_normalizado_unique';
+    END IF;
+  ELSE
+    -- Evita que un cliente cambie directamente la clave normalizada.
+    NEW.email_normalizado := OLD.email_normalizado;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_leads_server_fields ON public.leads;
+CREATE TRIGGER trg_leads_server_fields
+  BEFORE INSERT OR UPDATE ON public.leads
+  FOR EACH ROW EXECUTE FUNCTION public.cl_set_lead_server_fields();
 
 CREATE OR REPLACE FUNCTION public.rpe_set_updated_at()
 RETURNS trigger
@@ -421,6 +661,58 @@ CREATE TRIGGER trg_eventos_updated_at BEFORE UPDATE ON public.eventos
 DROP TRIGGER IF EXISTS trg_registrados_updated_at ON public.registrados;
 CREATE TRIGGER trg_registrados_updated_at BEFORE UPDATE ON public.registrados
   FOR EACH ROW EXECUTE FUNCTION public.rpe_set_updated_at();
+
+-- El externo acredita desde el escáner, pero no puede usar UPDATE como un
+-- editor genérico de asistentes. Se permiten únicamente la transición
+-- false->true y los campos de auditoría que genera ese flujo. La cola offline
+-- que envía solo `acreditado=true` sigue siendo compatible.
+CREATE OR REPLACE FUNCTION public.rpe_restrict_externo_registrado_update()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.rpe_is_externo() THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.acreditado IS NOT TRUE THEN
+    RAISE EXCEPTION 'El usuario externo solo puede acreditar asistentes';
+  END IF;
+
+  IF (to_jsonb(NEW) - ARRAY[
+        'acreditado', 'acreditado_en', 'acreditado_por', 'updated_at'
+      ]) IS DISTINCT FROM
+     (to_jsonb(OLD) - ARRAY[
+        'acreditado', 'acreditado_en', 'acreditado_por', 'updated_at'
+      ]) THEN
+    RAISE EXCEPTION 'El usuario externo no puede editar datos del asistente';
+  END IF;
+
+  -- Idempotencia para cola offline y escáneres concurrentes: si otra sesión ya
+  -- acreditó la fila, aceptar el no-op sin alterar quién/cuándo lo hizo.
+  IF OLD.acreditado IS TRUE THEN
+    NEW.acreditado := TRUE;
+    NEW.acreditado_por := OLD.acreditado_por;
+    NEW.acreditado_en := OLD.acreditado_en;
+    RETURN NEW;
+  END IF;
+
+  IF NEW.acreditado_por IS NOT NULL AND NEW.acreditado_por <> auth.uid() THEN
+    RAISE EXCEPTION 'La acreditación debe quedar asociada al usuario actual';
+  END IF;
+
+  -- El cliente online informa acreditado_por; la cola offline puede omitirlo.
+  NEW.acreditado_por := auth.uid();
+  NEW.acreditado_en := timezone('utc', now());
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_registrados_restrict_externo_update ON public.registrados;
+CREATE TRIGGER trg_registrados_restrict_externo_update
+  BEFORE UPDATE ON public.registrados
+  FOR EACH ROW EXECUTE FUNCTION public.rpe_restrict_externo_registrado_update();
 
 -- --- CORRECCIÓN CRÍTICA (doc Sección 8.2/17.6): anti-escalación de rol ---
 -- RLS por sí sola no puede comparar OLD vs NEW en un UPDATE (WITH CHECK solo
@@ -598,37 +890,173 @@ BEGIN
 END;
 $$;
 
--- Permite a un admin cambiar el rol de otro usuario sin exponer un UPDATE
--- directo de la columna `rol` desde el cliente (defensa en profundidad,
--- además del trigger de la sección 3).
-CREATE OR REPLACE FUNCTION public.rpe_actualizar_rol_usuario(usuario_id uuid, nuevo_rol text)
+-- Configuración administrativa atómica: rol global y alcance de eventos se
+-- cambian dentro de la misma transacción. `user` puede quedar sin eventos
+-- (acceso cerrado); `externo` requiere al menos uno; admin/organizador son
+-- globales y no conservan filas en usuarios_eventos.
+CREATE OR REPLACE FUNCTION public.rpe_configurar_acceso_usuario(
+  p_usuario_id uuid,
+  p_nuevo_rol text,
+  p_evento_ids uuid[] DEFAULT '{}'::uuid[]
+)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_usuario_id uuid := usuario_id;
+  v_rol_actual text;
+  v_evento_ids uuid[];
+  v_primer_evento uuid;
+  v_rol_evento text;
 BEGIN
   IF NOT public.rpe_is_admin() THEN
-    RAISE EXCEPTION 'Solo un administrador puede cambiar roles';
+    RAISE EXCEPTION 'Solo un administrador puede configurar accesos';
   END IF;
 
-  IF nuevo_rol NOT IN ('admin', 'organizador', 'user') THEN
-    RAISE EXCEPTION 'Rol inválido: %', nuevo_rol;
+  IF p_nuevo_rol NOT IN ('admin', 'organizador', 'user', 'externo') THEN
+    RAISE EXCEPTION 'Rol inválido: %', p_nuevo_rol;
   END IF;
+
+  SELECT p.rol
+  INTO v_rol_actual
+  FROM public.perfiles p
+  WHERE p.id = p_usuario_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Usuario no encontrado';
+  END IF;
+
+  SELECT COALESCE(
+    array_agg(ids.evento_id ORDER BY ids.primera_posicion),
+    '{}'::uuid[]
+  )
+  INTO v_evento_ids
+  FROM (
+    SELECT entrada.evento_id, min(entrada.orden) AS primera_posicion
+    FROM unnest(COALESCE(p_evento_ids, '{}'::uuid[]))
+      WITH ORDINALITY AS entrada(evento_id, orden)
+    WHERE entrada.evento_id IS NOT NULL
+    GROUP BY entrada.evento_id
+  ) ids;
+
+  IF p_nuevo_rol IN ('admin', 'organizador') THEN
+    v_evento_ids := '{}'::uuid[];
+  ELSIF p_nuevo_rol = 'externo' AND cardinality(v_evento_ids) < 1 THEN
+    RAISE EXCEPTION 'Debe seleccionar al menos un evento para el usuario externo';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM unnest(v_evento_ids) AS eid
+    WHERE NOT EXISTS (SELECT 1 FROM public.eventos e WHERE e.id = eid)
+  ) THEN
+    RAISE EXCEPTION 'Uno o más eventos no existen';
+  END IF;
+
+  IF p_nuevo_rol = 'externo' AND EXISTS (
+    SELECT 1
+    FROM public.eventos e
+    WHERE e.id = ANY(v_evento_ids)
+      AND (e.activo IS NOT TRUE OR e.fecha < CURRENT_DATE)
+  ) THEN
+    RAISE EXCEPTION 'Los externos solo pueden usar eventos activos y no finalizados';
+  END IF;
+
+  v_primer_evento := v_evento_ids[1];
+  v_rol_evento := CASE
+    WHEN p_nuevo_rol = 'externo' THEN 'externo'
+    ELSE 'vendedor'
+  END;
 
   DELETE FROM public.usuarios_eventos ue
-  WHERE ue.usuario_id = v_usuario_id;
+  WHERE ue.usuario_id = p_usuario_id;
+
+  IF p_nuevo_rol IN ('user', 'externo') AND cardinality(v_evento_ids) > 0 THEN
+    INSERT INTO public.usuarios_eventos (usuario_id, evento_id, rol_evento)
+    SELECT p_usuario_id, eid, v_rol_evento
+    FROM unnest(v_evento_ids) AS eid;
+  END IF;
+
+  -- Los pins no autorizan acceso, pero sí ocupan el límite del usuario y
+  -- podrían reaparecer si el evento vuelve a ser visible. Se limpian en la
+  -- misma transacción al reducir el alcance; pins de campañas no se tocan.
+  IF to_regclass('public.usuarios_eventos_fijados') IS NOT NULL
+     AND p_nuevo_rol IN ('user', 'externo') THEN
+    DELETE FROM public.usuarios_eventos_fijados f
+    WHERE f.usuario_id = p_usuario_id
+      AND NOT (f.evento_id = ANY(v_evento_ids));
+  END IF;
 
   UPDATE public.perfiles p
-  SET rol = nuevo_rol,
-      evento_asignado_id = NULL
-  WHERE p.id = v_usuario_id;
+  SET rol = p_nuevo_rol,
+      evento_asignado_id = CASE
+        WHEN p_nuevo_rol = 'externo' THEN v_primer_evento
+        ELSE NULL
+      END
+  WHERE p.id = p_usuario_id;
 END;
 $$;
 
--- Admin: reemplaza el set de eventos autorizados de un externo.
+-- Reemplaza asignaciones sin cambiar el rol.
+CREATE OR REPLACE FUNCTION public.rpe_sincronizar_eventos_usuario(
+  p_usuario_id uuid,
+  p_evento_ids uuid[]
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_rol text;
+BEGIN
+  IF NOT public.rpe_is_admin() THEN
+    RAISE EXCEPTION 'Solo un administrador puede sincronizar eventos';
+  END IF;
+
+  SELECT p.rol INTO v_rol
+  FROM public.perfiles p
+  WHERE p.id = p_usuario_id;
+
+  IF v_rol IS NULL THEN
+    RAISE EXCEPTION 'Usuario no encontrado';
+  END IF;
+  IF v_rol NOT IN ('user', 'externo') THEN
+    RAISE EXCEPTION 'Solo se asignan eventos a usuarios user o externo';
+  END IF;
+
+  PERFORM public.rpe_configurar_acceso_usuario(
+    p_usuario_id,
+    v_rol,
+    COALESCE(p_evento_ids, '{}'::uuid[])
+  );
+END;
+$$;
+
+-- Wrappers compatibles con clientes desplegados previamente.
+CREATE OR REPLACE FUNCTION public.rpe_actualizar_rol_usuario(
+  usuario_id uuid,
+  nuevo_rol text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF nuevo_rol = 'externo' THEN
+    RAISE EXCEPTION 'Use rpe_configurar_acceso_usuario para asignar un externo';
+  END IF;
+  PERFORM public.rpe_configurar_acceso_usuario(
+    usuario_id,
+    nuevo_rol,
+    '{}'::uuid[]
+  );
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.rpe_sincronizar_eventos_externo(
   p_usuario_id uuid,
   p_evento_ids uuid[]
@@ -640,54 +1068,374 @@ SET search_path = public
 AS $$
 DECLARE
   v_rol text;
-  v_activo uuid;
-  v_primero uuid;
 BEGIN
-  IF NOT public.rpe_is_admin() THEN
-    RAISE EXCEPTION 'Solo un administrador puede sincronizar eventos de externos';
-  END IF;
+  SELECT p.rol INTO v_rol
+  FROM public.perfiles p
+  WHERE p.id = p_usuario_id;
 
-  IF p_evento_ids IS NULL OR cardinality(p_evento_ids) < 1 THEN
-    RAISE EXCEPTION 'Debe seleccionar al menos un evento';
-  END IF;
-
-  SELECT rol INTO v_rol FROM public.perfiles WHERE id = p_usuario_id;
-  IF v_rol IS NULL THEN
-    RAISE EXCEPTION 'Usuario no encontrado';
-  END IF;
-  IF v_rol <> 'externo' THEN
+  IF v_rol IS DISTINCT FROM 'externo' THEN
     RAISE EXCEPTION 'Solo se pueden sincronizar eventos de usuarios externos';
   END IF;
 
+  PERFORM public.rpe_sincronizar_eventos_usuario(p_usuario_id, p_evento_ids);
+END;
+$$;
+
+-- Administración atómica del alcance de un evento: qué usuarios `user` y
+-- `externo` quedan autorizados. Admin y organizador conservan acceso global
+-- y no se materializan en usuarios_eventos.
+CREATE OR REPLACE FUNCTION public.rpe_configurar_acceso_evento(
+  p_evento_id uuid,
+  p_usuario_ids uuid[] DEFAULT '{}'::uuid[]
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_usuario_ids uuid[];
+  v_evento_activo boolean;
+  v_evento_fecha date;
+  r record;
+BEGIN
+  IF NOT public.rpe_is_admin() THEN
+    RAISE EXCEPTION 'Solo un administrador puede configurar accesos';
+  END IF;
+
+  SELECT e.activo, e.fecha
+  INTO v_evento_activo, v_evento_fecha
+  FROM public.eventos e
+  WHERE e.id = p_evento_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Evento no encontrado';
+  END IF;
+
+  SELECT COALESCE(array_agg(DISTINCT uid), '{}'::uuid[])
+  INTO v_usuario_ids
+  FROM unnest(COALESCE(p_usuario_ids, '{}'::uuid[])) AS uid
+  WHERE uid IS NOT NULL;
+
   IF EXISTS (
     SELECT 1
-    FROM unnest(p_evento_ids) AS eid
-    WHERE NOT EXISTS (SELECT 1 FROM public.eventos e WHERE e.id = eid)
+    FROM unnest(v_usuario_ids) AS uid
+    WHERE uid = '00000000-0000-0000-0000-000000000001'::uuid
+       OR NOT EXISTS (
+         SELECT 1
+         FROM public.perfiles p
+         WHERE p.id = uid
+           AND p.rol IN ('user', 'externo')
+       )
   ) THEN
-    RAISE EXCEPTION 'Uno o más eventos no existen';
+    RAISE EXCEPTION 'Solo se puede asignar acceso a usuarios o usuarios externos';
   END IF;
+
+  IF v_evento_activo IS NOT TRUE OR v_evento_fecha < CURRENT_DATE THEN
+    IF EXISTS (
+      SELECT 1
+      FROM unnest(v_usuario_ids) AS uid
+      JOIN public.perfiles p ON p.id = uid
+      WHERE p.rol = 'externo'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM public.usuarios_eventos ue
+          WHERE ue.usuario_id = uid
+            AND ue.evento_id = p_evento_id
+        )
+    ) THEN
+      RAISE EXCEPTION 'Los externos solo pueden usar eventos activos y no finalizados';
+    END IF;
+  END IF;
+
+  FOR r IN
+    SELECT p.id, p.nombre_completo, p.rol
+    FROM public.usuarios_eventos ue
+    JOIN public.perfiles p ON p.id = ue.usuario_id
+    WHERE ue.evento_id = p_evento_id
+      AND NOT (ue.usuario_id = ANY (v_usuario_ids))
+    FOR UPDATE OF p
+  LOOP
+    IF r.rol = 'externo' AND NOT EXISTS (
+      SELECT 1
+      FROM public.usuarios_eventos ue
+      WHERE ue.usuario_id = r.id
+        AND ue.evento_id <> p_evento_id
+    ) THEN
+      RAISE EXCEPTION
+        'No se puede quitar el acceso de %: el usuario externo debe conservar al menos un evento',
+        r.nombre_completo;
+    END IF;
+  END LOOP;
 
   DELETE FROM public.usuarios_eventos ue
-  WHERE ue.usuario_id = p_usuario_id
-    AND ue.evento_id <> ALL (p_evento_ids);
+  WHERE ue.evento_id = p_evento_id
+    AND NOT (ue.usuario_id = ANY (v_usuario_ids));
+
+  IF to_regclass('public.usuarios_eventos_fijados') IS NOT NULL THEN
+    DELETE FROM public.usuarios_eventos_fijados f
+    WHERE f.evento_id = p_evento_id
+      AND NOT (f.usuario_id = ANY (v_usuario_ids));
+  END IF;
 
   INSERT INTO public.usuarios_eventos (usuario_id, evento_id, rol_evento)
-  SELECT p_usuario_id, eid, 'externo'
-  FROM unnest(p_evento_ids) AS eid
-  ON CONFLICT (usuario_id, evento_id) DO UPDATE
-    SET rol_evento = 'externo';
+  SELECT
+    p.id,
+    p_evento_id,
+    CASE WHEN p.rol = 'externo' THEN 'externo' ELSE 'vendedor' END
+  FROM public.perfiles p
+  WHERE p.id = ANY (v_usuario_ids)
+  ON CONFLICT (usuario_id, evento_id) DO NOTHING;
 
-  SELECT evento_asignado_id INTO v_activo
-  FROM public.perfiles
-  WHERE id = p_usuario_id;
+  UPDATE public.perfiles p
+  SET evento_asignado_id = (
+    SELECT ue.evento_id
+    FROM public.usuarios_eventos ue
+    WHERE ue.usuario_id = p.id
+    ORDER BY ue.created_at
+    LIMIT 1
+  )
+  WHERE p.rol = 'externo'
+    AND p.evento_asignado_id = p_evento_id
+    AND NOT (p.id = ANY (v_usuario_ids));
 
-  v_primero := p_evento_ids[1];
+  UPDATE public.perfiles p
+  SET evento_asignado_id = p_evento_id
+  WHERE p.rol = 'externo'
+    AND p.id = ANY (v_usuario_ids)
+    AND p.evento_asignado_id IS NULL;
+END;
+$$;
 
-  IF v_activo IS NULL OR v_activo <> ALL (p_evento_ids) THEN
-    UPDATE public.perfiles
-    SET evento_asignado_id = v_primero
-    WHERE id = p_usuario_id;
+-- Alta/edición atómica de leads. La identidad de captura y la detección de
+-- duplicados se resuelven en servidor; las fotos se adjuntan después mediante
+-- UPDATE del lead propio. Un p_lead_id inexistente se usa como UUID de alta,
+-- lo que hace idempotente el reintento del cliente/offline.
+CREATE OR REPLACE FUNCTION public.cl_guardar_lead(
+  p_evento_id uuid,
+  p_nombre_completo text,
+  p_empresa text,
+  p_cargo text,
+  p_telefono text,
+  p_email text,
+  p_descripcion text,
+  p_lead_id uuid DEFAULT NULL
+)
+RETURNS TABLE (
+  resultado text,
+  lead_id uuid,
+  primer_capturador_nombre text,
+  es_propio boolean
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_usuario_id uuid := auth.uid();
+  v_rol text;
+  v_activo boolean;
+  v_capturador_nombre text;
+  v_email text := NULLIF(btrim(p_email), '');
+  v_email_normalizado text := NULLIF(lower(btrim(p_email)), '');
+  v_lead_id uuid := COALESCE(p_lead_id, gen_random_uuid());
+  v_existente public.leads%ROWTYPE;
+  v_duplicado public.leads%ROWTYPE;
+  v_guardado public.leads%ROWTYPE;
+  v_puede_editar_global boolean;
+BEGIN
+  IF v_usuario_id IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'No autenticado';
   END IF;
+
+  SELECT
+    p.rol,
+    p.activo,
+    COALESCE(NULLIF(btrim(p.nombre_completo), ''), 'Sin identificar')
+  INTO v_rol, v_activo, v_capturador_nombre
+  FROM public.perfiles p
+  WHERE p.id = v_usuario_id;
+
+  IF NOT FOUND OR v_activo IS NOT TRUE THEN
+    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Usuario inactivo o sin perfil';
+  END IF;
+
+  v_puede_editar_global := v_rol IN ('admin', 'organizador');
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.eventos_leads el WHERE el.id = p_evento_id
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Campaña no encontrada';
+  END IF;
+
+  IF v_rol NOT IN ('admin', 'organizador', 'user')
+     AND NOT (
+       v_rol = 'externo'
+       AND public.cl_externo_campana_autorizada(p_evento_id)
+     ) THEN
+    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Sin acceso a la campaña';
+  END IF;
+
+  IF NULLIF(btrim(p_nombre_completo), '') IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El nombre es obligatorio';
+  END IF;
+
+  IF v_email IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El email es obligatorio';
+  END IF;
+
+  IF v_email !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El email no es válido';
+  END IF;
+
+  -- Serializa por campaña+email. El índice único sigue siendo la última línea
+  -- de defensa para escrituras directas y clientes concurrentes.
+  IF v_email_normalizado IS NOT NULL THEN
+    PERFORM pg_advisory_xact_lock(
+      hashtextextended(p_evento_id::text || ':' || v_email_normalizado, 0)
+    );
+  END IF;
+
+  IF p_lead_id IS NOT NULL THEN
+    SELECT l.* INTO v_existente
+    FROM public.leads l
+    WHERE l.id = p_lead_id
+    FOR UPDATE;
+
+    IF FOUND THEN
+      IF v_existente.evento_id <> p_evento_id THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El lead pertenece a otra campaña';
+      END IF;
+      IF NOT v_puede_editar_global
+         AND v_existente.perfil_id IS DISTINCT FROM v_usuario_id THEN
+        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Solo puedes editar tus propios leads';
+      END IF;
+    END IF;
+  END IF;
+
+  IF v_email_normalizado IS NOT NULL THEN
+    SELECT l.* INTO v_duplicado
+    FROM public.leads l
+    WHERE l.evento_id = p_evento_id
+      AND l.id IS DISTINCT FROM v_lead_id
+      AND NULLIF(lower(btrim(l.email)), '') = v_email_normalizado
+    ORDER BY l.created_at NULLS LAST, l.id
+    LIMIT 1;
+
+    IF FOUND THEN
+      RETURN QUERY SELECT
+        'duplicado'::text,
+        v_duplicado.id,
+        v_duplicado.capturador_nombre,
+        v_duplicado.perfil_id = v_usuario_id;
+      RETURN;
+    END IF;
+  END IF;
+
+  IF v_existente.id IS NOT NULL THEN
+    UPDATE public.leads l
+    SET nombre_completo = btrim(p_nombre_completo),
+        empresa = NULLIF(btrim(p_empresa), ''),
+        cargo = NULLIF(btrim(p_cargo), ''),
+        telefono = NULLIF(btrim(p_telefono), ''),
+        email = v_email,
+        descripcion = NULLIF(btrim(p_descripcion), '')
+    WHERE l.id = v_existente.id
+    RETURNING l.* INTO v_guardado;
+
+    RETURN QUERY SELECT
+      'actualizado'::text,
+      v_guardado.id,
+      v_guardado.capturador_nombre,
+      v_guardado.perfil_id = v_usuario_id;
+    RETURN;
+  END IF;
+
+  INSERT INTO public.leads (
+    id,
+    evento_id,
+    nombre_completo,
+    empresa,
+    cargo,
+    telefono,
+    email,
+    descripcion,
+    perfil_id,
+    capturador_nombre
+  ) VALUES (
+    v_lead_id,
+    p_evento_id,
+    btrim(p_nombre_completo),
+    NULLIF(btrim(p_empresa), ''),
+    NULLIF(btrim(p_cargo), ''),
+    NULLIF(btrim(p_telefono), ''),
+    v_email,
+    NULLIF(btrim(p_descripcion), ''),
+    v_usuario_id,
+    v_capturador_nombre
+  )
+  RETURNING * INTO v_guardado;
+
+  RETURN QUERY SELECT
+    'creado'::text,
+    v_guardado.id,
+    v_guardado.capturador_nombre,
+    true;
+  RETURN;
+EXCEPTION
+  WHEN unique_violation THEN
+    SELECT l.* INTO v_duplicado
+    FROM public.leads l
+    WHERE l.evento_id = p_evento_id
+      AND l.id IS DISTINCT FROM v_lead_id
+      AND NULLIF(lower(btrim(l.email)), '') = v_email_normalizado
+    ORDER BY l.created_at NULLS LAST, l.id
+    LIMIT 1;
+
+    IF FOUND THEN
+      RETURN QUERY SELECT
+        'duplicado'::text,
+        v_duplicado.id,
+        v_duplicado.capturador_nombre,
+        v_duplicado.perfil_id = v_usuario_id;
+      RETURN;
+    END IF;
+    RAISE;
+END;
+$$;
+
+-- Conteos de campaña para quien puede abrirla: internos (admin/organizador/
+-- user) y externos autorizados por evento homónimo. No expone filas.
+CREATE OR REPLACE FUNCTION public.cl_resumen_campana(p_evento_id uuid)
+RETURNS TABLE (total bigint, empresas bigint)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+BEGIN
+  IF p_evento_id IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Campaña inválida';
+  END IF;
+
+  IF NOT (
+    public.rpe_is_internal_user()
+    OR public.cl_externo_campana_autorizada(p_evento_id)
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '42501',
+      MESSAGE = 'Sin acceso al resumen de la campaña';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    count(*)::bigint AS total,
+    count(*) FILTER (
+      WHERE nullif(btrim(l.empresa), '') IS NOT NULL
+    )::bigint AS empresas
+  FROM public.leads l
+  WHERE l.evento_id = p_evento_id;
 END;
 $$;
 
@@ -834,6 +1582,22 @@ GRANT EXECUTE ON FUNCTION public.rpe_actualizar_rol_usuario(uuid, text) TO authe
 GRANT EXECUTE ON FUNCTION public.rpe_eliminar_usuario(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.rpe_obtener_email_usuario(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.rpe_sincronizar_eventos_externo(uuid, uuid[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rpe_configurar_acceso_usuario(uuid, text, uuid[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rpe_sincronizar_eventos_usuario(uuid, uuid[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rpe_configurar_acceso_evento(uuid, uuid[]) TO authenticated;
+REVOKE ALL ON FUNCTION public.rpe_actualizar_rol_usuario(uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.rpe_sincronizar_eventos_externo(uuid, uuid[]) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.rpe_configurar_acceso_usuario(uuid, text, uuid[]) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.rpe_sincronizar_eventos_usuario(uuid, uuid[]) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.rpe_configurar_acceso_evento(uuid, uuid[]) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.cl_guardar_lead(
+  uuid, text, text, text, text, text, text, uuid
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cl_guardar_lead(
+  uuid, text, text, text, text, text, text, uuid
+) TO authenticated;
+REVOKE ALL ON FUNCTION public.cl_resumen_campana(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cl_resumen_campana(uuid) TO authenticated;
 
 -- ----------------------------------------------------------------
 -- 5. RLS
@@ -846,6 +1610,9 @@ ALTER TABLE public.eventos_leads    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leads            ENABLE ROW LEVEL SECURITY;
 
 -- --- perfiles ---
+DROP POLICY IF EXISTS "Acceso total perfiles" ON public.perfiles;
+DROP POLICY IF EXISTS "Perfiles visibles para usuarios autenticados" ON public.perfiles;
+DROP POLICY IF EXISTS "Usuarios editan su propio perfil" ON public.perfiles;
 DROP POLICY IF EXISTS rpe_perfiles_select ON public.perfiles;
 CREATE POLICY rpe_perfiles_select ON public.perfiles
   FOR SELECT TO authenticated
@@ -864,15 +1631,16 @@ CREATE POLICY rpe_perfiles_update ON public.perfiles
   USING (id = auth.uid() OR public.rpe_is_admin())
   WITH CHECK (id = auth.uid() OR public.rpe_is_admin());
 
--- --- eventos: internos ven todo; externo solo eventos autorizados (usuarios_eventos).
+-- --- eventos: admin/organizador globales; user/externo solo asignados.
+DROP POLICY IF EXISTS "Acceso total a eventos para autenticados" ON public.eventos;
+DROP POLICY IF EXISTS "Acceso total eventos" ON public.eventos;
+DROP POLICY IF EXISTS "Permitir lectura pública de eventos" ON public.eventos;
+DROP POLICY IF EXISTS anon_select_eventos ON public.eventos;
 DROP POLICY IF EXISTS rpe_eventos_all ON public.eventos;
 DROP POLICY IF EXISTS rpe_eventos_select ON public.eventos;
 CREATE POLICY rpe_eventos_select ON public.eventos
   FOR SELECT TO authenticated
-  USING (
-    public.rpe_is_internal_user()
-    OR public.rpe_externo_tiene_evento(id)
-  );
+  USING (public.rpe_puede_operar_evento(id));
 
 DROP POLICY IF EXISTS rpe_eventos_insert ON public.eventos;
 CREATE POLICY rpe_eventos_insert ON public.eventos
@@ -896,35 +1664,30 @@ DROP POLICY IF EXISTS rpe_eventos_select_publico ON public.eventos;
 CREATE POLICY rpe_eventos_select_publico ON public.eventos
   FOR SELECT TO anon USING (activo = true);
 
--- --- registrados: internos todos; externo solo eventos autorizados.
+-- --- registrados: acceso acotado al evento; externo continúa limitado por el
+-- trigger de actualización a la acreditación y no puede insertar.
+DROP POLICY IF EXISTS "Acceso total a registrados para autenticados" ON public.registrados;
+DROP POLICY IF EXISTS "Permitir registro público anónimo" ON public.registrados;
+DROP POLICY IF EXISTS anon_insert_registrados ON public.registrados;
 DROP POLICY IF EXISTS rpe_registrados_all ON public.registrados;
 DROP POLICY IF EXISTS rpe_registrados_select ON public.registrados;
 CREATE POLICY rpe_registrados_select ON public.registrados
   FOR SELECT TO authenticated
-  USING (
-    public.rpe_is_internal_user()
-    OR public.rpe_externo_tiene_evento(evento_id)
-  );
+  USING (public.rpe_puede_operar_evento(evento_id));
 
 DROP POLICY IF EXISTS rpe_registrados_insert ON public.registrados;
 CREATE POLICY rpe_registrados_insert ON public.registrados
   FOR INSERT TO authenticated
   WITH CHECK (
     public.rpe_is_internal_user()
-    OR public.rpe_externo_tiene_evento(evento_id)
+    AND public.rpe_puede_operar_evento(evento_id)
   );
 
 DROP POLICY IF EXISTS rpe_registrados_update ON public.registrados;
 CREATE POLICY rpe_registrados_update ON public.registrados
   FOR UPDATE TO authenticated
-  USING (
-    public.rpe_is_internal_user()
-    OR public.rpe_externo_tiene_evento(evento_id)
-  )
-  WITH CHECK (
-    public.rpe_is_internal_user()
-    OR public.rpe_externo_tiene_evento(evento_id)
-  );
+  USING (public.rpe_puede_operar_evento(evento_id))
+  WITH CHECK (public.rpe_puede_operar_evento(evento_id));
 
 DROP POLICY IF EXISTS rpe_registrados_delete ON public.registrados;
 CREATE POLICY rpe_registrados_delete ON public.registrados
@@ -949,13 +1712,13 @@ CREATE POLICY rpe_registrados_insert_publico ON public.registrados
 -- el formulario público (anon) también necesita ver los bloques activos.
 ALTER TABLE public.evento_bloques ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Lectura pública de bloques activos" ON public.evento_bloques;
+DROP POLICY IF EXISTS anon_select_evento_bloques ON public.evento_bloques;
+
 DROP POLICY IF EXISTS rpe_evento_bloques_select ON public.evento_bloques;
 CREATE POLICY rpe_evento_bloques_select ON public.evento_bloques
   FOR SELECT TO authenticated
-  USING (
-    public.rpe_is_internal_user()
-    OR public.rpe_externo_tiene_evento(evento_id)
-  );
+  USING (public.rpe_puede_operar_evento(evento_id));
 
 DROP POLICY IF EXISTS rpe_evento_bloques_select_publico ON public.evento_bloques;
 CREATE POLICY rpe_evento_bloques_select_publico ON public.evento_bloques
@@ -974,7 +1737,8 @@ CREATE POLICY rpe_evento_bloques_write ON public.evento_bloques
 -- --- usuarios_eventos ---
 DROP POLICY IF EXISTS rpe_usuarios_eventos_select ON public.usuarios_eventos;
 CREATE POLICY rpe_usuarios_eventos_select ON public.usuarios_eventos
-  FOR SELECT TO authenticated USING (true);
+  FOR SELECT TO authenticated
+  USING (usuario_id = auth.uid() OR public.rpe_is_admin());
 
 DROP POLICY IF EXISTS rpe_usuarios_eventos_write ON public.usuarios_eventos;
 CREATE POLICY rpe_usuarios_eventos_write ON public.usuarios_eventos
@@ -992,9 +1756,8 @@ CREATE POLICY cl_eventos_leads_select ON public.eventos_leads
     OR public.cl_externo_nombre_campana_autorizado(nombre)
   );
 
--- INSERT: internos siempre; externo solo campañas homónimas a eventos autorizados.
--- Crear/editar desde la UI sigue gated por canCreateContent en Flutter;
--- UPDATE requiere rpe_can_create_content(); DELETE requiere rpe_is_admin().
+-- INSERT: internos conservan la capacidad de materializar campañas; externo
+-- solo campañas homónimas a eventos autorizados desde el escáner.
 DROP POLICY IF EXISTS cl_eventos_leads_insert ON public.eventos_leads;
 CREATE POLICY cl_eventos_leads_insert ON public.eventos_leads
   FOR INSERT TO authenticated
@@ -1021,15 +1784,15 @@ DROP POLICY IF EXISTS cl_leads_select ON public.leads;
 CREATE POLICY cl_leads_select ON public.leads
   FOR SELECT TO authenticated
   USING (
-    public.rpe_is_internal_user()
-    OR (public.rpe_is_externo() AND perfil_id = auth.uid())
+    public.rpe_can_create_content()
+    OR perfil_id = auth.uid()
   );
 
 DROP POLICY IF EXISTS cl_leads_insert ON public.leads;
 CREATE POLICY cl_leads_insert ON public.leads
   FOR INSERT TO authenticated
   WITH CHECK (
-    (perfil_id IS NULL OR perfil_id = auth.uid())
+    perfil_id = auth.uid()
     AND (
       public.rpe_is_internal_user()
       OR public.cl_externo_campana_autorizada(evento_id)
@@ -1040,12 +1803,12 @@ DROP POLICY IF EXISTS cl_leads_update ON public.leads;
 CREATE POLICY cl_leads_update ON public.leads
   FOR UPDATE TO authenticated
   USING (
-    public.rpe_is_internal_user()
-    OR (public.rpe_is_externo() AND perfil_id = auth.uid())
+    public.rpe_can_create_content()
+    OR perfil_id = auth.uid()
   )
   WITH CHECK (
-    public.rpe_is_internal_user()
-    OR (public.rpe_is_externo() AND perfil_id = auth.uid())
+    public.rpe_can_create_content()
+    OR perfil_id = auth.uid()
   );
 
 DROP POLICY IF EXISTS cl_leads_delete ON public.leads;
@@ -1058,7 +1821,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.leads TO authenticated;
 
 -- ----------------------------------------------------------------
 -- 5a. Fijados personales (eventos y campañas por usuario)
--- Ver también supabase/migracion_eventos_fijados.sql
 -- ----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.usuarios_eventos_fijados (
   usuario_id  uuid NOT NULL REFERENCES public.perfiles (id) ON DELETE CASCADE,
@@ -1085,11 +1847,17 @@ ALTER TABLE public.usuarios_eventos_leads_fijados ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS rpe_usuarios_eventos_fijados_select ON public.usuarios_eventos_fijados;
 CREATE POLICY rpe_usuarios_eventos_fijados_select ON public.usuarios_eventos_fijados
-  FOR SELECT TO authenticated USING (usuario_id = auth.uid());
+  FOR SELECT TO authenticated USING (
+    usuario_id = auth.uid()
+    AND public.rpe_puede_operar_evento(evento_id)
+  );
 
 DROP POLICY IF EXISTS rpe_usuarios_eventos_fijados_insert ON public.usuarios_eventos_fijados;
 CREATE POLICY rpe_usuarios_eventos_fijados_insert ON public.usuarios_eventos_fijados
-  FOR INSERT TO authenticated WITH CHECK (usuario_id = auth.uid());
+  FOR INSERT TO authenticated WITH CHECK (
+    usuario_id = auth.uid()
+    AND public.rpe_puede_operar_evento(evento_id)
+  );
 
 DROP POLICY IF EXISTS rpe_usuarios_eventos_fijados_delete ON public.usuarios_eventos_fijados;
 CREATE POLICY rpe_usuarios_eventos_fijados_delete ON public.usuarios_eventos_fijados
@@ -1112,8 +1880,7 @@ GRANT SELECT, INSERT, DELETE ON public.usuarios_eventos_leads_fijados TO authent
 
 -- ----------------------------------------------------------------
 -- 5b. Notificaciones (inbox + tokens FCM)
--- Ver también supabase/migracion_notificaciones.sql para aplicar en
--- proyectos ya desplegados. Webhook INSERT → Edge Function enviar-push.
+-- Webhook INSERT → Edge Function enviar-push.
 -- ----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.notificaciones (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1313,10 +2080,14 @@ BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'No autenticado';
   END IF;
+  IF NOT public.rpe_is_internal_user() THEN
+    RAISE EXCEPTION 'No tienes acceso a notificaciones';
+  END IF;
 
   INSERT INTO public.notificaciones_ocultas (usuario_id, notificacion_id)
   SELECT v_user_id, n.id
   FROM public.notificaciones n
+  WHERE public.rpe_puede_ver_notificacion(n.evento_id)
   ON CONFLICT (usuario_id, notificacion_id) DO NOTHING;
 END;
 $$;
@@ -1330,51 +2101,116 @@ ALTER TABLE public.device_tokens ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS rpe_notificaciones_select ON public.notificaciones;
 CREATE POLICY rpe_notificaciones_select ON public.notificaciones
-  FOR SELECT TO authenticated USING (true);
+  FOR SELECT TO authenticated
+  USING (public.rpe_puede_ver_notificacion(evento_id));
 
 DROP POLICY IF EXISTS rpe_notificaciones_leidas_select ON public.notificaciones_leidas;
 CREATE POLICY rpe_notificaciones_leidas_select ON public.notificaciones_leidas
-  FOR SELECT TO authenticated USING (usuario_id = auth.uid());
+  FOR SELECT TO authenticated
+  USING (
+    usuario_id = auth.uid()
+    AND EXISTS (
+      SELECT 1
+      FROM public.notificaciones n
+      WHERE n.id = notificacion_id
+        AND public.rpe_puede_ver_notificacion(n.evento_id)
+    )
+  );
 
 DROP POLICY IF EXISTS rpe_notificaciones_leidas_insert ON public.notificaciones_leidas;
 CREATE POLICY rpe_notificaciones_leidas_insert ON public.notificaciones_leidas
-  FOR INSERT TO authenticated WITH CHECK (usuario_id = auth.uid());
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    usuario_id = auth.uid()
+    AND EXISTS (
+      SELECT 1
+      FROM public.notificaciones n
+      WHERE n.id = notificacion_id
+        AND public.rpe_puede_ver_notificacion(n.evento_id)
+    )
+  );
 
 DROP POLICY IF EXISTS rpe_notificaciones_leidas_update ON public.notificaciones_leidas;
 CREATE POLICY rpe_notificaciones_leidas_update ON public.notificaciones_leidas
   FOR UPDATE TO authenticated
-  USING (usuario_id = auth.uid())
-  WITH CHECK (usuario_id = auth.uid());
+  USING (
+    usuario_id = auth.uid()
+    AND EXISTS (
+      SELECT 1
+      FROM public.notificaciones n
+      WHERE n.id = notificacion_id
+        AND public.rpe_puede_ver_notificacion(n.evento_id)
+    )
+  )
+  WITH CHECK (
+    usuario_id = auth.uid()
+    AND EXISTS (
+      SELECT 1
+      FROM public.notificaciones n
+      WHERE n.id = notificacion_id
+        AND public.rpe_puede_ver_notificacion(n.evento_id)
+    )
+  );
 
 DROP POLICY IF EXISTS rpe_notificaciones_ocultas_select ON public.notificaciones_ocultas;
 CREATE POLICY rpe_notificaciones_ocultas_select ON public.notificaciones_ocultas
-  FOR SELECT TO authenticated USING (usuario_id = auth.uid());
+  FOR SELECT TO authenticated
+  USING (
+    usuario_id = auth.uid()
+    AND EXISTS (
+      SELECT 1
+      FROM public.notificaciones n
+      WHERE n.id = notificacion_id
+        AND public.rpe_puede_ver_notificacion(n.evento_id)
+    )
+  );
 
 DROP POLICY IF EXISTS rpe_notificaciones_ocultas_insert ON public.notificaciones_ocultas;
 CREATE POLICY rpe_notificaciones_ocultas_insert ON public.notificaciones_ocultas
-  FOR INSERT TO authenticated WITH CHECK (usuario_id = auth.uid());
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    usuario_id = auth.uid()
+    AND EXISTS (
+      SELECT 1
+      FROM public.notificaciones n
+      WHERE n.id = notificacion_id
+        AND public.rpe_puede_ver_notificacion(n.evento_id)
+    )
+  );
 
 DROP POLICY IF EXISTS rpe_notificaciones_ocultas_delete ON public.notificaciones_ocultas;
 CREATE POLICY rpe_notificaciones_ocultas_delete ON public.notificaciones_ocultas
-  FOR DELETE TO authenticated USING (usuario_id = auth.uid());
+  FOR DELETE TO authenticated
+  USING (
+    usuario_id = auth.uid()
+    AND EXISTS (
+      SELECT 1
+      FROM public.notificaciones n
+      WHERE n.id = notificacion_id
+        AND public.rpe_puede_ver_notificacion(n.evento_id)
+    )
+  );
 
 DROP POLICY IF EXISTS rpe_device_tokens_select ON public.device_tokens;
 CREATE POLICY rpe_device_tokens_select ON public.device_tokens
-  FOR SELECT TO authenticated USING (usuario_id = auth.uid());
+  FOR SELECT TO authenticated
+  USING (usuario_id = auth.uid() AND public.rpe_is_internal_user());
 
 DROP POLICY IF EXISTS rpe_device_tokens_insert ON public.device_tokens;
 CREATE POLICY rpe_device_tokens_insert ON public.device_tokens
-  FOR INSERT TO authenticated WITH CHECK (usuario_id = auth.uid());
+  FOR INSERT TO authenticated
+  WITH CHECK (usuario_id = auth.uid() AND public.rpe_is_internal_user());
 
 DROP POLICY IF EXISTS rpe_device_tokens_update ON public.device_tokens;
 CREATE POLICY rpe_device_tokens_update ON public.device_tokens
   FOR UPDATE TO authenticated
-  USING (usuario_id = auth.uid())
-  WITH CHECK (usuario_id = auth.uid());
+  USING (usuario_id = auth.uid() AND public.rpe_is_internal_user())
+  WITH CHECK (usuario_id = auth.uid() AND public.rpe_is_internal_user());
 
 DROP POLICY IF EXISTS rpe_device_tokens_delete ON public.device_tokens;
 CREATE POLICY rpe_device_tokens_delete ON public.device_tokens
-  FOR DELETE TO authenticated USING (usuario_id = auth.uid());
+  FOR DELETE TO authenticated
+  USING (usuario_id = auth.uid());
 
 GRANT SELECT ON public.notificaciones TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.notificaciones_leidas TO authenticated;
@@ -1394,17 +2230,116 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('plantillas', 'plantillas', true)
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('leads-privados', 'leads-privados', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
+
+-- La ruta del objeto también es parte de la autorización. Sin esta barrera,
+-- cualquier cuenta autenticada podría usar `upsert` sobre
+-- `leads/<uuid>.jpg` y reemplazar la fotografía de otro capturador.
+CREATE OR REPLACE FUNCTION public.rpe_puede_escribir_imagen(
+  p_object_name text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+DECLARE
+  v_carpeta text := split_part(COALESCE(p_object_name, ''), '/', 1);
+  v_archivo text := split_part(COALESCE(p_object_name, ''), '/', 2);
+  v_id_text text := split_part(v_archivo, '.', 1);
+  v_id uuid;
+BEGIN
+  IF auth.uid() IS NULL
+    OR p_object_name !~* '^(eventos|perfiles|leads)/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|jpeg|png|webp|heic|heif)$'
+  THEN
+    RETURN false;
+  END IF;
+
+  v_id := v_id_text::uuid;
+  CASE v_carpeta
+    WHEN 'eventos' THEN
+      RETURN public.rpe_can_create_content();
+    WHEN 'perfiles' THEN
+      RETURN v_id = auth.uid() OR public.rpe_is_admin();
+    WHEN 'leads' THEN
+      RETURN public.rpe_can_create_content() OR EXISTS (
+        SELECT 1
+        FROM public.leads l
+        WHERE l.id = v_id AND l.perfil_id = auth.uid()
+      );
+    ELSE
+      RETURN false;
+  END CASE;
+EXCEPTION
+  WHEN invalid_text_representation THEN
+    RETURN false;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.rpe_puede_escribir_imagen(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rpe_puede_escribir_imagen(text)
+  TO authenticated;
+
 DROP POLICY IF EXISTS rpe_storage_imagenes_read ON storage.objects;
 CREATE POLICY rpe_storage_imagenes_read ON storage.objects
   FOR SELECT USING (bucket_id = 'imagenes');
 
+DROP POLICY IF EXISTS "Permitir subidas a imagenes" ON storage.objects;
 DROP POLICY IF EXISTS rpe_storage_imagenes_write ON storage.objects;
 CREATE POLICY rpe_storage_imagenes_write ON storage.objects
-  FOR INSERT TO authenticated WITH CHECK (bucket_id = 'imagenes');
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'imagenes'
+    AND split_part(name, '/', 1) <> 'leads'
+    AND public.rpe_puede_escribir_imagen(name)
+  );
 
+DROP POLICY IF EXISTS "Permitir actualizar imagenes" ON storage.objects;
 DROP POLICY IF EXISTS rpe_storage_imagenes_update ON storage.objects;
 CREATE POLICY rpe_storage_imagenes_update ON storage.objects
-  FOR UPDATE TO authenticated USING (bucket_id = 'imagenes');
+  FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'imagenes'
+    AND split_part(name, '/', 1) <> 'leads'
+    AND public.rpe_puede_escribir_imagen(name)
+  )
+  WITH CHECK (
+    bucket_id = 'imagenes'
+    AND split_part(name, '/', 1) <> 'leads'
+    AND public.rpe_puede_escribir_imagen(name)
+  );
+
+DROP POLICY IF EXISTS rpe_storage_leads_read ON storage.objects;
+CREATE POLICY rpe_storage_leads_read ON storage.objects
+  FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'leads-privados'
+    AND public.rpe_puede_escribir_imagen(name)
+  );
+
+DROP POLICY IF EXISTS rpe_storage_leads_write ON storage.objects;
+CREATE POLICY rpe_storage_leads_write ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'leads-privados'
+    AND split_part(name, '/', 1) = 'leads'
+    AND public.rpe_puede_escribir_imagen(name)
+  );
+
+DROP POLICY IF EXISTS rpe_storage_leads_update ON storage.objects;
+CREATE POLICY rpe_storage_leads_update ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'leads-privados'
+    AND public.rpe_puede_escribir_imagen(name)
+  )
+  WITH CHECK (
+    bucket_id = 'leads-privados'
+    AND public.rpe_puede_escribir_imagen(name)
+  );
 
 DROP POLICY IF EXISTS rpe_storage_plantillas_read ON storage.objects;
 CREATE POLICY rpe_storage_plantillas_read ON storage.objects
@@ -1428,13 +2363,15 @@ BEGIN
 
   DROP POLICY IF EXISTS rpe_storage_prefixes_read ON storage.prefixes;
   CREATE POLICY rpe_storage_prefixes_read ON storage.prefixes
-    FOR SELECT USING (bucket_id IN ('imagenes', 'plantillas'));
+    FOR SELECT USING (bucket_id IN ('imagenes', 'plantillas', 'leads-privados'));
 
   DROP POLICY IF EXISTS rpe_storage_prefixes_write ON storage.prefixes;
   CREATE POLICY rpe_storage_prefixes_write ON storage.prefixes
-    FOR INSERT TO authenticated WITH CHECK (bucket_id = 'imagenes');
+    FOR INSERT TO authenticated
+    WITH CHECK (bucket_id IN ('imagenes', 'leads-privados'));
 
   DROP POLICY IF EXISTS rpe_storage_prefixes_update ON storage.prefixes;
   CREATE POLICY rpe_storage_prefixes_update ON storage.prefixes
-    FOR UPDATE TO authenticated USING (bucket_id = 'imagenes');
+    FOR UPDATE TO authenticated
+    USING (bucket_id IN ('imagenes', 'leads-privados'));
 END $$;

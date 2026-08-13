@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/offline/sync_queue_service.dart';
+import '../../data/offline/sync_coordinator.dart';
 import '../network/connectivity_service.dart';
 import '../theme/app_theme.dart';
+import 'sync_conflict_listener.dart';
 
 /// Indicador visible de "modo local" + cantidad de operaciones pendientes
 /// por sincronizar. En el proyecto legado este indicador vivía copiado y
@@ -17,37 +19,65 @@ class OfflineBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isOnline = ref.watch(isOnlineProvider);
     final pending = ref.watch(pendingSyncCountProvider);
+    final conflicts = ref.watch(syncConflictsProvider).length;
 
-    if (isOnline && pending == 0) return const SizedBox.shrink();
+    if (isOnline && pending == 0 && conflicts == 0) {
+      return const SizedBox.shrink();
+    }
 
-    final texto = !isOnline
-        ? (pending > 0 ? 'Sin conexión · $pending pendiente(s)' : 'Sin conexión')
-        : 'Sincronizando $pending pendiente(s)...';
+    final texto = conflicts > 0
+        ? '$conflicts conflicto(s) de sincronización · Revisar'
+        : !isOnline
+        ? (pending > 0
+              ? 'Sin conexión · $pending pendiente(s)'
+              : 'Sin conexión')
+        : '$pending pendiente(s) · Reintentar';
 
-    return Container(
-      width: double.infinity,
-      color: !isOnline
+    return Material(
+      color: conflicts > 0
+          ? AppColors.dangerTint
+          : !isOnline
           ? AppColors.dangerTint
           : AppColors.successTint,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            !isOnline ? Icons.cloud_off_rounded : Icons.sync_rounded,
-            size: 16,
-            color: !isOnline ? AppColors.danger : AppColors.success,
+      child: InkWell(
+        onTap: conflicts > 0
+            ? () => showSyncConflictsSheet(context, ref)
+            : isOnline && pending > 0
+            ? () => ref.read(syncCoordinatorProvider).sincronizarAhora()
+            : null,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                conflicts > 0
+                    ? Icons.warning_amber_rounded
+                    : !isOnline
+                    ? Icons.cloud_off_rounded
+                    : Icons.cloud_upload_rounded,
+                size: 16,
+                color: conflicts > 0 || !isOnline
+                    ? AppColors.danger
+                    : AppColors.success,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  texto,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: conflicts > 0 || !isOnline
+                        ? AppColors.danger
+                        : AppColors.primaryDeep,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          Text(
-            texto,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: !isOnline ? AppColors.danger : AppColors.primaryDeep,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

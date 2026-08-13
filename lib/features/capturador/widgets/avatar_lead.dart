@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/offline/pending_photo_store.dart';
+import '../../../data/repositories/storage_repository.dart';
 
 /// Foto del lead recortada en círculo para la lista. Cae en
 /// [AvatarInitials] cuando el lead no tiene foto, o cuando la que tiene
@@ -38,16 +39,28 @@ class AvatarLead extends ConsumerWidget {
       return _circulo(Image.memory(bytes, fit: BoxFit.cover));
     }
 
-    return _circulo(
-      CachedNetworkImage(
-        imageUrl: foto,
-        fit: BoxFit.cover,
-        memCacheWidth: (size * 3).round(),
-        placeholder: (_, _) => Container(color: AppColors.tintNavy),
-        errorWidget: (_, _, _) => _iniciales(),
-      ),
-    );
+    if (foto.startsWith('leads/')) {
+      return ref
+          .watch(fotoLeadUrlProvider(foto))
+          .when(
+            data: _imagenRemota,
+            loading: () => _circulo(Container(color: AppColors.tintNavy)),
+            error: (_, _) => _iniciales(),
+          );
+    }
+
+    return _imagenRemota(foto);
   }
+
+  Widget _imagenRemota(String url) => _circulo(
+    CachedNetworkImage(
+      imageUrl: url,
+      fit: BoxFit.cover,
+      memCacheWidth: (size * 3).round(),
+      placeholder: (_, _) => Container(color: AppColors.tintNavy),
+      errorWidget: (_, _, _) => _iniciales(),
+    ),
+  );
 
   Widget _iniciales() =>
       AvatarInitials(name: lead.nombreCompleto, size: size, index: index);
@@ -58,3 +71,7 @@ class AvatarLead extends ConsumerWidget {
     );
   }
 }
+
+final fotoLeadUrlProvider = FutureProvider.autoDispose.family<String, String>(
+  (ref, path) => ref.watch(storageRepositoryProvider).resolverFotoLead(path),
+);
