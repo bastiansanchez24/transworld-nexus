@@ -74,6 +74,17 @@ void main() {
 
       expect(publico.toInsertMap()['origen'], 'publico');
     });
+
+    test('normaliza el email a minúsculas', () {
+      const conMayusculas = Registrado(
+        id: '',
+        eventoId: 'evento-1',
+        nombreCompleto: 'Ana Díaz',
+        email: '  Ana.Diaz@Empresa.CL ',
+      );
+
+      expect(conMayusculas.toInsertMap()['email'], 'ana.diaz@empresa.cl');
+    });
   });
 
   group('Registrado.fromMap con join de bloque', () {

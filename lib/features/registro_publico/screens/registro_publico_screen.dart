@@ -5,7 +5,9 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../data/models/registrado.dart';
@@ -37,8 +39,10 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
   final _empresaController = TextEditingController();
   final _cargoController = TextEditingController();
   final _telefonoController = TextEditingController();
+  PaisTelefono _pais = kPaisTelefonoChile;
   bool _guardando = false;
   bool _enviado = false;
+  bool _autovalidar = false;
 
   @override
   void dispose() {
@@ -51,23 +55,50 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
   }
 
   Future<void> _enviar() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _guardando = true);
+    if (_guardando || _enviado) return;
+    _guardando = true;
 
+    aplicarFormatosRegistroAsistente(
+      nombre: _nombreController,
+      email: _emailController,
+      empresa: _empresaController,
+      cargo: _cargoController,
+      telefono: _telefonoController,
+      pais: _pais,
+    );
+
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      _guardando = false;
+      if (mounted) setState(() => _autovalidar = true);
+      return;
+    }
+
+    if (!mounted) {
+      _guardando = false;
+      return;
+    }
+    setState(() => _autovalidar = true);
+
+    final email = formatearEmail(_emailController.text);
     final registrado = Registrado(
       id: '',
       eventoId: widget.eventoId,
-      nombreCompleto: _nombreController.text.trim(),
-      email: _emailController.text.trim().toLowerCase(),
-      empresa: _empresaController.text.trim(),
-      cargo: _cargoController.text.trim(),
-      telefono: _telefonoController.text.trim(),
+      nombreCompleto: formatearNombreCompleto(_nombreController.text),
+      email: email,
+      empresa: formatearEmpresa(_empresaController.text),
+      cargo: formatearCargo(_cargoController.text),
+      telefono: telefonoInternacional(_telefonoController.text, _pais),
       origen: OrigenRegistro.publico,
     );
 
     try {
+      final repo = ref.read(registradosRepositoryProvider);
       if (ref.read(isOnlineProvider)) {
-        await ref.read(registradosRepositoryProvider).crear(registrado);
+        final yaExiste = await repo.existeEmailEnEvento(widget.eventoId, email);
+        if (yaExiste) {
+          throw Exception(kMensajeEmailDuplicado);
+        }
+        await repo.crear(registrado);
       } else {
         await ref.read(syncQueueServiceProvider.notifier).enqueueInsert(
               table: SupabaseTables.registrados,
@@ -77,7 +108,15 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
       if (mounted) setState(() => _enviado = true);
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(context, 'No se pudo completar el registro. Intenta de nuevo.', isError: true);
+        final detalle = e.toString().replaceFirst('Exception: ', '');
+        final esDuplicado = detalle == kMensajeEmailDuplicado;
+        showAppSnackBar(
+          context,
+          esDuplicado
+              ? kMensajeEmailDuplicado
+              : 'No se pudo completar el registro. Intenta de nuevo.',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -152,6 +191,9 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
                           ),
                           child: Form(
                             key: _formKey,
+                            autovalidateMode: _autovalidar
+                                ? AutovalidateMode.onUserInteraction
+                                : AutovalidateMode.disabled,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -171,55 +213,24 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
                                   style: TextStyle(color: AppColors.textSecondary),
                                 ),
                                 const SizedBox(height: 24),
-                                TextFormField(
-                                  controller: _nombreController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Nombre completo',
-                                  ),
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'Requerido'
-                                          : null,
-                                ),
-                                const SizedBox(height: 14),
-                                TextFormField(
-                                  controller: _emailController,
-                                  keyboardType: TextInputType.emailAddress,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Email',
-                                  ),
-                                  validator: (v) =>
-                                      (v == null || !v.contains('@'))
-                                          ? 'Email inválido'
-                                          : null,
-                                ),
-                                const SizedBox(height: 14),
-                                TextFormField(
-                                  controller: _empresaController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Empresa',
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                TextFormField(
-                                  controller: _cargoController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Cargo',
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                TextFormField(
-                                  controller: _telefonoController,
-                                  keyboardType: TextInputType.phone,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Teléfono (opcional)',
-                                  ),
+                                CamposRegistroAsistente(
+                                  nombreController: _nombreController,
+                                  emailController: _emailController,
+                                  empresaController: _empresaController,
+                                  cargoController: _cargoController,
+                                  telefonoController: _telefonoController,
+                                  pais: _pais,
+                                  onPaisChanged: (pais) =>
+                                      setState(() => _pais = pais),
+                                  enabled: !_guardando,
                                 ),
                                 const SizedBox(height: 24),
                                 PrimaryGradientButton(
                                   label: 'Registrarme',
                                   loading: _guardando,
-                                  onPressed: _guardando ? null : _enviar,
+                                  onPressed: (_guardando || _enviado)
+                                      ? null
+                                      : _enviar,
                                 ),
                               ],
                             ),

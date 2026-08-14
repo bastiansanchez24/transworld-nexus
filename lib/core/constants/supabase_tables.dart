@@ -51,6 +51,7 @@ class SupabaseRpc {
   static const ocultarTodasNotificaciones = 'rpe_ocultar_todas_notificaciones';
   static const resumenCampana = 'cl_resumen_campana';
   static const guardarLead = 'cl_guardar_lead';
+  static const existeEmailRegistrado = 'rpe_existe_email_registrado';
 }
 
 class SupabaseFunctions {

@@ -1,5 +1,8 @@
 import 'dart:io' show exit;
+import 'dart:math' as math;
+import 'dart:ui';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +14,6 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/notificaciones_header_button.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
@@ -23,7 +25,6 @@ import '../../notificaciones/providers/notificaciones_providers.dart';
 import '../../updates/services/update_platform.dart';
 import '../../updates/services/windows_uninstaller.dart';
 import '../../updates/widgets/update_checker.dart';
-import '../models/home_featured_item.dart';
 import '../providers/home_dashboard_providers.dart';
 import '../providers/home_featured_providers.dart';
 import '../widgets/home_dashboard_section.dart';
@@ -36,9 +37,26 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with SingleTickerProviderStateMixin {
   bool _menuCuentaAbierto = false;
   bool _desinstalando = false;
+  final _scrollTop = ValueNotifier<double>(0);
+  late final AnimationController _enterCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _enterCtrl = AnimationController(vsync: this, duration: AppMotion.screenIn)
+      ..forward();
+  }
+
+  @override
+  void dispose() {
+    _scrollTop.dispose();
+    _enterCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _desinstalar() async {
     if (_desinstalando || !canUninstallApp) return;
@@ -74,6 +92,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  String _firstName(Perfil? perfil) {
+    final nombre = perfil?.nombreCompleto.trim() ?? '';
+    if (nombre.isEmpty) return '';
+    return nombre.split(RegExp(r'\s+')).first;
+  }
+
   @override
   Widget build(BuildContext context) {
     final perfilAsync = ref.watch(currentPerfilProvider);
@@ -81,78 +105,145 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final featuredItems =
         ref.watch(homeFeaturedItemsProvider).valueOrNull ?? const [];
     final noLeidas = ref.watch(notificacionesNoLeidasProvider);
+    final first = _firstName(perfil);
+    final saludo = first.isEmpty ? 'Hola 👋' : 'Hola, $first 👋';
+    final reduce = AppMotion.reduceMotion(context);
+    final safeTop = MediaQuery.paddingOf(context).top;
+    // Sin barra de estado (web y Windows) no hay nada que despejar arriba: el
+    // aire fijo del spec dejaba la identidad hundida media pantalla.
+    final contentTop = safeTop + (safeTop > 0 ? 12 : 16);
+    final bottomPad = math.max(
+      120.0,
+      GlassNavTokens.contentBottomInset(context),
+    );
+
+    final body = NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.axis != Axis.vertical) return false;
+        _scrollTop.value = notification.metrics.pixels;
+        return false;
+      },
+      child: RefreshIndicator(
+        color: AppColors.primary,
+        displacement: safeTop + 72,
+        onRefresh: () async {
+          ref.invalidate(homeDashboardProvider);
+          ref.invalidate(homeFeaturedItemsProvider);
+          ref.invalidate(eventosFijadosProvider);
+          ref.invalidate(campanasFijadasProvider);
+          ref.invalidate(currentPerfilProvider);
+        },
+        child: ListView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          padding: EdgeInsets.fromLTRB(0, contentTop, 0, bottomPad),
+          children: [
+            _HomeColumn(
+              child: _HeaderPerfil(
+                perfil: perfil,
+                menuAbierto: _menuCuentaAbierto,
+                noLeidas: noLeidas,
+                onNotificaciones: () => context.push(RoutePaths.notificaciones),
+                onToggleMenu: () =>
+                    setState(() => _menuCuentaAbierto = !_menuCuentaAbierto),
+                onMiPerfil: () {
+                  setState(() => _menuCuentaAbierto = false);
+                  context.push(RoutePaths.perfil);
+                },
+              ),
+            ),
+            if (featuredItems.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              ProximoEventoCard(items: featuredItems),
+            ],
+            _HomeColumn(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AnimatedSize(
+                    duration: AppMotion.toggle,
+                    curve: AppMotion.ease,
+                    alignment: Alignment.topCenter,
+                    child: _menuCuentaAbierto
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: _MenuCuenta(
+                              onMiPerfil: () {
+                                setState(() => _menuCuentaAbierto = false);
+                                context.push(RoutePaths.perfil);
+                              },
+                              onActualizaciones: () {
+                                setState(() => _menuCuentaAbierto = false);
+                                context.push(RoutePaths.actualizaciones);
+                              },
+                              onDesinstalar: canUninstallApp
+                                  ? _desinstalar
+                                  : null,
+                              onCerrarSesion: () => ref
+                                  .read(authRepositoryProvider)
+                                  .cerrarSesion(),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  const SizedBox(height: 12),
+                  perfilAsync.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: LoadingView(),
+                    ),
+                    error: (e, _) => ErrorView(
+                      message: 'No se pudo cargar tu perfil.',
+                      onRetry: () => ref.invalidate(currentPerfilProvider),
+                    ),
+                    data: (_) => const HomeDashboardSection(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final enter = reduce
+        ? body
+        : FadeTransition(
+            opacity: CurvedAnimation(parent: _enterCtrl, curve: AppMotion.ease),
+            child: SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 0.024),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(parent: _enterCtrl, curve: AppMotion.ease),
+                  ),
+              child: body,
+            ),
+          );
 
     return BrowserThemeColor(
-      color: AppColors.primaryDeep,
+      color: AppColors.background,
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.light,
+        value: SystemUiOverlayStyle.dark,
         child: UpdateChecker(
           child: Scaffold(
             backgroundColor: AppColors.background,
             body: Column(
               children: [
                 const OfflineBanner(),
-                _HeaderPerfil(
-                  perfil: perfil,
-                  menuAbierto: _menuCuentaAbierto,
-                  featuredItems: featuredItems,
-                  noLeidas: noLeidas,
-                  onNotificaciones: () =>
-                      context.push(RoutePaths.notificaciones),
-                  onToggleMenu: () =>
-                      setState(() => _menuCuentaAbierto = !_menuCuentaAbierto),
-                  onMiPerfil: () {
-                    setState(() => _menuCuentaAbierto = false);
-                    context.push(RoutePaths.perfil);
-                  },
-                  onActualizaciones: () {
-                    setState(() => _menuCuentaAbierto = false);
-                    context.push(RoutePaths.actualizaciones);
-                  },
-                  onDesinstalar: canUninstallApp ? _desinstalar : null,
-                  onCerrarSesion: () =>
-                      ref.read(authRepositoryProvider).cerrarSesion(),
-                ),
                 Expanded(
-                  child: RefreshIndicator(
-                    color: AppColors.primary,
-                    onRefresh: () async {
-                      ref.invalidate(homeDashboardProvider);
-                      ref.invalidate(homeFeaturedItemsProvider);
-                      ref.invalidate(eventosFijadosProvider);
-                      ref.invalidate(campanasFijadasProvider);
-                      ref.invalidate(currentPerfilProvider);
-                    },
-                    child: ListView(
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
+                  child: Stack(
+                    children: [
+                      enter,
+                      ValueListenableBuilder<double>(
+                        valueListenable: _scrollTop,
+                        builder: (context, t, _) {
+                          return _HomeCollapseBar(scrollTop: t, title: saludo);
+                        },
                       ),
-                      padding: EdgeInsets.fromLTRB(
-                        20,
-                        20,
-                        20,
-                        GlassNavTokens.contentBottomInset(context),
-                      ),
-                      children: [
-                        Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 760),
-                            child: perfilAsync.when(
-                              loading: () => const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 48),
-                                child: LoadingView(),
-                              ),
-                              error: (e, _) => ErrorView(
-                                message: 'No se pudo cargar tu perfil.',
-                                onRetry: () =>
-                                    ref.invalidate(currentPerfilProvider),
-                              ),
-                              data: (_) => const HomeDashboardSection(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
               ],
@@ -164,30 +255,140 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+/// Columna del home con el gutter de pantalla. El carrusel de eventos se
+/// sale de este wrapper para poder deslizar hasta el borde.
+class _HomeColumn extends StatelessWidget {
+  const _HomeColumn({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: AppSpacing.contentMax),
+          child: SizedBox(width: double.infinity, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCollapseBar extends StatelessWidget {
+  const _HomeCollapseBar({required this.scrollTop, required this.title});
+
+  final double scrollTop;
+  final String title;
+
+  static List<double> _saturationMatrix(double s) {
+    const r = 0.213;
+    const g = 0.715;
+    const b = 0.072;
+    final inv = 1 - s;
+    return [
+      inv * r + s,
+      inv * g,
+      inv * b,
+      0,
+      0,
+      inv * r,
+      inv * g + s,
+      inv * b,
+      0,
+      0,
+      inv * r,
+      inv * g,
+      inv * b + s,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final safeTop = MediaQuery.paddingOf(context).top;
+    final barHeight = safeTop + 52;
+    final opacity = (scrollTop / 48).clamp(0.0, 1.0);
+    final titleOpacity = ((scrollTop - 28) / 30).clamp(0.0, 1.0);
+    final titleTranslateY = (1 - titleOpacity) * 6;
+    final visible = opacity > 0.01;
+
+    return IgnorePointer(
+      ignoring: opacity < 0.45,
+      child: SizedBox(
+        height: barHeight,
+        child: Stack(
+          children: [
+            if (visible)
+              Positioned.fill(
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.compose(
+                      inner: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      outer: ColorFilter.matrix(_saturationMatrix(1.8)),
+                    ),
+                    child: ColoredBox(
+                      color: Color.fromRGBO(242, 245, 249, 0.72 * opacity),
+                    ),
+                  ),
+                ),
+              ),
+            Positioned(
+              top: safeTop,
+              left: 20,
+              right: 20,
+              bottom: 0,
+              child: Opacity(
+                opacity: titleOpacity,
+                child: Transform.translate(
+                  offset: Offset(0, titleTranslateY),
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: AppColors.identityInk,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HeaderPerfil extends StatelessWidget {
   const _HeaderPerfil({
     required this.perfil,
     required this.menuAbierto,
-    required this.featuredItems,
     required this.noLeidas,
     required this.onNotificaciones,
     required this.onToggleMenu,
     required this.onMiPerfil,
-    required this.onActualizaciones,
-    this.onDesinstalar,
-    required this.onCerrarSesion,
   });
 
   final Perfil? perfil;
   final bool menuAbierto;
-  final List<HomeFeaturedItem> featuredItems;
   final int noLeidas;
   final VoidCallback onNotificaciones;
   final VoidCallback onToggleMenu;
   final VoidCallback onMiPerfil;
-  final VoidCallback onActualizaciones;
-  final VoidCallback? onDesinstalar;
-  final VoidCallback onCerrarSesion;
 
   String get _firstName {
     final nombre = perfil?.nombreCompleto.trim() ?? '';
@@ -200,117 +401,131 @@ class _HeaderPerfil extends StatelessWidget {
     final first = _firstName;
     final saludo = first.isEmpty ? 'Hola 👋' : 'Hola, $first 👋';
     final rol = perfil?.rol.label ?? '';
-    final topPad = MediaQuery.paddingOf(context).top;
 
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(AppRadius.header),
-        ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, topPad + 8, 20, 22),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Pressable(
-                      scale: 0.94,
-                      onTap: onMiPerfil,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: AvatarPerfil(
-                          nombre: perfil?.nombreCompleto ?? '?',
-                          fotoUrl: perfil?.fotoUrl,
-                          size: 44,
-                          index: 0,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            saludo,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.2,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (rol.isNotEmpty) ...[
-                            const SizedBox(height: 3),
-                            _HeaderRoleChip(label: rol),
-                          ],
-                        ],
-                      ),
-                    ),
-                    NotificacionesHeaderButton(
-                      noLeidas: noLeidas,
-                      onTap: onNotificaciones,
-                    ),
-                    const SizedBox(width: 8),
-                    Pressable(
-                      scale: 0.92,
-                      onTap: onToggleMenu,
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.14),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          menuAbierto
-                              ? Symbols.close_rounded
-                              : Symbols.settings_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (featuredItems.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  ProximoEventoCard(items: featuredItems),
-                ],
-                AnimatedSize(
-                  duration: AppMotion.toggle,
-                  curve: AppMotion.ease,
-                  alignment: Alignment.topCenter,
-                  child: menuAbierto
-                      ? Padding(
-                          padding: EdgeInsets.only(
-                            top: featuredItems.isNotEmpty ? 12 : 16,
-                          ),
-                          child: _MenuCuenta(
-                            onMiPerfil: onMiPerfil,
-                            onActualizaciones: onActualizaciones,
-                            onDesinstalar: onDesinstalar,
-                            onCerrarSesion: onCerrarSesion,
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-              ],
-            ),
+    return Row(
+      children: [
+        Pressable(
+          scale: 0.94,
+          onTap: onMiPerfil,
+          child: _HomeAvatar(
+            nombre: perfil?.nombreCompleto ?? '?',
+            fotoUrl: perfil?.fotoUrl,
           ),
         ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                saludo,
+                style: const TextStyle(
+                  color: AppColors.identityInk,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                  height: 1.15,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (rol.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                _HeaderRoleChip(label: rol),
+              ],
+            ],
+          ),
+        ),
+        _IconChip(
+          icon: menuAbierto ? Symbols.close_rounded : Symbols.settings_rounded,
+          onTap: onToggleMenu,
+        ),
+        const SizedBox(width: 8),
+        NotificacionesHeaderButton(noLeidas: noLeidas, onTap: onNotificaciones),
+      ],
+    );
+  }
+}
+
+class _HomeAvatar extends StatelessWidget {
+  const _HomeAvatar({required this.nombre, this.fotoUrl});
+
+  final String nombre;
+  final String? fotoUrl;
+
+  String get _inicial {
+    final trimmed = nombre.trim();
+    if (trimmed.isEmpty) return '?';
+    return trimmed[0].toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tieneFoto = fotoUrl != null && fotoUrl!.isNotEmpty;
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: AppColors.primary, width: 2),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(13),
+        child: tieneFoto
+            ? CachedNetworkImage(
+                imageUrl: fotoUrl!,
+                fit: BoxFit.cover,
+                memCacheWidth: 132,
+                placeholder: (_, _) => _Inicial(letra: _inicial),
+                errorWidget: (_, _, _) => _Inicial(letra: _inicial),
+              )
+            : _Inicial(letra: _inicial),
+      ),
+    );
+  }
+}
+
+class _Inicial extends StatelessWidget {
+  const _Inicial({required this.letra});
+
+  final String letra;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        letra,
+        style: const TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          color: AppColors.heroNavy,
+          height: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _IconChip extends StatelessWidget {
+  const _IconChip({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      scale: 0.92,
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Icon(icon, color: AppColors.identityAccent, size: 20),
       ),
     );
   }
@@ -326,17 +541,16 @@ class _HeaderRoleChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.16),
+        color: AppColors.identityChip,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Text(
         label.toUpperCase(),
         style: const TextStyle(
-          color: Colors.white,
+          color: AppColors.identityAccent,
           fontSize: 10.5,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.6,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
         ),
       ),
     );

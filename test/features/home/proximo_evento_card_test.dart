@@ -2,7 +2,10 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:transworld_nexus/core/theme/app_theme.dart';
+import 'package:transworld_nexus/core/widgets/evento_hero_banner.dart';
 import 'package:transworld_nexus/features/home/models/home_featured_item.dart';
 import 'package:transworld_nexus/features/home/widgets/proximo_evento_card.dart';
 
@@ -24,6 +27,12 @@ final _items = [
 
 void main() {
   setUpAll(() => initializeDateFormatting('es'));
+
+  test('el inset centrado coincide con el gutter del home', () {
+    expect(homeFeaturedSettledInset(320), AppSpacing.screenH);
+    expect(homeFeaturedSettledInset(400), AppSpacing.screenH);
+    expect(homeFeaturedSettledInset(1200), (1200 - AppSpacing.contentMax) / 2);
+  });
 
   testWidgets('desliza las cards sin cambiar la altura máxima', (tester) async {
     final items = _items;
@@ -53,6 +62,9 @@ void main() {
     expect(find.byType(AnimatedSwitcher), findsNothing);
     final alturaInicial = tester.getSize(find.byType(ProximoEventoCard)).height;
     expect(alturaInicial, greaterThan(96));
+    expect(find.text('Ver evento'), findsOneWidget);
+    expect(find.text('Escanear QR'), findsOneWidget);
+    expect(find.text('REGISTRADOS'), findsWidgets);
 
     await tester.fling(
       find.text('Evento destacado con un nombre suficientemente extenso'),
@@ -69,12 +81,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('en móvil no aparecen flechas: basta el swipe', (tester) async {
+  testWidgets('la card ocupa todo el ancho: sin flechas laterales', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Center(
-            child: SizedBox(width: 320, child: ProximoEventoCard(items: _items)),
+            child: SizedBox(
+              width: 320,
+              child: ProximoEventoCard(items: _items),
+            ),
           ),
         ),
       ),
@@ -83,9 +100,12 @@ void main() {
 
     expect(find.byKey(const Key('proximo_evento_siguiente')), findsNothing);
     expect(find.byKey(const Key('proximo_evento_anterior')), findsNothing);
+    expect(tester.getSize(find.byType(PageView)).width, 320);
   });
 
-  testWidgets('en Windows las flechas cambian de card', (tester) async {
+  testWidgets('los puntos cambian de card sin depender del swipe', (
+    tester,
+  ) async {
     // El binding exige devolver la variable de debug antes de terminar el
     // cuerpo del test, así que no sirve un addTearDown.
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
@@ -104,15 +124,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final siguiente = find.byKey(const Key('proximo_evento_siguiente'));
-      expect(siguiente, findsOneWidget);
       expect(find.text('Campaña destacada'), findsNothing);
 
-      await tester.tap(siguiente);
+      await tester.tap(find.byKey(const Key('proximo_evento_punto_1')));
       await tester.pumpAndSettle();
       expect(find.text('Campaña destacada'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('proximo_evento_anterior')));
+      await tester.tap(find.byKey(const Key('proximo_evento_punto_0')));
       await tester.pumpAndSettle();
       expect(
         find.text('Evento destacado con un nombre suficientemente extenso'),
@@ -122,5 +140,233 @@ void main() {
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
+  });
+
+  testWidgets('la card de próximo evento muestra métricas y CTA', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: ProximoEventoCard(
+                items: [
+                  HomeFeaturedItem(
+                    kind: HomeFeaturedKind.proximoEvento,
+                    id: 'evento-1',
+                    nombre: 'Taller ALTAI: Título por confirmar',
+                    fecha: DateTime(2026, 8, 25),
+                    lugar: 'Hotel Intercontinental · Santiago',
+                    registrados: 64,
+                    acreditados: 26,
+                    leads: 23,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('PRÓXIMO EVENTO'), findsOneWidget);
+    expect(find.text('25 AGO'), findsOneWidget);
+    expect(find.text('Taller ALTAI: Título por confirmar'), findsOneWidget);
+    expect(find.text('Hotel Intercontinental · Santiago'), findsOneWidget);
+    expect(find.text('64'), findsOneWidget);
+    expect(find.text('41%'), findsOneWidget);
+    expect(find.text('23'), findsOneWidget);
+    expect(find.text('Ver evento'), findsOneWidget);
+    expect(find.text('Escanear QR'), findsOneWidget);
+    expect(find.byType(PageView), findsNothing);
+    expect(find.byType(EventoHeroFoto), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('con imagen de portada la card monta la foto del evento', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: ProximoEventoCard(
+                items: [
+                  HomeFeaturedItem(
+                    kind: HomeFeaturedKind.proximoEvento,
+                    id: 'evento-1',
+                    nombre: 'Taller ALTAI: Título por confirmar',
+                    fecha: DateTime(2026, 8, 25),
+                    imagenUrl: 'https://example.com/evento.jpg',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Taller ALTAI: Título por confirmar'), findsOneWidget);
+    expect(find.byType(EventoHeroFoto), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('la campaña fijada no muestra escanear QR', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: ProximoEventoCard(
+                items: [
+                  HomeFeaturedItem(
+                    kind: HomeFeaturedKind.campanaFijada,
+                    id: 'campana-1',
+                    nombre: 'Campaña destacada',
+                    fecha: DateTime(2026, 9, 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Ver campaña'), findsOneWidget);
+    expect(find.text('Escanear QR'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('los puntos inactivos se distinguen del activo', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: ProximoEventoCard(items: _items),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('proximo_evento_punto_0')), findsOneWidget);
+    expect(find.byKey(const Key('proximo_evento_punto_1')), findsOneWidget);
+
+    BoxDecoration decoDe(Key key) {
+      final container = tester.widget<AnimatedContainer>(
+        find.descendant(
+          of: find.byKey(key),
+          matching: find.byType(AnimatedContainer),
+        ),
+      );
+      return container.decoration! as BoxDecoration;
+    }
+
+    final activo = decoDe(const Key('proximo_evento_punto_0'));
+    final inactivo = decoDe(const Key('proximo_evento_punto_1'));
+    expect(activo.color, AppColors.heroNavy);
+    expect(inactivo.color, isNot(AppColors.border));
+    expect(inactivo.color, isNot(activo.color));
+    expect(inactivo.color!.a, greaterThan(0.2));
+  });
+
+  testWidgets('las cards centradas respetan el gutter del home', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: ProximoEventoCard(items: _items),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final pageWidth = tester.getSize(find.byType(PageView)).width;
+    expect(pageWidth, 320);
+    final card = find
+        .descendant(
+          of: find.byType(PageView),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Container &&
+                widget.decoration is BoxDecoration &&
+                (widget.decoration! as BoxDecoration).gradient ==
+                    AppColors.heroGradient,
+          ),
+        )
+        .first;
+    expect(tester.getSize(card).width, pageWidth - AppSpacing.screenH * 2);
+  });
+
+  testWidgets('solo el botón Ver evento navega al evento', (tester) async {
+    String? location;
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 320,
+                child: ProximoEventoCard(
+                  items: [
+                    HomeFeaturedItem(
+                      kind: HomeFeaturedKind.proximoEvento,
+                      id: 'evento-1',
+                      nombre: 'Taller ALTAI: Título por confirmar',
+                      fecha: DateTime(2026, 8, 25),
+                      lugar: 'Hotel Intercontinental · Santiago',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/eventos/:id/usar',
+          builder: (_, state) {
+            location = state.uri.path;
+            return const SizedBox.shrink();
+          },
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pump();
+
+    await tester.tap(find.text('Taller ALTAI: Título por confirmar'));
+    await tester.pump();
+    expect(location, isNull);
+
+    await tester.tap(find.text('Hotel Intercontinental · Santiago'));
+    await tester.pump();
+    expect(location, isNull);
+
+    await tester.tap(find.text('Ver evento'));
+    await tester.pump();
+    expect(location, '/eventos/evento-1/usar');
+    expect(tester.takeException(), isNull);
   });
 }

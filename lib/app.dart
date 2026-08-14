@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/desktop/desktop_window.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/sync_conflict_listener.dart';
@@ -39,8 +40,9 @@ class TransworldNexusApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: router,
-      builder: (context, child) =>
-          SyncConflictListener(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => DesktopWindowFrame(
+        child: SyncConflictListener(child: child ?? const SizedBox.shrink()),
+      ),
     );
   }
 }

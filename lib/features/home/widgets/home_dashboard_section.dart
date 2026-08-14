@@ -105,7 +105,7 @@ class _KpiGrid extends StatelessWidget {
               for (var col = 0; col < 2; col++) ...[
                 if (col > 0) const SizedBox(width: 12),
                 Expanded(
-                  child: StaggeredListItem(
+                  child: _HomeCardIn(
                     index: row * 2 + col,
                     child: StatCard(
                       value: cards[row * 2 + col].$1,
@@ -189,8 +189,8 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
                   ),
                   child: const Icon(
                     Symbols.chevron_left_rounded,
-                    size: 18,
-                    color: AppColors.primary,
+                    size: 17,
+                    color: AppColors.identityAccent,
                   ),
                 ),
               ),
@@ -219,8 +219,8 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
                   ),
                   child: const Icon(
                     Symbols.chevron_right_rounded,
-                    size: 18,
-                    color: AppColors.primary,
+                    size: 17,
+                    color: AppColors.identityAccent,
                   ),
                 ),
               ),
@@ -344,14 +344,14 @@ class _CalendarioGrid extends StatelessWidget {
       celdas.add(
         GestureDetector(
           onTap: () => onDiaTap(fecha),
-          child: AspectRatio(
-            aspectRatio: 1.15,
+          child: SizedBox(
+            height: 34,
             child: Container(
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                gradient: esHoy ? AppColors.headerGradient : null,
+                gradient: esHoy ? AppColors.heroGradient : null,
                 color: !esHoy && seleccionado ? AppColors.tintNavy : null,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Stack(
                 alignment: Alignment.center,
@@ -377,7 +377,7 @@ class _CalendarioGrid extends StatelessWidget {
                         width: 4,
                         height: 4,
                         decoration: const BoxDecoration(
-                          color: AppColors.primary,
+                          color: AppColors.identityAccent,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -419,7 +419,7 @@ class _CeldaCalendarioVacia extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const AspectRatio(aspectRatio: 1.15);
+    return const SizedBox(height: 34);
   }
 }
 
@@ -488,6 +488,52 @@ class _EventoCalendarioTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _HomeCardIn extends StatefulWidget {
+  const _HomeCardIn({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_HomeCardIn> createState() => _HomeCardInState();
+}
+
+class _HomeCardInState extends State<_HomeCardIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: AppMotion.cardIn);
+    _fade = CurvedAnimation(parent: _ctrl, curve: AppMotion.ease);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: AppMotion.ease));
+    Future<void>.delayed(AppMotion.stagger * widget.index, () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (AppMotion.reduceMotion(context)) return widget.child;
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }

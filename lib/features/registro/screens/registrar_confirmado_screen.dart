@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/sync_queue_service.dart';
@@ -39,8 +41,10 @@ class _RegistrarConfirmadoScreenState
   final _telefonoController = TextEditingController();
   final _rutController = TextEditingController();
   final _patenteController = TextEditingController();
+  PaisTelefono _pais = kPaisTelefonoChile;
   bool _acreditarAhora = false;
   bool _guardando = false;
+  bool _autovalidar = false;
 
   @override
   void dispose() {
@@ -58,10 +62,33 @@ class _RegistrarConfirmadoScreenState
     required bool requiereCertificacion,
     required String nombreEvento,
   }) async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _guardando = true);
+    if (_guardando) return;
+    _guardando = true;
 
-    final email = _emailController.text.trim().toLowerCase();
+    aplicarFormatosRegistroAsistente(
+      nombre: _nombreController,
+      email: _emailController,
+      empresa: _empresaController,
+      cargo: _cargoController,
+      telefono: _telefonoController,
+      pais: _pais,
+      rut: requiereCertificacion ? _rutController : null,
+      patente: requiereCertificacion ? _patenteController : null,
+    );
+
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      _guardando = false;
+      if (mounted) setState(() => _autovalidar = true);
+      return;
+    }
+
+    if (!mounted) {
+      _guardando = false;
+      return;
+    }
+    setState(() => _autovalidar = true);
+
+    final email = formatearEmail(_emailController.text);
     final isOnline = ref.read(isOnlineProvider);
     final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
 
@@ -76,21 +103,21 @@ class _RegistrarConfirmadoScreenState
             .read(registradosRepositoryProvider)
             .existeEmailEnEvento(widget.eventoId, email);
         if (yaExiste) {
-          throw Exception('Ese correo ya está registrado en este evento.');
+          throw Exception(kMensajeEmailDuplicado);
         }
       }
 
       final registrado = Registrado(
         id: '',
         eventoId: widget.eventoId,
-        nombreCompleto: _nombreController.text.trim(),
+        nombreCompleto: formatearNombreCompleto(_nombreController.text),
         email: email,
         acreditado: _acreditarAhora,
         rut: requiereCertificacion ? _rutController.text.trim() : null,
         patente: requiereCertificacion ? _patenteController.text.trim() : null,
-        empresa: _empresaController.text.trim(),
-        cargo: _cargoController.text.trim(),
-        telefono: _telefonoController.text.trim(),
+        empresa: formatearEmpresa(_empresaController.text),
+        cargo: formatearCargo(_cargoController.text),
+        telefono: telefonoInternacional(_telefonoController.text, _pais),
         ingresadoPor: userId,
       );
 
@@ -128,7 +155,11 @@ class _RegistrarConfirmadoScreenState
         _telefonoController.clear();
         _rutController.clear();
         _patenteController.clear();
-        setState(() => _acreditarAhora = false);
+        setState(() {
+          _acreditarAhora = false;
+          _pais = kPaisTelefonoChile;
+          _autovalidar = false;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -159,58 +190,33 @@ class _RegistrarConfirmadoScreenState
                   ),
                   child: Form(
                     key: _formKey,
+                    autovalidateMode: _autovalidar
+                        ? AutovalidateMode.onUserInteraction
+                        : AutovalidateMode.disabled,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextFormField(
-                          controller: _nombreController,
-                          decoration: const InputDecoration(labelText: 'Nombre completo'),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                        CamposRegistroAsistente(
+                          nombreController: _nombreController,
+                          emailController: _emailController,
+                          empresaController: _empresaController,
+                          cargoController: _cargoController,
+                          telefonoController: _telefonoController,
+                          pais: _pais,
+                          onPaisChanged: (pais) => setState(() => _pais = pais),
+                          enabled: !_guardando,
+                          mostrarCertificacion: requiereCertificacion,
+                          rutController: _rutController,
+                          patenteController: _patenteController,
                         ),
-                        AppSpacing.field,
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(labelText: 'Email'),
-                          validator: (v) =>
-                              (v == null || !v.contains('@')) ? 'Email inválido' : null,
-                        ),
-                        AppSpacing.field,
-                        TextFormField(
-                          controller: _empresaController,
-                          decoration: const InputDecoration(labelText: 'Empresa'),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                        ),
-                        AppSpacing.field,
-                        TextFormField(
-                          controller: _cargoController,
-                          decoration: const InputDecoration(labelText: 'Cargo'),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                        ),
-                        AppSpacing.field,
-                        TextFormField(
-                          controller: _telefonoController,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(labelText: 'Teléfono (opcional)'),
-                        ),
-                        if (requiereCertificacion) ...[
-                          AppSpacing.field,
-                          TextFormField(
-                            controller: _rutController,
-                            decoration: const InputDecoration(labelText: 'RUT / RUC'),
-                          ),
-                          AppSpacing.field,
-                          TextFormField(
-                            controller: _patenteController,
-                            decoration: const InputDecoration(labelText: 'Patente'),
-                          ),
-                        ],
                         const SizedBox(height: AppSpacing.lg),
                         _ToggleRow(
                           title: 'Acreditar de inmediato',
                           subtitle: 'Marca al asistente como acreditado al guardar',
                           value: _acreditarAhora,
-                          onChanged: (v) => setState(() => _acreditarAhora = v),
+                          onChanged: _guardando
+                              ? (_) {}
+                              : (v) => setState(() => _acreditarAhora = v),
                         ),
                         const SizedBox(height: AppSpacing.xl),
                         PrimaryGradientButton(

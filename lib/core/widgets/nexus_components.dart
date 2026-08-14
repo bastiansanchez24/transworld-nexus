@@ -323,7 +323,7 @@ class StatCard extends StatelessWidget {
               color: tint,
               borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(icon, size: 20, color: iconColor),
+            child: Icon(icon, size: 19, color: iconColor, fill: 1),
           ),
           const SizedBox(height: 10),
           Text(
@@ -507,32 +507,35 @@ class PrimaryGradientButton extends StatelessWidget {
       scale: 0.97,
       onTap: loading ? null : onPressed,
       enabled: onPressed != null && !loading,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          gradient: AppColors.headerGradient,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          boxShadow: AppColors.shadowFab,
+      child: AbsorbPointer(
+        absorbing: loading || onPressed == null,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            gradient: AppColors.headerGradient,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            boxShadow: AppColors.shadowFab,
+          ),
+          alignment: Alignment.center,
+          child: loading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
         ),
-        alignment: Alignment.center,
-        child: loading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
       ),
     );
   }

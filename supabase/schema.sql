@@ -662,6 +662,46 @@ DROP TRIGGER IF EXISTS trg_registrados_updated_at ON public.registrados;
 CREATE TRIGGER trg_registrados_updated_at BEFORE UPDATE ON public.registrados
   FOR EACH ROW EXECUTE FUNCTION public.rpe_set_updated_at();
 
+-- El email es el identificador irrepetible del asistente. Se fuerza a
+-- minúsculas para que UNIQUE(evento_id, email) no deje pasar "Ana@x.cl"
+-- junto a "ana@x.cl" (causa habitual de duplicados por doble envío).
+CREATE OR REPLACE FUNCTION public.rpe_normalizar_email_registrado()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  NEW.email := lower(trim(NEW.email));
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_registrados_normalizar_email ON public.registrados;
+CREATE TRIGGER trg_registrados_normalizar_email
+  BEFORE INSERT OR UPDATE OF email ON public.registrados
+  FOR EACH ROW EXECUTE FUNCTION public.rpe_normalizar_email_registrado();
+
+-- Consulta case-insensitive usable también por `anon` (el formulario
+-- público no tiene SELECT sobre registrados). SECURITY DEFINER solo
+-- expone un boolean: no filtra filas hacia el cliente.
+CREATE OR REPLACE FUNCTION public.rpe_existe_email_registrado(
+  p_evento_id uuid,
+  p_email text
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.registrados
+    WHERE evento_id = p_evento_id
+      AND lower(trim(email)) = lower(trim(p_email))
+  );
+$$;
+
 -- El externo acredita desde el escáner, pero no puede usar UPDATE como un
 -- editor genérico de asistentes. Se permiten únicamente la transición
 -- false->true y los campos de auditoría que genera ese flujo. La cola offline
@@ -1585,6 +1625,9 @@ GRANT EXECUTE ON FUNCTION public.rpe_sincronizar_eventos_externo(uuid, uuid[]) T
 GRANT EXECUTE ON FUNCTION public.rpe_configurar_acceso_usuario(uuid, text, uuid[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.rpe_sincronizar_eventos_usuario(uuid, uuid[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.rpe_configurar_acceso_evento(uuid, uuid[]) TO authenticated;
+REVOKE ALL ON FUNCTION public.rpe_existe_email_registrado(uuid, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rpe_existe_email_registrado(uuid, text)
+  TO anon, authenticated;
 REVOKE ALL ON FUNCTION public.rpe_actualizar_rol_usuario(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.rpe_sincronizar_eventos_externo(uuid, uuid[]) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.rpe_configurar_acceso_usuario(uuid, text, uuid[]) FROM PUBLIC;

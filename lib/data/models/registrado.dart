@@ -104,7 +104,7 @@ class Registrado {
     return {
       'evento_id': eventoId,
       'nombre_completo': nombreCompleto,
-      'email': email,
+      'email': email.trim().toLowerCase(),
       'acreditado': acreditado,
       'rut': rut,
       'patente': patente,

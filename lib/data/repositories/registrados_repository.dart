@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/supabase_tables.dart';
+import '../../core/utils/registro_asistente.dart';
 import '../models/registrado.dart';
 import '../offline/sync_queue_service.dart';
 import '../supabase/supabase_client_provider.dart';
@@ -46,27 +47,60 @@ class RegistradosRepository implements SyncExecutor {
   }
 
   /// Antes de insertar, revisa si ya existe alguien con ese correo en el
-  /// evento. Esto refuerza (no reemplaza) el `UNIQUE(evento_id, email)` de
-  /// la base de datos: la constraint es la última línea de defensa ante
-  /// condiciones de carrera; este chequeo evita el viaje redondo con error
-  /// en el caso común (ver documentacion_zips_registro_pro.md Sección 17.7).
+  /// evento. Compara en minúsculas porque el email es el identificador
+  /// irrepetible y en producción hay filas históricas con distinta capitalización.
+  ///
+  /// Refuerza (no reemplaza) el `UNIQUE(evento_id, email)` de la base: la
+  /// constraint es la última línea de defensa ante doble click / carrera;
+  /// este chequeo evita el viaje redondo con error en el caso común.
   Future<bool> existeEmailEnEvento(String eventoId, String email) async {
-    final rows = await _client
-        .from(SupabaseTables.registrados)
-        .select('id')
-        .eq('evento_id', eventoId)
-        .eq('email', email.trim().toLowerCase())
-        .limit(1);
-    return rows.isNotEmpty;
+    final normalizado = email.trim().toLowerCase();
+    if (normalizado.isEmpty) return false;
+    try {
+      final result = await _client.rpc(
+        SupabaseRpc.existeEmailRegistrado,
+        params: {
+          'p_evento_id': eventoId,
+          'p_email': normalizado,
+        },
+      );
+      return result == true;
+    } catch (_) {
+      // Fallback si el RPC aún no está desplegado. `ilike` sin comodines
+      // equivale a igualdad case-insensitive. El rol `anon` no puede leer
+      // la tabla: en ese caso devolvemos false y `crear` se apoya en UNIQUE.
+      final escaped = normalizado
+          .replaceAll(r'\', r'\\')
+          .replaceAll('%', r'\%')
+          .replaceAll('_', r'\_');
+      try {
+        final rows = await _client
+            .from(SupabaseTables.registrados)
+            .select('id')
+            .eq('evento_id', eventoId)
+            .ilike('email', escaped)
+            .limit(1);
+        return rows.isNotEmpty;
+      } catch (_) {
+        return false;
+      }
+    }
   }
 
   Future<Registrado> crear(Registrado registrado) async {
-    final row = await _client
-        .from(SupabaseTables.registrados)
-        .insert(registrado.toInsertMap())
-        .select()
-        .single();
-    return Registrado.fromMap(row);
+    try {
+      final row = await _client
+          .from(SupabaseTables.registrados)
+          .insert(registrado.toInsertMap())
+          .select()
+          .single();
+      return Registrado.fromMap(row);
+    } on PostgrestException catch (e) {
+      if (e.code == _uniqueViolation) {
+        throw Exception(kMensajeEmailDuplicado);
+      }
+      rethrow;
+    }
   }
 
   /// Inserción masiva (carga por Excel). Filtra localmente los correos que
@@ -100,7 +134,7 @@ class RegistradosRepository implements SyncExecutor {
         );
 
     final emailsExistentes = existentesRows
-        .map((r) => r['email'] as String)
+        .map((r) => (r['email'] as String).trim().toLowerCase())
         .toSet();
 
     final aInsertar = unicosDelArchivo
@@ -196,6 +230,24 @@ class RegistradosRepository implements SyncExecutor {
     final id = payload['id'] as String;
     final changes = Map<String, dynamic>.from(payload['changes'] as Map);
     await _client.from(SupabaseTables.registrados).update(changes).eq('id', id);
+  }
+
+  /// Totales de un evento concreto para la card del home.
+  Future<({int total, int acreditados})> obtenerResumenPorEvento(
+    String eventoId,
+  ) async {
+    final resultados = await Future.wait<int>([
+      _client
+          .from(SupabaseTables.registrados)
+          .count(CountOption.exact)
+          .eq('evento_id', eventoId),
+      _client
+          .from(SupabaseTables.registrados)
+          .count(CountOption.exact)
+          .eq('evento_id', eventoId)
+          .eq('acreditado', true),
+    ]);
+    return (total: resultados[0], acreditados: resultados[1]);
   }
 
   /// Totales visibles para el dashboard. RLS acota las filas a los eventos

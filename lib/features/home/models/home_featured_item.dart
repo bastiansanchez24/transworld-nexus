@@ -12,6 +12,10 @@ class HomeFeaturedItem {
     required this.nombre,
     required this.fecha,
     this.lugar = '',
+    this.registrados = 0,
+    this.acreditados = 0,
+    this.leads = 0,
+    this.imagenUrl,
   });
 
   final HomeFeaturedKind kind;
@@ -19,23 +23,55 @@ class HomeFeaturedItem {
   final String nombre;
   final DateTime fecha;
   final String lugar;
+  final int registrados;
+  final int acreditados;
+  final int leads;
+  final String? imagenUrl;
+
+  bool get tieneImagen => imagenUrl != null && imagenUrl!.isNotEmpty;
 
   bool get esFijado =>
       kind == HomeFeaturedKind.eventoFijado ||
       kind == HomeFeaturedKind.campanaFijada;
 
   String get etiqueta => switch (kind) {
-        HomeFeaturedKind.proximoEvento => 'PRÓXIMO EVENTO',
-        HomeFeaturedKind.eventoFijado => 'EVENTO FIJADO',
-        HomeFeaturedKind.campanaFijada => 'CAMPAÑA FIJADA',
-      };
+    HomeFeaturedKind.proximoEvento => 'PRÓXIMO EVENTO',
+    HomeFeaturedKind.eventoFijado => 'EVENTO FIJADO',
+    HomeFeaturedKind.campanaFijada => 'CAMPAÑA FIJADA',
+  };
+
+  String get ctaLabel =>
+      kind == HomeFeaturedKind.campanaFijada ? 'Ver campaña' : 'Ver evento';
+
+  bool get puedeEscanearQr => kind != HomeFeaturedKind.campanaFijada;
+
+  String? get qrRoutePath =>
+      puedeEscanearQr ? RoutePaths.acreditarQr(id) : null;
+
+  String get porcentajeAcreditados {
+    if (registrados <= 0) return '0%';
+    return '${((acreditados / registrados) * 100).round()}%';
+  }
 
   String get routePath => switch (kind) {
-        HomeFeaturedKind.proximoEvento ||
-        HomeFeaturedKind.eventoFijado =>
-          RoutePaths.usarEvento(id),
-        HomeFeaturedKind.campanaFijada => RoutePaths.usarEventoLead(id),
-      };
+    HomeFeaturedKind.proximoEvento ||
+    HomeFeaturedKind.eventoFijado => RoutePaths.usarEvento(id),
+    HomeFeaturedKind.campanaFijada => RoutePaths.usarEventoLead(id),
+  };
+
+  HomeFeaturedItem copyWith({int? registrados, int? acreditados, int? leads}) {
+    return HomeFeaturedItem(
+      kind: kind,
+      id: id,
+      nombre: nombre,
+      fecha: fecha,
+      lugar: lugar,
+      registrados: registrados ?? this.registrados,
+      acreditados: acreditados ?? this.acreditados,
+      leads: leads ?? this.leads,
+      imagenUrl: imagenUrl,
+    );
+  }
 
   factory HomeFeaturedItem.proximoEvento(Evento evento) {
     return HomeFeaturedItem(
@@ -44,6 +80,7 @@ class HomeFeaturedItem {
       nombre: evento.nombre,
       fecha: evento.fecha,
       lugar: evento.lugar ?? evento.pais ?? '',
+      imagenUrl: evento.imagenUrl,
     );
   }
 
@@ -54,6 +91,7 @@ class HomeFeaturedItem {
       nombre: evento.nombre,
       fecha: evento.fecha,
       lugar: evento.lugar ?? evento.pais ?? '',
+      imagenUrl: evento.imagenUrl,
     );
   }
 
@@ -66,4 +104,17 @@ class HomeFeaturedItem {
       lugar: campana.pais ?? '',
     );
   }
+}
+
+/// Slider del home: fijados primero. El próximo evento cierra la lista si no
+/// está ya fijado (si lo está, se muestra como fijado y no se duplica).
+List<HomeFeaturedItem> ensamblarHomeFeaturedItems({
+  required List<HomeFeaturedItem> fijados,
+  HomeFeaturedItem? proximo,
+}) {
+  if (proximo == null) return List<HomeFeaturedItem>.of(fijados);
+  if (fijados.any((item) => item.id == proximo.id)) {
+    return List<HomeFeaturedItem>.of(fijados);
+  }
+  return [...fijados, proximo];
 }

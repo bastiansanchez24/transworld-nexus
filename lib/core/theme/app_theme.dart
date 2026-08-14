@@ -13,12 +13,18 @@ class AppColors {
   static const accent = Color(0xFFB1F22A); // logo lima
   static const accentGlow = Color(0xFFA0DE2A); // lima glow del motion spec
 
-  static const ink = Color(0xFF14253F);
-  static const textSecondary = Color(0xFF5A6B82);
-  static const textTertiary = Color(0xFF8A9BB0);
+  static const ink = Color(0xFF10263D);
+  static const identityInk = ink;
+  static const identityAccent = Color(0xFF14507F);
+  static const identityChip = Color(0xFFE8F0F8);
+  static const heroNavy = Color(0xFF0C3357);
+  static const heroNavyMid = Color(0xFF175E93);
+  static const live = Color(0xFF5BD69B);
+  static const textSecondary = Color(0xFF5C6E82);
+  static const textTertiary = Color(0xFF8CA0B3);
   static const background = Color(0xFFF2F5F9);
   static const surface = Color(0xFFFFFFFF);
-  static const border = Color(0xFFE3E9F1);
+  static const border = Color(0xFFE4EAF1);
   static const tintNavy = Color(0xFFE8EDF5);
   static const tintLime = Color(0xFFF3FCE0);
 
@@ -47,6 +53,13 @@ class AppColors {
     end: Alignment.bottomRight,
   );
 
+  /// Card de próximo evento del home (150° #0C3357 → #175E93).
+  static const heroGradient = LinearGradient(
+    colors: [heroNavy, heroNavyMid],
+    begin: Alignment(-0.5, -1),
+    end: Alignment(0.5, 1),
+  );
+
   static const shadowRest = [
     BoxShadow(color: Color(0x0D14253F), offset: Offset(0, 1), blurRadius: 2),
   ];
@@ -61,6 +74,23 @@ class AppColors {
 
   static const shadowHero = [
     BoxShadow(color: Color(0x4714253F), offset: Offset(0, 10), blurRadius: 26),
+  ];
+
+  /// Sombra de la card hero del home. El spread negativo la mantiene bajo la
+  /// card: sin él el halo desborda los bordes y se lee como un rectángulo.
+  static const shadowHeroCard = [
+    BoxShadow(
+      color: Color(0x33041426),
+      offset: Offset(0, 16),
+      blurRadius: 34,
+      spreadRadius: -10,
+    ),
+    BoxShadow(
+      color: Color(0x1F041426),
+      offset: Offset(0, 4),
+      blurRadius: 12,
+      spreadRadius: -6,
+    ),
   ];
 
   static const shadowToast = [
@@ -137,6 +167,7 @@ class AppSpacing {
 
   static const screenH = 20.0;
   static const screen = EdgeInsets.symmetric(horizontal: screenH);
+  static const contentMax = 760.0;
   static const field = SizedBox(height: 14);
   static const sectionGap = 22.0;
   static const cardGap = 10.0;
@@ -220,19 +251,21 @@ class AppTheme {
       headlineSmall: baseText.headlineSmall?.copyWith(
         fontSize: 19,
         fontWeight: FontWeight.w800,
-        letterSpacing: -0.2,
+        height: 1.28,
+        letterSpacing: -0.4,
         color: AppColors.ink,
       ),
       titleLarge: baseText.titleLarge?.copyWith(
         fontSize: 17,
         fontWeight: FontWeight.w800,
-        letterSpacing: -0.2,
+        letterSpacing: -0.35,
         color: AppColors.ink,
       ),
       titleMedium: baseText.titleMedium?.copyWith(
         fontSize: 14,
         fontWeight: FontWeight.w700,
         height: 1.35,
+        letterSpacing: -0.2,
         color: AppColors.ink,
       ),
       titleSmall: baseText.titleSmall?.copyWith(

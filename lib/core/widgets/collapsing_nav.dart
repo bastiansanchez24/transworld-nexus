@@ -33,6 +33,15 @@ class CollapsingNavMetrics {
   double get barHeight => topInset + gapTop + titleZone;
 
   double get barWithSearch => barHeight + 56;
+
+  /// Aire reservado sobre el contenido scrollable.
+  ///
+  /// Solo hay que despejar la zona de botones cuando la barra tiene acciones
+  /// visibles en reposo. Sin ellas ([conAcciones] falso) el único habitante de
+  /// la barra es el título colapsado, que aparece con el scroll y se superpone
+  /// al contenido: reservarle sitio dejaba las listas hundidas media pantalla.
+  double contentTop({required bool conAcciones}) =>
+      conAcciones ? barHeight : topInset + gapTop;
 }
 
 /// Overlay sticky con blur scroll-driven (HANDOFF §4.1).
@@ -494,12 +503,22 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
     parent: AlwaysScrollableScrollPhysics(),
   );
 
+  /// Botones que ocupan la barra desde el primer frame, sin esperar al scroll.
+  bool get _tieneAccionesFijas =>
+      widget.alwaysShowActions ||
+      widget.overlayLeading != null ||
+      widget.overlayTrailing != null;
+
   Widget _buildScrollable({
     required CollapsingNavMetrics metrics,
     required bool hasPinnedContent,
   }) {
     final topSpacer = [
-      SliverToBoxAdapter(child: SizedBox(height: metrics.barHeight)),
+      SliverToBoxAdapter(
+        child: SizedBox(
+          height: metrics.contentTop(conAcciones: _tieneAccionesFijas),
+        ),
+      ),
     ];
     final bottomSpacer = [
       SliverToBoxAdapter(
