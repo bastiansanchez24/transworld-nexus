@@ -325,7 +325,9 @@ class _FeaturedSlide extends StatelessWidget {
       child: Stack(
         children: [
           if (item.tieneImagen)
-            Positioned.fill(child: EventoHeroFoto(imagenUrl: item.imagenUrl!))
+            Positioned.fill(
+              child: EventoHeroFoto(imagenUrl: item.imagenUrl!, velo: 0),
+            )
           else
             Positioned(
               top: -52,
@@ -341,6 +343,18 @@ class _FeaturedSlide extends StatelessWidget {
                 ),
               ),
             ),
+          // Velo sobre foto o degradado: el texto blanco y las métricas leen.
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x59000000), Color(0xA3000000)],
+                ),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
             child: LayoutBuilder(

@@ -4,10 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:transworld_nexus/core/widgets/collapsing_nav.dart';
 
 void main() {
-  Future<void> montarLista(
-    WidgetTester tester, {
-    required EdgeInsets padding,
-  }) {
+  Future<void> montarLista(WidgetTester tester, {required EdgeInsets padding}) {
     return tester.pumpWidget(
       MaterialApp(
         home: MediaQuery(
@@ -61,10 +58,46 @@ void main() {
     final metricas = tester.element(find.byType(CollapsingScrollScaffold));
     final barHeight = CollapsingNavMetrics(metricas).barHeight;
 
-    expect(barHeight, CollapsingNavMetrics.gapTop + CollapsingNavMetrics.titleZone);
+    expect(
+      barHeight,
+      CollapsingNavMetrics.gapTop + CollapsingNavMetrics.titleZone,
+    );
     expect(
       tester.getBottomLeft(find.byType(CollapsingNavButton)).dy,
       lessThanOrEqualTo(barHeight),
     );
+  });
+
+  test('el blur espera a que el header toque el borde superior', () {
+    const overlay = CollapsingNavOverlay(
+      scrollOffset: 0,
+      title: 'Eventos',
+      collapseStart: 12,
+    );
+    expect(overlay.bgOpacity, 0);
+    expect(overlay.titleOpacity, 0);
+
+    const alTocar = CollapsingNavOverlay(
+      scrollOffset: 12,
+      title: 'Eventos',
+      collapseStart: 12,
+    );
+    expect(alTocar.bgOpacity, 0);
+    expect(alTocar.titleOpacity, 0);
+
+    const aMedia = CollapsingNavOverlay(
+      scrollOffset: 22,
+      title: 'Eventos',
+      collapseStart: 12,
+    );
+    expect(aMedia.bgOpacity, 0.5);
+
+    const opaco = CollapsingNavOverlay(
+      scrollOffset: 32,
+      title: 'Eventos',
+      collapseStart: 12,
+    );
+    expect(opaco.bgOpacity, 1);
+    expect(opaco.titleOpacity, 1);
   });
 }

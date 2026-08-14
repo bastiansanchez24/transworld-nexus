@@ -117,7 +117,7 @@ abstract final class GlassNavTokens {
   static const horizontalMargin = 14.0;
 
   /// Aire extra bajo el panel, **además** del home indicator / safe area.
-  static const bottomMargin = 16.0;
+  static const bottomMargin = 10.0;
 
   /// Holgura extra en PWA (iPhone): separa la navbar de la barra nativa.
   static const webBottomExtra = 14.0;

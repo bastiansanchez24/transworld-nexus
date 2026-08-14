@@ -34,6 +34,9 @@ class CollapsingNavMetrics {
 
   double get barWithSearch => barHeight + 56;
 
+  /// Fade del blur/título compacto una vez el header toca el borde superior.
+  static const double collapseFadeRange = 20;
+
   /// Aire reservado sobre el contenido scrollable.
   ///
   /// Solo hay que despejar la zona de botones cuando la barra tiene acciones
@@ -42,6 +45,10 @@ class CollapsingNavMetrics {
   /// al contenido: reservarle sitio dejaba las listas hundidas media pantalla.
   double contentTop({required bool conAcciones}) =>
       conAcciones ? barHeight : topInset + gapTop;
+
+  /// Scroll hasta que el header toca el borde superior (bajo el safe area).
+  double collapseStart({required bool conAcciones}) =>
+      contentTop(conAcciones: conAcciones) - topInset;
 }
 
 /// Overlay sticky con blur scroll-driven (HANDOFF §4.1).
@@ -56,9 +63,9 @@ class CollapsingNavOverlay extends StatelessWidget {
     this.trailing,
     this.alwaysShowActions = false,
 
-    /// Distancia de scroll hasta que el buscador toca el título colapsado.
-    /// Alinea fade del título/blur con ese momento.
-    this.collapseExtent = 48,
+    /// Scroll en el que el header toca el borde superior. Hasta entonces
+    /// el blur y el título compacto no aparecen.
+    this.collapseStart = 0,
   });
 
   final double scrollOffset;
@@ -68,19 +75,17 @@ class CollapsingNavOverlay extends StatelessWidget {
   final Widget? leading;
   final Widget? trailing;
   final bool alwaysShowActions;
-  final double collapseExtent;
+  final double collapseStart;
 
-  double get _extent => collapseExtent <= 0 ? 48.0 : collapseExtent;
+  double get _start => collapseStart < 0 ? 0.0 : collapseStart;
 
-  double get bgOpacity => (scrollOffset / _extent).clamp(0.0, 1.0);
+  double get bgOpacity =>
+      ((scrollOffset - _start) / CollapsingNavMetrics.collapseFadeRange).clamp(
+        0.0,
+        1.0,
+      );
 
-  /// El título colapsado queda opaco antes de que el buscador se fije.
-  double get titleOpacity {
-    final start = _extent * 0.18;
-    final end = _extent * 0.82;
-    final range = (end - start).clamp(1.0, _extent);
-    return ((scrollOffset - start) / range).clamp(0.0, 1.0);
-  }
+  double get titleOpacity => bgOpacity;
 
   double get titleTranslateY => (1 - titleOpacity) * 6;
 
@@ -568,9 +573,7 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
           : Padding(
               // Scaffold anidado bajo MainShellScaffold: el FAB no se eleva
               // solo con extendBody del padre; hay que despejar la tab bar.
-              padding: EdgeInsets.only(
-                bottom: AppSpacing.shellFabBottomOf(),
-              ),
+              padding: EdgeInsets.only(bottom: AppSpacing.shellFabBottomOf()),
               child: widget.floatingActionButton,
             ),
       body: Column(
@@ -600,7 +603,9 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
                           title: widget.title,
                           style: widget.style,
                           extendedHeight: overlayH,
-                          collapseExtent: _collapseExtent,
+                          collapseStart: metrics.collapseStart(
+                            conAcciones: _tieneAccionesFijas,
+                          ),
                           leading: widget.overlayLeading,
                           trailing: widget.overlayTrailing,
                           alwaysShowActions: widget.alwaysShowActions,

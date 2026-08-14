@@ -51,9 +51,16 @@ class EventoHeroBanner extends StatelessWidget {
 
 /// Foto de portada a sangre con velo oscuro para que el texto blanco lea.
 class EventoHeroFoto extends StatefulWidget {
-  const EventoHeroFoto({super.key, required this.imagenUrl});
+  const EventoHeroFoto({
+    super.key,
+    required this.imagenUrl,
+    this.velo = 0.40,
+  });
 
   final String imagenUrl;
+
+  /// Opacidad del velo negro. `0` deja la foto a sangre (el padre pinta el suyo).
+  final double velo;
 
   @override
   State<EventoHeroFoto> createState() => _EventoHeroFotoState();
@@ -81,8 +88,8 @@ class _EventoHeroFotoState extends State<EventoHeroFoto> {
             return Image(image: imageProvider, fit: BoxFit.cover);
           },
         ),
-        if (_imagenLista)
-          ColoredBox(color: Colors.black.withValues(alpha: 0.40)),
+        if (_imagenLista && widget.velo > 0)
+          ColoredBox(color: Colors.black.withValues(alpha: widget.velo)),
       ],
     );
   }

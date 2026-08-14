@@ -14,6 +14,7 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/notificaciones_header_button.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
@@ -111,7 +112,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final safeTop = MediaQuery.paddingOf(context).top;
     // Sin barra de estado (web y Windows) no hay nada que despejar arriba: el
     // aire fijo del spec dejaba la identidad hundida media pantalla.
-    final contentTop = safeTop + (safeTop > 0 ? 12 : 16);
+    final contentTop = safeTop + _HomeHeaderMetrics.topGap(safeTop);
+    // El avatar parte a [contentTop]; el blur espera a que toque el safe area.
+    final collapseStart = contentTop - safeTop;
     final bottomPad = math.max(
       120.0,
       GlassNavTokens.contentBottomInset(context),
@@ -240,7 +243,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       ValueListenableBuilder<double>(
                         valueListenable: _scrollTop,
                         builder: (context, t, _) {
-                          return _HomeCollapseBar(scrollTop: t, title: saludo);
+                          return _HomeCollapseBar(
+                            scrollTop: t,
+                            title: saludo,
+                            collapseStart: collapseStart,
+                          );
                         },
                       ),
                     ],
@@ -276,11 +283,28 @@ class _HomeColumn extends StatelessWidget {
   }
 }
 
+/// Medidas del header de identidad: el avatar vive a [topGap] bajo el safe area.
+abstract final class _HomeHeaderMetrics {
+  static const avatarSize = 44.0;
+  static const topGapWithSafeArea = 12.0;
+  static const topGapWithoutSafeArea = 16.0;
+
+  static double topGap(double safeTop) =>
+      safeTop > 0 ? topGapWithSafeArea : topGapWithoutSafeArea;
+}
+
 class _HomeCollapseBar extends StatelessWidget {
-  const _HomeCollapseBar({required this.scrollTop, required this.title});
+  const _HomeCollapseBar({
+    required this.scrollTop,
+    required this.title,
+    required this.collapseStart,
+  });
 
   final double scrollTop;
   final String title;
+
+  /// Scroll en el que el avatar toca el borde superior (bajo el safe area).
+  final double collapseStart;
 
   static List<double> _saturationMatrix(double s) {
     const r = 0.213;
@@ -315,8 +339,13 @@ class _HomeCollapseBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final barHeight = safeTop + 52;
-    final opacity = (scrollTop / 48).clamp(0.0, 1.0);
-    final titleOpacity = ((scrollTop - 28) / 30).clamp(0.0, 1.0);
+    final start = collapseStart < 0 ? 0.0 : collapseStart;
+    final opacity =
+        ((scrollTop - start) / CollapsingNavMetrics.collapseFadeRange).clamp(
+          0.0,
+          1.0,
+        );
+    final titleOpacity = opacity;
     final titleTranslateY = (1 - titleOpacity) * 6;
     final visible = opacity > 0.01;
 
@@ -462,8 +491,8 @@ class _HomeAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final tieneFoto = fotoUrl != null && fotoUrl!.isNotEmpty;
     return Container(
-      width: 44,
-      height: 44,
+      width: _HomeHeaderMetrics.avatarSize,
+      height: _HomeHeaderMetrics.avatarSize,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
