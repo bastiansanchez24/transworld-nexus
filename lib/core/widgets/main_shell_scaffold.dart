@@ -80,9 +80,7 @@ class MainShellScaffold extends ConsumerWidget {
               padding: EdgeInsets.only(
                 left: GlassNavTokens.horizontalMargin,
                 right: GlassNavTokens.horizontalMargin,
-                bottom:
-                    MediaQuery.viewPaddingOf(context).bottom +
-                    GlassNavTokens.bottomMargin,
+                bottom: GlassNavTokens.floatingBottomPadding(context),
               ),
               child: GlassBottomNavBar(
                 selectedIndex: selectedIndex,

@@ -179,6 +179,29 @@ class CamposRegistroAsistente extends StatelessWidget {
   }
 }
 
+/// Impide escribir más dígitos nacionales que [PaisTelefono.maxDigitos].
+/// Cuenta solo dígitos (espacios y `+` no ocupan cupo) y, si se pega el
+/// número con código de país, recorta el tramo nacional.
+class _LimiteDigitosTelefonoFormatter extends TextInputFormatter {
+  const _LimiteDigitosTelefonoFormatter(this.pais);
+
+  final PaisTelefono pais;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final nacionales = extraerDigitosNacionales(newValue.text, pais);
+    if (nacionales.length <= pais.maxDigitos) return newValue;
+    final recortado = nacionales.substring(0, pais.maxDigitos);
+    return TextEditingValue(
+      text: recortado,
+      selection: TextSelection.collapsed(offset: recortado.length),
+    );
+  }
+}
+
 class _LowerCaseTextFormatter extends TextInputFormatter {
   const _LowerCaseTextFormatter();
 
@@ -219,6 +242,7 @@ class CampoTelefonoInternacional extends StatelessWidget {
         textInputAction: TextInputAction.next,
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'[0-9 +]')),
+          _LimiteDigitosTelefonoFormatter(pais),
         ],
         decoration: InputDecoration(
           labelText: 'Teléfono',

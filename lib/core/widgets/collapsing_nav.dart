@@ -568,7 +568,9 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
           : Padding(
               // Scaffold anidado bajo MainShellScaffold: el FAB no se eleva
               // solo con extendBody del padre; hay que despejar la tab bar.
-              padding: const EdgeInsets.only(bottom: AppSpacing.shellFabBottom),
+              padding: EdgeInsets.only(
+                bottom: AppSpacing.shellFabBottomOf(),
+              ),
               child: widget.floatingActionButton,
             ),
       body: Column(

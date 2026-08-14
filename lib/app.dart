@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/desktop/desktop_window.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/browser_theme_color.dart';
 import 'core/widgets/sync_conflict_listener.dart';
 import 'data/offline/sync_coordinator.dart';
 import 'features/notificaciones/providers/notificaciones_providers.dart';
@@ -28,20 +29,23 @@ class TransworldNexusApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
     ref.read(pushNotificationServiceProvider).attachRouter(router);
 
-    return MaterialApp.router(
-      title: publicAppName,
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      locale: const Locale('es'),
-      supportedLocales: const [Locale('es')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      routerConfig: router,
-      builder: (context, child) => DesktopWindowFrame(
-        child: SyncConflictListener(child: child ?? const SizedBox.shrink()),
+    return BrowserThemeColor(
+      color: AppColors.background,
+      child: MaterialApp.router(
+        title: publicAppName,
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        locale: const Locale('es'),
+        supportedLocales: const [Locale('es')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        routerConfig: router,
+        builder: (context, child) => DesktopWindowFrame(
+          child: SyncConflictListener(child: child ?? const SizedBox.shrink()),
+        ),
       ),
     );
   }

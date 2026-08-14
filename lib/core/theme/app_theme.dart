@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -117,6 +118,9 @@ abstract final class GlassNavTokens {
 
   /// Aire extra bajo el panel, **además** del home indicator / safe area.
   static const bottomMargin = 16.0;
+
+  /// Holgura extra en PWA (iPhone): separa la navbar de la barra nativa.
+  static const webBottomExtra = 14.0;
   static const innerPaddingH = 6.0;
   static const innerPaddingV = 6.0;
 
@@ -129,12 +133,22 @@ abstract final class GlassNavTokens {
   static const transitionDuration = Duration(milliseconds: 180);
   static const transitionCurve = Curves.easeOutCubic;
 
-  /// Panel + margen de flotación, sin safe area.
+  /// Panel + margen de flotación, sin safe area ni holgura web.
   static const occupiedHeight = height + bottomMargin;
+
+  static double webBottomGap() => kIsWeb ? webBottomExtra : 0;
+
+  /// Panel + márgenes de flotación (incluye holgura web).
+  static double occupiedHeightOf() => occupiedHeight + webBottomGap();
 
   /// Espacio al final del contenido para que no quede bajo la barra flotante.
   static double contentBottomInset(BuildContext context) =>
-      occupiedHeight + MediaQuery.viewPaddingOf(context).bottom + AppSpacing.xl;
+      occupiedHeightOf() +
+      MediaQuery.viewPaddingOf(context).bottom +
+      AppSpacing.xl;
+
+  static double floatingBottomPadding(BuildContext context) =>
+      MediaQuery.viewPaddingOf(context).bottom + bottomMargin + webBottomGap();
 
   static Color activeColor(Brightness brightness) =>
       brightness == Brightness.dark ? AppColors.accent : AppColors.primary;
@@ -178,6 +192,8 @@ class AppSpacing {
   /// Holgura inferior del FAB en pantallas dentro del shell anidado.
   /// El Scaffold interno no ve el [bottomNavigationBar] del padre.
   static const shellFabBottom = GlassNavTokens.occupiedHeight + sm;
+
+  static double shellFabBottomOf() => GlassNavTokens.occupiedHeightOf() + sm;
 }
 
 class AppRadius {

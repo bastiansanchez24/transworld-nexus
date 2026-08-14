@@ -124,7 +124,7 @@ class _ToastBannerState extends State<_ToastBanner>
   Widget build(BuildContext context) {
     final bottom =
         MediaQuery.paddingOf(context).bottom +
-        GlassNavTokens.occupiedHeight +
+        GlassNavTokens.occupiedHeightOf() +
         AppSpacing.sm;
     return Positioned(
       left: 20,

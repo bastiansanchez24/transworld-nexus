@@ -67,6 +67,10 @@ void main() {
         '+56 9 1234 5678',
       );
     });
+
+    test('al formatear recorta dígitos extra según el máximo del país', () {
+      expect(formatearTelefonoNacional('9123456789', kPaisTelefonoChile), '9 1234 5678');
+    });
   });
 
   group('validarTelefono otros países', () {

@@ -12,9 +12,13 @@ void setBrowserThemeColor(Color color) {
   final head = web.document.head;
   if (head == null) return;
 
-  final existing = web.document.querySelector('meta[name="theme-color"]');
-  if (existing != null) {
-    existing.setAttribute('content', hex);
+  final existing = web.document.querySelectorAll('meta[name="theme-color"]');
+  if (existing.length > 0) {
+    for (var i = 0; i < existing.length; i++) {
+      final node = existing.item(i);
+      if (node == null) continue;
+      (node as web.HTMLMetaElement).content = hex;
+    }
     return;
   }
 

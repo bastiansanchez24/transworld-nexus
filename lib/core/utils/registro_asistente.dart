@@ -308,7 +308,10 @@ String extraerDigitosNacionales(String raw, PaisTelefono pais) {
 }
 
 String formatearTelefonoNacional(String raw, PaisTelefono pais) {
-  final digits = extraerDigitosNacionales(raw, pais);
+  var digits = extraerDigitosNacionales(raw, pais);
+  if (digits.length > pais.maxDigitos) {
+    digits = digits.substring(0, pais.maxDigitos);
+  }
   if (pais.iso == 'CL' && digits.length == 9) {
     return '${digits[0]} ${digits.substring(1, 5)} ${digits.substring(5)}';
   }
