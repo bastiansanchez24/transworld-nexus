@@ -7,6 +7,7 @@ import 'package:mobile_scanner/src/method_channel/mobile_scanner_method_channel.
 import 'package:permission_handler/permission_handler.dart';
 
 import 'scanner_models.dart';
+import 'web_camera_tracks.dart';
 
 /// Acceso a cámara y linterna. Sin lógica de UI ni de parseo QR.
 class CameraService {
@@ -129,7 +130,14 @@ class CameraService {
     }
   }
 
+  /// En nativo mantiene la sesión (evita CAMERA_ERROR al reanudar).
+  /// En web equivale a [stop]: `pause()` solo pausa el `<video>` y el
+  /// indicador de cámara del navegador permanece encendido.
   Future<void> pause() async {
+    if (kIsWeb) {
+      await stop();
+      return;
+    }
     if (_disposed) return;
     await _runExclusive(() async {
       if (_disposed) return;
@@ -143,10 +151,21 @@ class CameraService {
     if (_disposed) return;
     await _runExclusive(() async {
       if (_disposed) return;
-      try {
-        await _controller.stop();
-      } catch (_) {}
+      await _releaseSession();
     });
+  }
+
+  /// [MobileScannerController.stop] no hace nada si ya está en pause
+  /// (`isRunning == false`). En web eso deja el MediaStream vivo.
+  Future<void> _releaseSession() async {
+    try {
+      await _controller.stop();
+    } catch (_) {}
+    if (!kIsWeb) return;
+    try {
+      await MobileScannerPlatform.instance.stop();
+    } catch (_) {}
+    stopOrphanWebCameraTracks();
   }
 
   Future<void> toggleTorch() async {
@@ -162,9 +181,7 @@ class CameraService {
     if (_disposed) return;
     _disposed = true;
     await _runExclusive(() async {
-      try {
-        await _controller.stop();
-      } catch (_) {}
+      await _releaseSession();
       await _controller.dispose();
     });
   }

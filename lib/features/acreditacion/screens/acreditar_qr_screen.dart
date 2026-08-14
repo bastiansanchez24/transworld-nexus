@@ -60,6 +60,9 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     // y provoca stop/start concurrentes → CAMERA_ERROR en release.
     switch (state) {
       case AppLifecycleState.resumed:
+        // La ruta puede seguir montada bajo otra pantalla (p. ej. capturar lead).
+        if (!mounted) return;
+        if (ModalRoute.of(context)?.isCurrent != true) return;
         _scanner.resumeCamera();
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
@@ -179,7 +182,14 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     await _navegarACaptura(registrado);
   }
 
-  void _cerrarEscaner() {
+  bool _cerrando = false;
+
+  Future<void> _cerrarEscaner() async {
+    if (_cerrando) return;
+    _cerrando = true;
+    // Hay que cortar el MediaStream *antes* de desmontar el <video>;
+    // si no, en web el indicador de cámara queda encendido.
+    await _scanner.stopCamera();
     if (!mounted) return;
     if (context.canPop()) {
       context.pop();

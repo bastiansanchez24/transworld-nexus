@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -179,8 +181,11 @@ class ScannerController extends ChangeNotifier {
     });
   }
 
-  /// Pausa el preview sin liberar la sesión (mejor que stop en lifecycle).
+  /// Pausa el preview. En nativo no libera la sesión; en web sí (MediaStream).
   Future<void> pauseCamera() => _camera.pause();
+
+  /// Libera la cámara (getUserMedia / sesión nativa). Llamar antes de pop.
+  Future<void> stopCamera() => _camera.stop();
 
   Future<void> resumeCamera() async {
     if (_permission == ScannerPermissionStatus.granted) {
@@ -191,7 +196,7 @@ class ScannerController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _camera.dispose();
+    unawaited(_camera.dispose());
     super.dispose();
   }
 }
