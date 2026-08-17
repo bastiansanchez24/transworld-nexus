@@ -8,13 +8,14 @@ import '../theme/app_theme.dart';
 import '../theme/browser_theme_color.dart';
 import '../theme/tw_tokens.dart';
 import 'tw_components.dart';
+import 'tw_detail_scaffold.dart';
 
 enum CollapsingNavStyle { standard, home, detail }
 
 /// Medidas de la barra colapsable adaptadas al safe area real.
 class CollapsingNavMetrics {
   CollapsingNavMetrics(BuildContext context)
-    : topInset = MediaQuery.paddingOf(context).top;
+    : topInset = TwDetailBarMetrics.topInsetOf(context);
 
   final double topInset;
 

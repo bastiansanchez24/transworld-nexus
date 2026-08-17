@@ -63,6 +63,7 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
               const OfflineBanner(),
               Expanded(
                 child: eventoAsync.when(
+                  skipLoadingOnReload: true,
                   loading: () => const LoadingView(),
                   error: (e, _) => const ErrorView(
                     message: 'No se pudo cargar la campaña.',
@@ -117,7 +118,7 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
                           iconStyle: TwIconBoxStyle.excel,
                           excel: true,
                           badge: 'XLSX',
-                          title: 'Exportar a Excel',
+                          title: 'Importar o Exportar',
                           subtitle: _subtituloExcel(resumen?.total),
                           onTap: () => context.push(
                             RoutePaths.exportarLeads(widget.eventoId),

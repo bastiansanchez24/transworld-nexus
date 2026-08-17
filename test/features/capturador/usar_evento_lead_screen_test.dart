@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -78,6 +80,63 @@ void main() {
       expect(find.text('5'), findsOneWidget);
       expect(find.text('Mis leads'), findsNothing);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'al recargar la campaña el menú de acciones sigue montado',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      var bloquearRecarga = false;
+      final recarga = Completer<EventoLead>();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            connectivityStreamProvider.overrideWith(
+              (ref) => Stream.value(true),
+            ),
+            authStateChangesProvider.overrideWith(
+              (ref) => const Stream<AuthState>.empty(),
+            ),
+            currentPerfilProvider.overrideWith((ref) async => perfilUser),
+            leadsResumenLocalProvider.overrideWith(
+              (ref, id) => const LeadsResumen(total: 12, empresas: 5),
+            ),
+            eventoLeadByIdProvider.overrideWith((ref, id) async {
+              if (bloquearRecarga) await recarga.future;
+              return evento;
+            }),
+          ],
+          child: const MaterialApp(
+            locale: Locale('es'),
+            home: UsarEventoLeadScreen(eventoId: 'campana-1'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ver leads'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      bloquearRecarga = true;
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(UsarEventoLeadScreen)),
+      );
+      container.invalidate(eventoLeadByIdProvider('campana-1'));
+      await tester.pump();
+
+      expect(find.text('Ver leads'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      recarga.complete(evento);
+      await tester.pumpAndSettle();
+      expect(find.text('Ver leads'), findsOneWidget);
     },
   );
 }

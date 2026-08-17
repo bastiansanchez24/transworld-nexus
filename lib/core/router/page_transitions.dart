@@ -1,8 +1,21 @@
 import 'package:animations/animations.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../theme/app_theme.dart';
+
+/// Safari (PWA de iPhone/iPad) anima el pop con el gesto de atrás del
+/// historial. Si Flutter aplica SharedAxis encima, el menú de debajo
+/// (evento / campaña) parpadea: el snapshot del gesto no coincide con la
+/// página desplazada por [secondaryAnimation].
+bool browserOwnsBackSwipe({
+  bool? isWeb,
+  TargetPlatform? platform,
+}) {
+  return (isWeb ?? kIsWeb) &&
+      (platform ?? defaultTargetPlatform) == TargetPlatform.iOS;
+}
 
 /// Página push con SharedAxis horizontal (HANDOFF §5).
 CustomTransitionPage<T> sharedAxisPage<T>({
@@ -10,11 +23,12 @@ CustomTransitionPage<T> sharedAxisPage<T>({
   required Widget child,
   SharedAxisTransitionType type = SharedAxisTransitionType.horizontal,
 }) {
+  final browserBack = browserOwnsBackSwipe();
   return CustomTransitionPage<T>(
     key: key,
     child: child,
     transitionDuration: AppMotion.pushIn,
-    reverseTransitionDuration: AppMotion.pushIn,
+    reverseTransitionDuration: browserBack ? Duration.zero : AppMotion.pushIn,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final reduce = AppMotion.reduceMotion(context);
       if (reduce) {
@@ -22,8 +36,11 @@ CustomTransitionPage<T> sharedAxisPage<T>({
       }
       return SharedAxisTransition(
         animation: animation,
-        secondaryAnimation: secondaryAnimation,
+        secondaryAnimation: browserBack
+            ? const AlwaysStoppedAnimation<double>(0)
+            : secondaryAnimation,
         transitionType: type,
+        fillColor: AppColors.background,
         child: child,
       );
     },

@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/router/refresh_on_visible.dart';
@@ -19,7 +21,6 @@ import '../../../data/models/evento.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
-import '../widgets/evento_operativo_sheets.dart';
 
 /// Menú operativo de un evento — rediseño §8 de la guía de componentes.
 ///
@@ -47,9 +48,21 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
     ref.invalidate(registradosPorEventoProvider(widget.eventoId));
   }
 
-  Future<void> _compartir() async {
+  Future<void> _compartir(String nombreEvento) async {
     final base = Env.appPublicBaseUrl.replaceAll(RegExp(r'/$'), '');
     final link = '$base${RoutePaths.registroPublico(widget.eventoId)}';
+    final esMovil =
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+    if (esMovil) {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: '¡Regístrate al evento "$nombreEvento" aquí!\n$link',
+        ),
+      );
+      return;
+    }
     await Clipboard.setData(ClipboardData(text: link));
     if (!mounted) return;
     TwToast.link(context, 'Enlace del evento copiado');
@@ -74,6 +87,9 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
               const OfflineBanner(),
               Expanded(
                 child: eventoAsync.when(
+                  // Al volver (gesto iOS o atrás) RefreshOnVisible invalida
+                  // el evento: sin esto el menú se desmonta un frame.
+                  skipLoadingOnReload: true,
                   loading: () => const LoadingView(),
                   error: (e, _) =>
                       const ErrorView(message: 'No se pudo cargar el evento.'),
@@ -95,8 +111,8 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
                         icon: Symbols.ios_share_rounded,
                         iconSize: 20,
                         variant: TwIconButtonStyle.brand,
-                        tooltip: 'Copiar enlace del evento',
-                        onTap: _compartir,
+                        tooltip: 'Compartir enlace de registro',
+                        onTap: () => _compartir(evento.nombre),
                       ),
                     ],
                     children: [
@@ -107,11 +123,9 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
                         iconStyle: TwIconBoxStyle.brand,
                         title: 'Registrar asistente',
                         subtitle: 'Inscribir a alguien en el evento',
-                        onTap: () =>
-                            EventoOperativoSheets.mostrarOpcionesRegistrarAsistente(
-                              context,
-                              widget.eventoId,
-                            ),
+                        onTap: () => context.push(
+                          RoutePaths.registrar(widget.eventoId),
+                        ),
                       ),
                       const SizedBox(height: TwSpacing.tileGap),
                       TwActionTile(
@@ -149,7 +163,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
                           iconStyle: TwIconBoxStyle.excel,
                           excel: true,
                           badge: 'XLSX',
-                          title: 'Exportar a Excel',
+                          title: 'Importar o Exportar',
                           subtitle: _subtituloExcel(resumen?.total),
                           onTap: () => context.push(
                             RoutePaths.exportar(widget.eventoId),
@@ -210,8 +224,8 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
   }
 
   static String _subtituloExcel(int? total) {
-    if (total == null) return 'Asistentes registrados';
+    if (total == null) return 'Carga masiva o descarga de asistentes';
     final filas = total == 1 ? '1 fila' : '$total filas';
-    return 'Asistentes registrados · $filas';
+    return 'Carga masiva o descarga · $filas';
   }
 }

@@ -25,6 +25,26 @@ abstract final class TwDetailBarMetrics {
 
   static double height(double topInset) =>
       topInset + gapVertical * 2 + rowHeight;
+
+  /// Inset superior estable para la barra.
+  ///
+  /// En la PWA de iOS el gesto de atrás mueve el visual viewport y
+  /// [MediaQuery.padding] puede caer a 0 un frame (el notch se cuenta como
+  /// `viewInsets`). [viewPadding] no se mueve: sin esto la cabecera —y con
+  /// ella el menú de acciones— salta al volver deslizando.
+  static double topInsetOf(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    return mq.viewPadding.top > mq.padding.top
+        ? mq.viewPadding.top
+        : mq.padding.top;
+  }
+
+  static double bottomInsetOf(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    return mq.viewPadding.bottom > mq.padding.bottom
+        ? mq.viewPadding.bottom
+        : mq.padding.bottom;
+  }
 }
 
 /// Pantalla-menú con cabecera fija que colapsa al hacer scroll.
@@ -101,8 +121,8 @@ class _TwDetailScaffoldState extends State<TwDetailScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final padding = MediaQuery.paddingOf(context);
-    final headerHeight = TwDetailBarMetrics.height(padding.top);
+    final topInset = TwDetailBarMetrics.topInsetOf(context);
+    final headerHeight = TwDetailBarMetrics.height(topInset);
 
     return Column(
       children: [
@@ -119,7 +139,8 @@ class _TwDetailScaffoldState extends State<TwDetailScaffold> {
                   TwSpacing.screenH,
                   headerHeight,
                   TwSpacing.screenH,
-                  widget.bottomPadding + padding.bottom,
+                  widget.bottomPadding +
+                      TwDetailBarMetrics.bottomInsetOf(context),
                 ),
                 child: Center(
                   child: ConstrainedBox(
@@ -142,7 +163,7 @@ class _TwDetailScaffoldState extends State<TwDetailScaffold> {
                     valueListenable: _scrollY,
                     builder: (context, scrollY, _) => _TwDetailBar(
                       scrollOffset: scrollY,
-                      topInset: padding.top,
+                      topInset: topInset,
                       eyebrow: widget.eyebrow,
                       title: widget.title,
                       onBack: widget.onBack,

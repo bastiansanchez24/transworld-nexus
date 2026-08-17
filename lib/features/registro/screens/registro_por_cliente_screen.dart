@@ -1,4 +1,3 @@
-import 'package:excel/excel.dart' as xls;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,9 +15,9 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/pressable.dart';
-import '../../../data/models/registrado.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../eventos/providers/eventos_providers.dart';
+import '../../exportacion/services/excel_import_registrados.dart';
 import '../../registrados/providers/registrados_providers.dart';
 
 /// Comparte el enlace de autoregistro público y permite cargar un Excel con
@@ -35,25 +34,6 @@ class RegistroPorClienteScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<RegistroPorClienteScreen> createState() =>
       _RegistroPorClienteScreenState();
-}
-
-/// El paquete `excel` (v4) modela el valor de cada celda como un
-/// `sealed class CellValue` (texto, entero, decimal, fecha, fórmula, etc.),
-/// no como un `dynamic` plano. Aquí se resuelve explícitamente cada
-/// variante en vez de confiar en `toString()` (que en `TextCellValue`
-/// envuelve un `TextSpan` de Flutter y no da directamente el texto plano).
-String _textoDeCelda(xls.Data? celda) {
-  final valor = celda?.value;
-  return switch (valor) {
-    null => '',
-    xls.TextCellValue v => (v.value.text ?? '').trim(),
-    xls.IntCellValue v => v.value.toString(),
-    xls.DoubleCellValue v => v.value.toString(),
-    xls.BoolCellValue v => v.value.toString(),
-    xls.DateCellValue v => v.asDateTimeLocal().toIso8601String(),
-    xls.FormulaCellValue v => v.formula,
-    _ => valor.toString(),
-  }.trim();
 }
 
 class _RegistroPorClienteScreenState
@@ -108,51 +88,10 @@ class _RegistroPorClienteScreenState
     setState(() => _importando = true);
     try {
       final bytes = await archivo.readAsBytes();
-      final excel = xls.Excel.decodeBytes(bytes);
-      final hoja = excel.tables.values.first;
-
-      final filas = hoja.rows;
-      if (filas.isEmpty) throw Exception('El archivo está vacío.');
-
-      final encabezados = filas.first.map(_textoDeCelda).toList();
-
-      int indiceDe(String nombre) => encabezados.indexWhere(
-          (h) => h.toLowerCase() == nombre.toLowerCase());
-
-      final iNombre = indiceDe('Nombre y Apellido');
-      final iEmail = indiceDe('Email');
-      final iEmpresa = indiceDe('Empresa');
-      final iCargo = indiceDe('Cargo');
-      final iTelefono = indiceDe('Teléfono');
-      final iRut = indiceDe('RUT / RUC');
-      final iPatente = indiceDe('Patente');
-
-      String celda(List<xls.Data?> fila, int i) =>
-          (i == -1 || i >= fila.length) ? '' : _textoDeCelda(fila[i]);
-
-      final registros = <Registrado>[];
-      for (final fila in filas.skip(1)) {
-        final nombre = celda(fila, iNombre);
-        final email = celda(fila, iEmail).toLowerCase();
-        if (nombre.isEmpty || email.isEmpty) continue;
-
-        registros.add(Registrado(
-          id: '',
-          eventoId: widget.eventoId,
-          nombreCompleto: nombre,
-          email: email,
-          empresa: celda(fila, iEmpresa),
-          cargo: celda(fila, iCargo),
-          telefono: celda(fila, iTelefono),
-          rut: iRut == -1 ? null : celda(fila, iRut),
-          patente: iPatente == -1 ? null : celda(fila, iPatente),
-          origen: OrigenRegistro.excel,
-        ));
-      }
-
-      if (registros.isEmpty) {
-        throw Exception('No se encontraron filas válidas (revisa los encabezados).');
-      }
+      final registros = const ExcelImportRegistrados().parsear(
+        bytes,
+        eventoId: widget.eventoId,
+      );
 
       final resultado = await ref
           .read(registradosRepositoryProvider)
@@ -264,8 +203,7 @@ class _RegistroPorClienteScreenState
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'Columnas esperadas: Nombre y Apellido, Email, Empresa, Cargo, '
-                          'Teléfono, RUT / RUC (opcional), Patente (opcional).',
+                          ExcelImportRegistrados.descripcionColumnas,
                           style: TextStyle(
                             fontSize: 13,
                             color: AppColors.textSecondary,

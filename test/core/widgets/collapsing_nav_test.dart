@@ -63,6 +63,36 @@ void main() {
     expect(boton.top, TwDetailBarMetrics.gapVertical);
   });
 
+  testWidgets(
+    'el menú de acciones no salta si el gesto iOS anula el padding',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(390, 844),
+              padding: EdgeInsets.zero,
+              viewPadding: EdgeInsets.only(top: 47),
+              viewInsets: EdgeInsets.only(top: 47),
+            ),
+            child: TwDetailScaffold(
+              eyebrow: 'Detalle del evento',
+              title: 'Evento',
+              onBack: () {},
+              children: const [SizedBox(height: 400)],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getTopLeft(find.byType(TwIconButton).first).dy,
+        47 + TwDetailBarMetrics.gapVertical,
+      );
+    },
+  );
+
   testWidgets('el contenido arranca bajo la barra, no debajo del atrás', (
     tester,
   ) async {

@@ -1,16 +1,20 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/require_permission.dart';
+import '../../../data/repositories/registrados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
 import '../services/excel_export_service.dart';
+import '../services/excel_import_registrados.dart';
 import '../services/export_file_delivery.dart';
 
 class ExportarScreen extends ConsumerStatefulWidget {
@@ -23,8 +27,12 @@ class ExportarScreen extends ConsumerStatefulWidget {
 }
 
 class _ExportarScreenState extends ConsumerState<ExportarScreen> {
-  static const _service = ExcelExportService();
+  static const _exportService = ExcelExportService();
+  static const _importService = ExcelImportRegistrados();
   bool _generando = false;
+  bool _importando = false;
+
+  bool get _ocupado => _generando || _importando;
 
   Future<void> _exportar({required bool soloAcreditados}) async {
     if (!ref.read(canExportDataProvider)) {
@@ -57,7 +65,7 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
         return;
       }
 
-      final bytes = _service.generar(
+      final bytes = _exportService.generar(
         filtrados,
         tituloHoja: soloAcreditados ? 'Acreditados' : 'Registrados',
       );
@@ -83,67 +91,153 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
     }
   }
 
+  Future<void> _cargarExcel() async {
+    if (!ref.read(isOnlineProvider)) {
+      showAppSnackBar(
+        context,
+        'La carga de Excel requiere conexión a internet.',
+        isError: true,
+      );
+      return;
+    }
+
+    final archivo = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Excel', extensions: ['xlsx']),
+      ],
+    );
+    if (archivo == null) return;
+
+    setState(() => _importando = true);
+    try {
+      final bytes = await archivo.readAsBytes();
+      final registros = _importService.parsear(
+        bytes,
+        eventoId: widget.eventoId,
+      );
+
+      final resultado = await ref
+          .read(registradosRepositoryProvider)
+          .importarLote(widget.eventoId, registros);
+
+      ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Se registraron ${resultado.insertados} personas'
+          '${resultado.omitidos > 0 ? ' (${resultado.omitidos} omitidas por duplicado)' : ''}.',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'No se pudo procesar el Excel: $e',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _importando = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return RequirePermission(
       allowed: (perfil) => perfil.canExportData,
       deniedMessage: 'Tu rol no permite exportar datos del evento.',
       builder: (_) => AppScaffold(
-        title: 'Exportar a Excel',
-        body: Padding(
+        title: 'Importar o Exportar',
+        body: ListView(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.screenH,
             AppSpacing.xl,
             AppSpacing.screenH,
             AppSpacing.xxxl,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: AppColors.shadowRest,
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SectionLabel('Exportación'),
-                    SizedBox(height: 10),
-                    Text(
-                      'Descarga la lista de asistentes del evento para '
-                      'guardarla o enviarla a quien necesites.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                        height: 1.45,
-                      ),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.border),
+                boxShadow: AppColors.shadowRest,
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SectionLabel('Exportación'),
+                  SizedBox(height: 10),
+                  Text(
+                    'Descarga la lista de asistentes del evento para '
+                    'guardarla o enviarla a quien necesites.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      height: 1.45,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.xxl),
-              PrimaryGradientButton(
-                label: 'Exportar todos los registrados',
-                loading: _generando,
-                onPressed: _generando
-                    ? null
-                    : () => _exportar(soloAcreditados: false),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            PrimaryGradientButton(
+              label: 'Exportar todos los registrados',
+              loading: _generando,
+              onPressed: _ocupado
+                  ? null
+                  : () => _exportar(soloAcreditados: false),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            NexusActionRow(
+              icon: Symbols.verified_rounded,
+              title: 'Exportar solo acreditados',
+              subtitle: 'Incluye únicamente asistentes ya acreditados',
+              onTap: () {
+                if (!_ocupado) _exportar(soloAcreditados: true);
+              },
+            ),
+            const SizedBox(height: AppSpacing.cardGap + 6),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.border),
+                boxShadow: AppColors.shadowRest,
               ),
-              const SizedBox(height: AppSpacing.md),
-              NexusActionRow(
-                icon: Symbols.verified_rounded,
-                title: 'Exportar solo acreditados',
-                subtitle: 'Incluye únicamente asistentes ya acreditados',
-                onTap: () {
-                  if (!_generando) _exportar(soloAcreditados: true);
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionLabel('Carga masiva'),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Carga masiva por Excel',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    ExcelImportRegistrados.descripcionColumnas,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  PrimaryGradientButton(
+                    label: _importando
+                        ? 'Procesando...'
+                        : 'Elegir archivo .xlsx',
+                    loading: _importando,
+                    onPressed: _ocupado ? null : _cargarExcel,
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
