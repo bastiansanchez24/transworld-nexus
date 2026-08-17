@@ -1,22 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../../../core/router/route_paths.dart';
+import '../../../core/theme/browser_theme_color.dart';
+import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/tw_components.dart';
+import '../../../core/widgets/tw_toast.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../login_error_message.dart';
 import '../providers/auth_providers.dart';
-import '../widgets/login/login_button.dart';
-import '../widgets/login/login_form.dart';
-import '../widgets/login/login_header.dart';
-import '../widgets/login/login_theme.dart';
 
 const _rememberedEmailKey = 'login_remembered_email';
 
-/// Pantalla de login (composición). La UI está separada en componentes
-/// (`widgets/login/`): header hero, formulario, botón principal y acciones
-/// secundarias — esta clase solo orquesta estado, animaciones y layout.
+/// Pantalla de login — rediseño §7 de la guía de componentes.
+///
+/// Columna única sobre [TwColors.bg]: marca, título, tarjeta de formulario,
+/// tarjeta de soporte y pie de versión. Los errores de validación se muestran
+/// en línea ([TwErrorLine]) dentro de la tarjeta; los de red o credenciales,
+/// como [TwToast] de error.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -24,19 +31,15 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen>
-    with SingleTickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
-  bool _rememberMe = false;
-  bool _loading = false;
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _email = TextEditingController();
+  final _pass = TextEditingController();
 
-  late final AnimationController _enter = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 650),
-  )..forward();
+  bool _showPass = false;
+  bool _remember = false;
+  bool _loading = false;
+  String? _error;
+  String _version = '';
 
   @override
   void initState() {
@@ -45,32 +48,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         .read(sharedPreferencesProvider)
         .getString(_rememberedEmailKey);
     if (remembered != null && remembered.isNotEmpty) {
-      _emailController.text = remembered;
-      _rememberMe = true;
+      _email.text = remembered;
+      _remember = true;
     }
+    _cargarVersion();
   }
 
   @override
   void dispose() {
-    _enter.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
+    _email.dispose();
+    _pass.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    if (_loading || !_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+  Future<void> _cargarVersion() async {
     try {
-      final email = _emailController.text.trim();
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() => _version = info.version);
+    } catch (_) {
+      // El pie es decorativo: si la plataforma no informa versión, se omite.
+    }
+  }
+
+  void _limpiarError() {
+    if (_error != null) setState(() => _error = null);
+  }
+
+  Future<void> _submit() async {
+    if (_loading) return;
+
+    final email = _email.text.trim();
+    if (!RegExp(r'.+@.+\..+').hasMatch(email)) {
+      setState(() => _error = 'Ingresa un correo electrónico válido');
+      return;
+    }
+    if (_pass.text.isEmpty) {
+      setState(() => _error = 'Ingresa tu contraseña para continuar');
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
+
+    try {
       await ref
           .read(authRepositoryProvider)
-          .iniciarSesion(email: email, password: _passwordController.text);
+          .iniciarSesion(email: email, password: _pass.text);
       // Evita que el router lea un AsyncData(null) stale (pre-login) y
       // cierre la sesión antes de que el perfil se recargue.
       ref.invalidate(currentPerfilProvider);
       final prefs = ref.read(sharedPreferencesProvider);
-      if (_rememberMe) {
+      if (_remember) {
         await prefs.setString(_rememberedEmailKey, email);
       } else {
         await prefs.remove(_rememberedEmailKey);
@@ -80,8 +111,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     } catch (e, st) {
       debugPrint('Login falló: $e\n$st');
       if (!mounted) return;
-      showAppSnackBar(context, mensajeErrorInicioSesion(e), isError: true);
       setState(() => _loading = false);
+      TwToast.error(context, mensajeErrorInicioSesion(e));
     }
   }
 
@@ -92,169 +123,211 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         ref.read(authRepositoryProvider).currentSession;
     if (session != null && !_loading) {
       return const Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: TwColors.bg,
         body: LoadingView(),
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Theme(
-        data: LoginTheme.of(context),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final esAncho = constraints.maxWidth >= 900;
-            return esAncho
-                ? _buildWide(constraints)
-                : _buildNarrow(constraints);
-          },
+    return BrowserThemeColor(
+      color: TwColors.bg,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: TwColors.bg,
+          resizeToAvoidBottomInset: true,
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, c) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: c.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Center(
+                      child: ConstrainedBox(
+                        // El mock está trazado sobre 412 dp; en escritorio y
+                        // web la columna se centra en vez de estirarse.
+                        constraints: const BoxConstraints(maxWidth: 460),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 22),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const _LoginBrand(),
+                              const SizedBox(height: 48),
+                              const Text('Inicia sesión', style: TwText.display),
+                              const SizedBox(height: 7),
+                              const SizedBox(
+                                width: 280,
+                                child: Text(
+                                  'Captura leads en eventos y sincroniza con '
+                                  'tu pipeline.',
+                                  style: TwText.bodyText,
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              _formCard(),
+                              const SizedBox(height: 12),
+                              _supportTile(),
+                              const Spacer(),
+                              const SizedBox(height: 26),
+                              Center(
+                                child: Text(
+                                  _version.isEmpty
+                                      ? 'TRANSWORLD P&T'
+                                      : 'v$_version · TRANSWORLD P&T',
+                                  style: TwText.footer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  /// Teléfonos: hero arriba (~45%, colapsa suavemente al abrir el teclado)
-  /// y formulario debajo.
-  Widget _buildNarrow(BoxConstraints constraints) {
-    final tecladoAbierto = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final alturaHero = tecladoAbierto
-        ? 150.0
-        : (constraints.maxHeight * 0.45).clamp(240.0, 420.0);
-
-    return Column(
-      children: [
-        AnimatedContainer(
-          duration: LoginTheme.keyboardDuration,
-          curve: LoginTheme.curve,
-          height: alturaHero,
-          width: double.infinity,
-          child: _Entrada(
-            animation: _enter,
-            intervalo: const Interval(0, 0.5, curve: LoginTheme.curve),
-            deslizar: false,
-            child: const LoginHeader(
-              title: 'Bienvenido',
-              subtitle: 'Inicia sesión para continuar.',
-            ),
-          ),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 460),
-                child: _buildFormulario(),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Tablets / escritorio / web ancho: hero como panel izquierdo a pantalla
-  /// completa y formulario centrado a la derecha.
-  Widget _buildWide(BoxConstraints constraints) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 5,
-          child: _Entrada(
-            animation: _enter,
-            intervalo: const Interval(0, 0.5, curve: LoginTheme.curve),
-            deslizar: false,
-            child: const LoginHeader(
-              title: 'Bienvenido',
-              subtitle: 'Inicia sesión para continuar.',
-              borderRadius: BorderRadius.horizontal(
-                right: Radius.circular(LoginTheme.heroRadius),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 6,
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(48),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: _buildFormulario(),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFormulario() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _Entrada(
-            animation: _enter,
-            intervalo: const Interval(0.15, 0.7, curve: LoginTheme.curve),
-            child: LoginForm(
-              emailController: _emailController,
-              passwordController: _passwordController,
-              obscurePassword: _obscurePassword,
-              onToggleObscure: () =>
-                  setState(() => _obscurePassword = !_obscurePassword),
-              rememberMe: _rememberMe,
-              onRememberChanged: (v) => setState(() => _rememberMe = v),
-              onSubmit: _handleLogin,
+  Widget _formCard() {
+    return TwCard(
+      child: AutofillGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const TwFieldLabel('Correo electrónico'),
+            TwTextField(
+              controller: _email,
+              icon: Symbols.mail_rounded,
+              hint: 'tu@empresa.cl',
               enabled: !_loading,
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+              onChanged: (_) => _limpiarError(),
             ),
-          ),
-          const SizedBox(height: 16),
-          _Entrada(
-            animation: _enter,
-            intervalo: const Interval(0.3, 0.85, curve: LoginTheme.curve),
-            child: LoginButton(
-              label: 'Iniciar sesión',
-              loading: _loading,
-              loadingSemanticsLabel: 'Iniciando sesión…',
-              onPressed: _handleLogin,
+            const TwFieldLabel('Contraseña', top: 16),
+            TwTextField(
+              controller: _pass,
+              icon: Symbols.lock_rounded,
+              hint: '••••••••',
+              obscure: !_showPass,
+              enabled: !_loading,
+              autofillHints: const [AutofillHints.password],
+              textInputAction: TextInputAction.done,
+              onSubmitted: _submit,
+              onChanged: (_) => _limpiarError(),
+              trailing: TwPasswordEye(
+                visible: _showPass,
+                onTap: () => setState(() => _showPass = !_showPass),
+              ),
             ),
-          ),
-        ],
+            if (_error != null) TwErrorLine(_error!),
+            TwCheckRow(
+              checked: _remember,
+              label: 'Recordarme',
+              onToggle: () => setState(() => _remember = !_remember),
+              linkText: 'Olvidé mi contraseña',
+              onLink: () => context.push(RoutePaths.recuperarPassword),
+            ),
+            Semantics(
+              label: _loading ? 'Iniciando sesión…' : null,
+              child: TwPrimaryButton(
+                label: _loading ? 'Ingresando…' : 'Iniciar sesión',
+                loading: _loading,
+                onTap: _submit,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _supportTile() {
+    return TwPressable(
+      onTap: () => TwToast.info(
+        context,
+        'soporte@transworld.cl · +56 2 2422 4000',
+      ),
+      child: const TwCard(
+        padding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        child: Row(
+          children: [
+            TwIconBox(
+              Symbols.support_agent_rounded,
+              variant: TwIconBoxStyle.support,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('¿Problemas para ingresar?', style: TwText.supportTitle),
+                  SizedBox(height: 3),
+                  Text(
+                    'Contactar a soporte Transworld',
+                    style: TwText.supportSub,
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Symbols.chevron_right_rounded,
+              size: 20,
+              color: TwColors.chevronSoft,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Fade in + slide up escalonado para la animación de entrada (plan:
-/// 250–350 ms por tramo, easeOutCubic).
-class _Entrada extends StatelessWidget {
-  const _Entrada({
-    required this.animation,
-    required this.intervalo,
-    required this.child,
-    this.deslizar = true,
-  });
-
-  final Animation<double> animation;
-  final Interval intervalo;
-  final Widget child;
-  final bool deslizar;
+/// Logo 52×52 r14 + nombre y bajada de marca.
+class _LoginBrand extends StatelessWidget {
+  const _LoginBrand();
 
   @override
   Widget build(BuildContext context) {
-    final curva = CurvedAnimation(parent: animation, curve: intervalo);
-    Widget resultado = FadeTransition(opacity: curva, child: child);
-    if (deslizar) {
-      resultado = SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.08),
-          end: Offset.zero,
-        ).animate(curva),
-        child: resultado,
-      );
-    }
-    return resultado;
+    return Row(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          clipBehavior: Clip.antiAlias,
+          decoration: const BoxDecoration(
+            color: TwColors.surface,
+            borderRadius: TwRadii.button,
+            border: Border.fromBorderSide(
+              BorderSide(color: TwColors.border08),
+            ),
+            boxShadow: TwShadows.card,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Image.asset(
+              'assets/images/logo_nexus_transparente.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('TRANSWORLD REGISPRO', style: TwText.brandName),
+              SizedBox(height: 5),
+              Text('EVENTOS & LEADS', style: TwText.brandSub),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

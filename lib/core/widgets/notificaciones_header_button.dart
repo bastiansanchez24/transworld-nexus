@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../core/theme/app_theme.dart';
+import '../theme/tw_tokens.dart';
 import 'pressable.dart';
 
 /// Botón de campana 40×40 con punto de no leídas (home).
@@ -31,14 +31,18 @@ class NotificacionesHeaderButton extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.border),
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: TwColors.surface,
+                borderRadius: TwRadii.iconLg,
+                border: Border.fromBorderSide(
+                  BorderSide(color: TwColors.border08),
+                ),
+                boxShadow: TwShadows.soft,
               ),
               child: const Icon(
                 Symbols.notifications_rounded,
-                color: AppColors.identityAccent,
+                color: TwColors.iconInk,
                 size: 20,
               ),
             ),
@@ -50,7 +54,7 @@ class NotificacionesHeaderButton extends StatelessWidget {
                   width: 7,
                   height: 7,
                   decoration: BoxDecoration(
-                    color: AppColors.danger,
+                    color: TwColors.danger,
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 1.5),
                   ),

@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:transworld_nexus/core/constants/app_role.dart';
 import 'package:transworld_nexus/core/network/connectivity_service.dart';
-import 'package:transworld_nexus/core/widgets/nexus_components.dart';
+import 'package:transworld_nexus/core/widgets/tw_components.dart';
 import 'package:transworld_nexus/data/models/evento_lead.dart';
 import 'package:transworld_nexus/data/models/perfil.dart';
 import 'package:transworld_nexus/data/offline/sync_queue_service.dart';
@@ -69,9 +69,11 @@ void main() {
     (tester) async {
       await montar(tester, perfil: perfilUser);
 
-      expect(find.byType(StatCard), findsNWidgets(2));
-      expect(find.text('Leads capturados'), findsOneWidget);
-      expect(find.text('Empresas'), findsOneWidget);
+      // El hero del rediseño (§9) muestra 2 métricas, rotuladas en mayúsculas.
+      final stats = tester.widget<TwStatsRow>(find.byType(TwStatsRow));
+      expect(stats.stats, hasLength(2));
+      expect(find.text('LEADS CAPTURADOS'), findsOneWidget);
+      expect(find.text('EMPRESAS'), findsOneWidget);
       expect(find.text('12'), findsOneWidget);
       expect(find.text('5'), findsOneWidget);
       expect(find.text('Mis leads'), findsNothing);

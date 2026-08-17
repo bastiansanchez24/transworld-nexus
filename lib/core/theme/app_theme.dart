@@ -107,27 +107,24 @@ class AppColors {
   ];
 }
 
-/// Tokens de la bottom navbar Liquid Glass (ver `flutter_liquid_glass_navbar_specs.md`).
+/// Métricas de la bottom navbar flotante ([TwBottomNavBar]).
 ///
-/// El acento activo usa navy corporativo en lugar del violeta de la referencia.
+/// El panel dejó de ser Liquid Glass: el prototipo lo define blanco sólido de
+/// 68 dp con doble sombra. Aquí solo viven las medidas que otras pantallas
+/// necesitan para reservar espacio bajo su contenido.
 abstract final class GlassNavTokens {
-  static const height = 72.0;
+  static const height = 68.0;
   static const radius = 26.0;
 
   static const horizontalMargin = 14.0;
 
   /// Aire extra bajo el panel, **además** del home indicator / safe area.
-  static const bottomMargin = 10.0;
+  static const bottomMargin = 14.0;
 
   /// Holgura extra en PWA (iPhone): separa la navbar de la barra nativa.
   static const webBottomExtra = 14.0;
-  static const innerPaddingH = 6.0;
-  static const innerPaddingV = 6.0;
-
-  static const blurSigma = 20.0;
 
   static const iconSize = 24.0;
-  static const iconLabelGap = 3.0;
   static const labelSize = 12.0;
 
   static const transitionDuration = Duration(milliseconds: 180);
@@ -157,15 +154,6 @@ abstract final class GlassNavTokens {
       brightness == Brightness.dark
       ? const Color.fromRGBO(255, 255, 255, 0.90)
       : AppColors.ink;
-
-  static Color glassTint(Brightness brightness) => brightness == Brightness.dark
-      ? const Color.fromRGBO(22, 43, 76, 0.38)
-      : const Color.fromRGBO(255, 255, 255, 0.36);
-
-  static Color borderColor(Brightness brightness) =>
-      brightness == Brightness.dark
-      ? const Color.fromRGBO(255, 255, 255, 0.10)
-      : const Color.fromRGBO(20, 37, 63, 0.08);
 }
 
 class AppSpacing {

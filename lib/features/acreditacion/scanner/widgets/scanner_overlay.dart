@@ -164,7 +164,7 @@ class _ScannerOverlayState extends State<ScannerOverlay>
               Positioned(
                 left: 32,
                 right: 32,
-                bottom: bottomInset + 100,
+                bottom: bottomInset + 128,
                 child: _FeedbackBanner(
                   message: widget.feedbackMessage!,
                   isError: widget.feedbackIsError,
@@ -173,7 +173,7 @@ class _ScannerOverlayState extends State<ScannerOverlay>
             Positioned(
               left: 0,
               right: 0,
-              bottom: bottomInset + 28,
+              bottom: bottomInset + 56,
               child: Center(
                 child: _GlassPillButton(
                   label: 'Capturar Lead',

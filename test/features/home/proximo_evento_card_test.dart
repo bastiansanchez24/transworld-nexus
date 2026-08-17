@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:transworld_nexus/core/theme/app_theme.dart';
+import 'package:transworld_nexus/core/theme/tw_tokens.dart';
 import 'package:transworld_nexus/core/widgets/evento_hero_banner.dart';
 import 'package:transworld_nexus/features/home/models/home_featured_item.dart';
 import 'package:transworld_nexus/features/home/widgets/proximo_evento_card.dart';
@@ -29,8 +30,8 @@ void main() {
   setUpAll(() => initializeDateFormatting('es'));
 
   test('el inset centrado coincide con el gutter del home', () {
-    expect(homeFeaturedSettledInset(320), AppSpacing.screenH);
-    expect(homeFeaturedSettledInset(400), AppSpacing.screenH);
+    expect(homeFeaturedSettledInset(320), TwSpacing.screenH);
+    expect(homeFeaturedSettledInset(400), TwSpacing.screenH);
     expect(homeFeaturedSettledInset(1200), (1200 - AppSpacing.contentMax) / 2);
   });
 
@@ -277,8 +278,8 @@ void main() {
 
     final activo = decoDe(const Key('proximo_evento_punto_0'));
     final inactivo = decoDe(const Key('proximo_evento_punto_1'));
-    expect(activo.color, AppColors.heroNavy);
-    expect(inactivo.color, isNot(AppColors.border));
+    expect(activo.color, TwColors.hero700);
+    expect(inactivo.color, isNot(TwColors.border07));
     expect(inactivo.color, isNot(activo.color));
     expect(inactivo.color!.a, greaterThan(0.2));
   });
@@ -310,11 +311,11 @@ void main() {
                 widget is Container &&
                 widget.decoration is BoxDecoration &&
                 (widget.decoration! as BoxDecoration).gradient ==
-                    AppColors.heroGradient,
+                    TwGradients.hero,
           ),
         )
         .first;
-    expect(tester.getSize(card).width, pageWidth - AppSpacing.screenH * 2);
+    expect(tester.getSize(card).width, pageWidth - TwSpacing.screenH * 2);
   });
 
   testWidgets('solo el botón Ver evento navega al evento', (tester) async {

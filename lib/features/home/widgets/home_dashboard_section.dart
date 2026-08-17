@@ -6,9 +6,9 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/pressable.dart';
+import '../../../core/widgets/tw_components.dart';
 import '../../../data/models/evento.dart';
 import '../providers/home_dashboard_providers.dart';
 
@@ -31,12 +31,9 @@ class HomeDashboardSection extends ConsumerWidget {
       data: (data) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionLabel('Resumen'),
-          const SizedBox(height: 12),
+          const TwSectionLabel('Resumen', top: 0),
           _KpiGrid(data: data),
-          const SizedBox(height: AppSpacing.sectionGap),
-          const SectionLabel('Calendario de eventos'),
-          const SizedBox(height: 12),
+          const TwSectionLabel('Calendario de eventos'),
           _EventosCalendario(data: data),
         ],
       ),
@@ -51,73 +48,70 @@ class _KpiGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cards = [
-      (
-        '${data.totalEventos}',
-        'Eventos',
-        Symbols.calendar_month_rounded,
-        AppColors.tintNavy,
-        AppColors.primary,
+    final cards = <TwKpiCard>[
+      TwKpiCard(
+        value: '${data.totalEventos}',
+        label: 'Eventos',
+        icon: Symbols.calendar_month_rounded,
+        tint: TwColors.blueTint,
+        iconColor: TwColors.blueInk,
       ),
-      (
-        '${data.eventosProximos}',
-        'Próximos',
-        Symbols.upcoming_rounded,
-        AppColors.successTint,
-        AppColors.success,
+      TwKpiCard(
+        value: '${data.eventosProximos}',
+        label: 'Próximos',
+        icon: Symbols.event_upcoming_rounded,
+        tint: TwColors.greenTint,
+        iconColor: TwColors.greenInk,
       ),
-      (
-        '${data.totalRegistrados}',
-        'Registrados',
-        Symbols.group_rounded,
-        AppColors.tintNavy,
-        AppColors.primary,
+      TwKpiCard(
+        value: '${data.totalRegistrados}',
+        label: 'Registrados',
+        icon: Symbols.groups_rounded,
+        tint: TwColors.blueTint,
+        iconColor: TwColors.blueInk,
       ),
-      (
-        '${(data.porcentajeAcreditacion * 100).toStringAsFixed(0)}%',
-        'Acreditación',
-        Symbols.verified_rounded,
-        AppColors.successTint,
-        AppColors.success,
+      TwKpiCard(
+        value: '${(data.porcentajeAcreditacion * 100).toStringAsFixed(0)}%',
+        label: 'Acreditación',
+        icon: Symbols.verified_rounded,
+        tint: TwColors.greenTint,
+        iconColor: TwColors.greenInk,
       ),
-      (
-        '${data.eventosActivos}',
-        'Activos',
-        Symbols.check_circle_rounded,
-        AppColors.successTint,
-        AppColors.success,
+      TwKpiCard(
+        value: '${data.eventosActivos}',
+        label: 'Activos',
+        icon: Symbols.bolt_rounded,
+        tint: TwColors.amberTint,
+        iconColor: TwColors.amberInk,
       ),
-      (
-        '${data.eventosEsteMes}',
-        'Este mes',
-        Symbols.event_rounded,
-        AppColors.warningTint,
-        AppColors.warning,
+      TwKpiCard(
+        value: '${data.eventosEsteMes}',
+        label: 'Este mes',
+        icon: Symbols.insights_rounded,
+        tint: TwColors.purpleTint,
+        iconColor: TwColors.purpleInk,
       ),
     ];
 
     return Column(
       children: [
-        for (var row = 0; row < 3; row++) ...[
+        for (var row = 0; row * 2 < cards.length; row++) ...[
           if (row > 0) const SizedBox(height: 12),
-          Row(
-            children: [
-              for (var col = 0; col < 2; col++) ...[
-                if (col > 0) const SizedBox(width: 12),
-                Expanded(
-                  child: _HomeCardIn(
-                    index: row * 2 + col,
-                    child: StatCard(
-                      value: cards[row * 2 + col].$1,
-                      label: cards[row * 2 + col].$2,
-                      icon: cards[row * 2 + col].$3,
-                      tint: cards[row * 2 + col].$4,
-                      iconColor: cards[row * 2 + col].$5,
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var col = 0; col < 2; col++) ...[
+                  if (col > 0) const SizedBox(width: 12),
+                  Expanded(
+                    child: _HomeCardIn(
+                      index: row * 2 + col,
+                      child: cards[row * 2 + col],
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ],
@@ -164,35 +158,17 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
         ? widget.data.eventosEnDia(_diaSeleccionado!)
         : widget.data.proximosEventos.take(5).toList();
 
-    return Container(
+    return TwCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.shadowRest,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Pressable(
-                scale: 0.9,
+              _NavMes(
+                icon: Symbols.chevron_left_rounded,
+                tooltip: 'Mes anterior',
                 onTap: () => _cambiarMes(-1),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                  child: const Icon(
-                    Symbols.chevron_left_rounded,
-                    size: 17,
-                    color: AppColors.identityAccent,
-                  ),
-                ),
               ),
               Expanded(
                 child: Text(
@@ -200,29 +176,16 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
                     DateFormat('MMMM yyyy', 'es').format(_mesVisible),
                   ),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
+                  style: TwText.supportTitle.copyWith(
                     fontSize: 14,
-                    color: AppColors.ink,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              Pressable(
-                scale: 0.9,
+              _NavMes(
+                icon: Symbols.chevron_right_rounded,
+                tooltip: 'Mes siguiente',
                 onTap: () => _cambiarMes(1),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                  child: const Icon(
-                    Symbols.chevron_right_rounded,
-                    size: 17,
-                    color: AppColors.identityAccent,
-                  ),
-                ),
               ),
             ],
           ),
@@ -250,15 +213,15 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
               onDiaTap: (dia) => setState(() => _diaSeleccionado = dia),
             ),
           ),
-          const Divider(height: AppSpacing.xxl, color: AppColors.divider),
+          const Divider(height: AppSpacing.xxl, color: TwColors.border07),
           Text(
             _diaSeleccionado != null
                 ? 'Eventos del ${_formatDia(_diaSeleccionado!)}'
                 : 'Próximos eventos',
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+            style: TwText.tileSubtitle.copyWith(
               fontSize: 13,
+              color: TwColors.secondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -267,7 +230,7 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
               padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
               child: Text(
                 'No hay eventos en esta fecha.',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TwText.tileSubtitle,
               ),
             )
           else
@@ -283,6 +246,39 @@ class _EventosCalendarioState extends State<_EventosCalendario> {
   String _formatDia(DateTime dia) => DateFormat('d MMM', 'es').format(dia);
 }
 
+class _NavMes extends StatelessWidget {
+  const _NavMes({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: TwPressable(
+        onTap: onTap,
+        scale: 0.92,
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: TwColors.surfaceTint,
+            borderRadius: TwRadii.iconSm,
+          ),
+          child: Icon(icon, size: 18, color: TwColors.iconInk),
+        ),
+      ),
+    );
+  }
+}
+
 class _DiaSemanaLabel extends StatelessWidget {
   const _DiaSemanaLabel(this.label);
 
@@ -294,10 +290,10 @@ class _DiaSemanaLabel extends StatelessWidget {
       child: Center(
         child: Text(
           label,
-          style: const TextStyle(
+          style: TwText.statLabel.copyWith(
             fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textTertiary,
+            letterSpacing: 0,
+            color: TwColors.muted,
           ),
         ),
       ),
@@ -343,14 +339,15 @@ class _CalendarioGrid extends StatelessWidget {
 
       celdas.add(
         GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () => onDiaTap(fecha),
           child: SizedBox(
             height: 34,
             child: Container(
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                gradient: esHoy ? AppColors.heroGradient : null,
-                color: !esHoy && seleccionado ? AppColors.tintNavy : null,
+                gradient: esHoy ? TwGradients.hero : null,
+                color: !esHoy && seleccionado ? TwColors.blueTint : null,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Stack(
@@ -360,14 +357,17 @@ class _CalendarioGrid extends StatelessWidget {
                     '$dia',
                     style: TextStyle(
                       fontSize: 12.5,
+                      height: 1.0,
+                      letterSpacing: 0,
+                      leadingDistribution: TextLeadingDistribution.even,
                       fontWeight: esHoy || seleccionado
-                          ? FontWeight.w800
+                          ? FontWeight.w700
                           : FontWeight.w500,
                       color: esHoy
                           ? Colors.white
                           : esPasado
-                          ? AppColors.textTertiary
-                          : AppColors.ink,
+                          ? TwColors.muted
+                          : TwColors.ink,
                     ),
                   ),
                   if (tieneEventos && !esHoy)
@@ -377,7 +377,7 @@ class _CalendarioGrid extends StatelessWidget {
                         width: 4,
                         height: 4,
                         decoration: const BoxDecoration(
-                          color: AppColors.identityAccent,
+                          color: TwColors.blueInk,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -435,7 +435,7 @@ class _EventoCalendarioTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Pressable(
+      child: TwPressable(
         onTap: () => context.push(RoutePaths.usarEvento(evento.id)),
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -448,7 +448,7 @@ class _EventoCalendarioTile extends StatelessWidget {
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: pasado ? AppColors.textTertiary : AppColors.primary,
+                  color: pasado ? TwColors.chevron : TwColors.brand700,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -459,29 +459,24 @@ class _EventoCalendarioTile extends StatelessWidget {
                   children: [
                     Text(
                       evento.nombre,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                      ),
+                      style: TwText.supportTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 3),
                     Text(
                       '$fecha · ${evento.lugar ?? evento.pais ?? ''}',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                      ),
+                      style: TwText.tileSubtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              if (!evento.activo)
-                const StatusChip(
-                  label: 'Inactivo',
-                  variant: StatusChipVariant.neutral,
-                ),
+              const SizedBox(width: 8),
               const Icon(
                 Symbols.chevron_right_rounded,
-                color: AppColors.chevronMuted,
+                color: TwColors.chevron,
                 size: 20,
               ),
             ],

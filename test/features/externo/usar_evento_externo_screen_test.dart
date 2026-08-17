@@ -97,8 +97,9 @@ void main() {
     expect(find.text('Acreditados'), findsNothing);
     expect(find.text('Pendientes'), findsNothing);
     expect(find.byKey(const Key('externo_logout_button')), findsOneWidget);
-    expect(find.byType(EventoHeroBanner), findsOneWidget);
+    // Sin foto el hero se pinta solo con el degradado del rediseño.
     expect(find.byType(EventoHeroFoto), findsNothing);
+    expect(find.text('EVENTO ACTIVO'), findsOneWidget);
 
     final logoutRect = tester.getRect(
       find.byKey(const Key('externo_logout_button')),
@@ -128,7 +129,6 @@ void main() {
     );
 
     expect(find.text('Evento de prueba'), findsWidgets);
-    expect(find.byType(EventoHeroBanner), findsOneWidget);
     expect(find.byType(EventoHeroFoto), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

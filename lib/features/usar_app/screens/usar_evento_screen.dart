@@ -2,26 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/config/env.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/browser_theme_color.dart';
+import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
-import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/offline_banner.dart';
-import '../../../core/widgets/pressable.dart';
+import '../../../core/widgets/tw_components.dart';
+import '../../../core/widgets/tw_detail_scaffold.dart';
+import '../../../core/widgets/tw_toast.dart';
 import '../../../data/models/evento.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
 import '../widgets/evento_operativo_sheets.dart';
 
-/// Menú operativo de un evento: equivalente a `usar-app.tsx` / `UsarApp.tsx`
-/// del proyecto legado, rediseñado con hero navy + acciones Nexus.
+/// Menú operativo de un evento — rediseño §8 de la guía de componentes.
+///
+/// Hero con métricas y CTA de escaneo, seguido de dos grupos de acciones.
+/// Sin barra inferior: se llega desde la lista y se vuelve con el botón atrás.
 class UsarEventoScreen extends ConsumerStatefulWidget {
   const UsarEventoScreen({super.key, required this.eventoId});
 
@@ -44,6 +47,14 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
     ref.invalidate(registradosPorEventoProvider(widget.eventoId));
   }
 
+  Future<void> _compartir() async {
+    final base = Env.appPublicBaseUrl.replaceAll(RegExp(r'/$'), '');
+    final link = '$base${RoutePaths.registroPublico(widget.eventoId)}';
+    await Clipboard.setData(ClipboardData(text: link));
+    if (!mounted) return;
+    TwToast.link(context, 'Enlace del evento copiado');
+  }
+
   @override
   Widget build(BuildContext context) {
     final eventoAsync = ref.watch(eventoByIdProvider(widget.eventoId));
@@ -52,407 +63,155 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
     final esAdmin = ref.watch(isAdminProvider);
     final resumen = ref.watch(registradosResumenProvider(widget.eventoId));
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        body: Column(
-          children: [
-            const OfflineBanner(),
-            Expanded(
-              child: eventoAsync.when(
-                loading: () => const LoadingView(),
-                error: (e, _) =>
-                    const ErrorView(message: 'No se pudo cargar el evento.'),
-                data: (evento) {
-                  final totalReg = resumen?.total;
-                  final totalAcred = resumen?.acreditados;
-                  final noAcred = resumen?.pendientes;
-
-                  return Column(
-                    children: [
-                      Stack(
-                        children: [
-                          _EventoHero(evento: evento),
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: CollapsingNavOverlay(
-                              scrollOffset: 0,
-                              title: evento.nombre,
-                              style: CollapsingNavStyle.detail,
-                              alwaysShowActions: true,
-                              leading: _HeroNavButton(
-                                icon: Symbols.arrow_back_ios_new_rounded,
-                                onTap: () => context.pop(),
-                              ),
-                              trailing: puedeEditar
-                                  ? _HeroNavButton(
-                                      icon: Symbols.edit_rounded,
-                                      onTap: () => context.push(
-                                        RoutePaths.editarEvento(
-                                          widget.eventoId,
-                                        ),
-                                      ),
-                                    )
-                                  : null,
-                            ),
+    return BrowserThemeColor(
+      color: TwColors.bg,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: TwColors.bg,
+          body: Column(
+            children: [
+              const OfflineBanner(),
+              Expanded(
+                child: eventoAsync.when(
+                  loading: () => const LoadingView(),
+                  error: (e, _) =>
+                      const ErrorView(message: 'No se pudo cargar el evento.'),
+                  data: (evento) => TwDetailScaffold(
+                    eyebrow: 'Detalle del evento',
+                    title: evento.nombre,
+                    onBack: () => context.pop(),
+                    actions: [
+                      if (puedeEditar)
+                        TwIconButton(
+                          icon: Symbols.edit_rounded,
+                          iconSize: 19,
+                          tooltip: 'Editar evento',
+                          onTap: () => context.push(
+                            RoutePaths.editarEvento(widget.eventoId),
                           ),
-                        ],
-                      ),
-                      Expanded(
-                        child: CustomScrollView(
-                          physics: const BouncingScrollPhysics(
-                            parent: AlwaysScrollableScrollPhysics(),
-                          ),
-                          slivers: [
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  20,
-                                  18,
-                                  20,
-                                  32,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _MiniStat(
-                                            value:
-                                                totalAcred?.toString() ?? '—',
-                                            label: 'Acreditados',
-                                            valueColor: AppColors.success,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: _MiniStat(
-                                            value: noAcred?.toString() ?? '—',
-                                            label: 'Pendientes',
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: _MiniStat(
-                                            value: totalReg?.toString() ?? '—',
-                                            label: 'Registrados',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 18),
-                                    StaggeredListItem(
-                                      index: 0,
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: _PrimaryActionCard(
-                                              icon: Symbols
-                                                  .qr_code_scanner_rounded,
-                                              title: 'Escanear QR',
-                                              onTap: () => context.push(
-                                                RoutePaths.acreditarQr(
-                                                  widget.eventoId,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: _PrimaryActionCard(
-                                              icon: Symbols.person_add_rounded,
-                                              title: 'Registrar Asistente',
-                                              onTap: () =>
-                                                  EventoOperativoSheets.mostrarOpcionesRegistrarAsistente(
-                                                    context,
-                                                    widget.eventoId,
-                                                  ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 18),
-                                    const SectionLabel('Acciones del evento'),
-                                    const SizedBox(height: 10),
-                                    ..._acciones(
-                                      context,
-                                      puedeExportar: puedeExportar,
-                                      esAdmin: esAdmin,
-                                    ).asMap().entries.map(
-                                      (entry) => Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 10,
-                                        ),
-                                        child: StaggeredListItem(
-                                          index: entry.key + 1,
-                                          child: entry.value,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SliverToBoxAdapter(
-                              child: SizedBox(height: 40),
-                            ),
-                          ],
                         ),
+                      TwIconButton(
+                        icon: Symbols.ios_share_rounded,
+                        iconSize: 20,
+                        variant: TwIconButtonStyle.brand,
+                        tooltip: 'Copiar enlace del evento',
+                        onTap: _compartir,
                       ),
                     ],
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _acciones(
-    BuildContext context, {
-    required bool puedeExportar,
-    required bool esAdmin,
-  }) {
-    final id = widget.eventoId;
-    return [
-      if (esAdmin)
-        NexusActionRow(
-          icon: Symbols.group_rounded,
-          title: 'Gestionar acceso',
-          onTap: () => context.push(RoutePaths.accesoEvento(id)),
-        ),
-      NexusActionRow(
-        icon: Symbols.list_alt_rounded,
-        title: 'Lista de asistentes registrados',
-        onTap: () => context.push(RoutePaths.verRegistrados(id)),
-      ),
-      NexusActionRow(
-        icon: Symbols.bar_chart_rounded,
-        title: 'KPI del evento',
-        onTap: () => context.push(RoutePaths.kpi(id)),
-      ),
-      if (puedeExportar)
-        NexusActionRow(
-          icon: Symbols.download_rounded,
-          title: 'Exportar a Excel',
-          onTap: () => context.push(RoutePaths.exportar(id)),
-        ),
-    ];
-  }
-}
-
-class _HeroNavButton extends StatelessWidget {
-  const _HeroNavButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      scale: 0.9,
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Icon(icon, size: 18, color: Colors.white),
-      ),
-    );
-  }
-}
-
-class _EventoHero extends StatelessWidget {
-  const _EventoHero({required this.evento});
-
-  final Evento evento;
-
-  @override
-  Widget build(BuildContext context) {
-    final topPad = MediaQuery.paddingOf(context).top;
-    // Reserva espacio para los botones del CollapsingNavOverlay (titleZone).
-    final fechaChip = DateFormat(
-      "EEEE d · MMMM yyyy",
-      'es',
-    ).format(evento.fecha);
-    final lugar = [
-      if (evento.lugar != null && evento.lugar!.isNotEmpty) evento.lugar,
-      if (evento.pais != null && evento.pais!.isNotEmpty) evento.pais,
-    ].join(' · ');
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-          ),
-          child: Text(
-            fechaChip,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          evento.nombre,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 21,
-            fontWeight: FontWeight.w800,
-            height: 1.3,
-            letterSpacing: -0.3,
-          ),
-        ),
-        if (lugar.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(
-                Symbols.location_on_rounded,
-                size: 16,
-                color: Color(0xBFFFFFFF),
-              ),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  lugar,
-                  style: const TextStyle(
-                    color: Color(0xBFFFFFFF),
-                    fontSize: 13,
+                    children: [
+                      _hero(context, evento, resumen),
+                      const TwSectionLabel('Acciones del evento'),
+                      TwActionTile(
+                        icon: Symbols.person_add_rounded,
+                        iconStyle: TwIconBoxStyle.brand,
+                        title: 'Registrar asistente',
+                        subtitle: 'Inscribir a alguien en el evento',
+                        onTap: () =>
+                            EventoOperativoSheets.mostrarOpcionesRegistrarAsistente(
+                              context,
+                              widget.eventoId,
+                            ),
+                      ),
+                      const SizedBox(height: TwSpacing.tileGap),
+                      TwActionTile(
+                        icon: Symbols.contacts_rounded,
+                        title: 'Lista de asistentes registrados',
+                        subtitle: _subtituloAsistentes(resumen?.total),
+                        onTap: () => context.push(
+                          RoutePaths.verRegistrados(widget.eventoId),
+                        ),
+                      ),
+                      const TwSectionLabel('Administración'),
+                      if (esAdmin) ...[
+                        TwActionTile(
+                          icon: Symbols.groups_rounded,
+                          title: 'Gestionar acceso',
+                          subtitle: 'Acreditar y controlar la entrada',
+                          onTap: () => context.push(
+                            RoutePaths.accesoEvento(widget.eventoId),
+                          ),
+                        ),
+                        const SizedBox(height: TwSpacing.tileGap),
+                      ],
+                      TwActionTile(
+                        icon: Symbols.bar_chart_rounded,
+                        iconStyle: TwIconBoxStyle.purpleTint,
+                        title: 'KPI del evento',
+                        subtitle: 'Métricas y acreditación en vivo',
+                        onTap: () =>
+                            context.push(RoutePaths.kpi(widget.eventoId)),
+                      ),
+                      if (puedeExportar) ...[
+                        const SizedBox(height: TwSpacing.tileGap),
+                        TwActionTile(
+                          icon: Symbols.table_chart_rounded,
+                          iconStyle: TwIconBoxStyle.excel,
+                          excel: true,
+                          badge: 'XLSX',
+                          title: 'Exportar a Excel',
+                          subtitle: _subtituloExcel(resumen?.total),
+                          onTap: () => context.push(
+                            RoutePaths.exportar(widget.eventoId),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _hero(
+    BuildContext context,
+    Evento evento,
+    RegistradosResumen? resumen,
+  ) {
+    final lugar = [
+      if (evento.lugar != null && evento.lugar!.isNotEmpty) evento.lugar,
+      if (evento.pais != null && evento.pais!.isNotEmpty) evento.pais,
+    ].join(' · ');
+    final imagenUrl = evento.imagenUrl;
+
+    return TwHeroCard(
+      dateText: formatearFechaLarga(evento.fecha),
+      status: evento.yaOcurrio ? TwStatus.finalizado : TwStatus.activo,
+      title: evento.nombre,
+      location: lugar,
+      photo: imagenUrl == null || imagenUrl.isEmpty
+          ? null
+          // El velo lo pinta la propia TwHeroCard (heroScrim).
+          : EventoHeroFoto(imagenUrl: imagenUrl, velo: 0),
+      stats: [
+        TwStat(
+          _valor(resumen?.acreditados),
+          'Acreditados',
+          valueColor: TwColors.statusActive,
+        ),
+        TwStat(_valor(resumen?.pendientes), 'Pendientes'),
+        TwStat(_valor(resumen?.total), 'Registrados'),
       ],
-    );
-
-    final padding = EdgeInsets.fromLTRB(
-      20,
-      topPad +
-          CollapsingNavMetrics.gapDetail * 2 +
-          CollapsingNavMetrics.titleZone +
-          8,
-      20,
-      24,
-    );
-
-    return EventoHeroBanner(
-      imagenUrl: evento.imagenUrl,
-      padding: padding,
-      child: content,
+      ctaLabel: 'Escanear QR',
+      ctaIcon: Symbols.qr_code_scanner_rounded,
+      onCta: () => context.push(RoutePaths.acreditarQr(widget.eventoId)),
     );
   }
-}
 
-class _PrimaryActionCard extends StatelessWidget {
-  const _PrimaryActionCard({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-  });
+  static String _valor(int? n) => n?.toString() ?? '—';
 
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      scale: 0.97,
-      onTap: onTap,
-      child: Container(
-        height: 104,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          gradient: AppColors.headerGradient,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          boxShadow: AppColors.shadowFab,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Icon(icon, color: Colors.white, size: 28),
-            Text(
-              title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
-                height: 1.2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  static String _subtituloAsistentes(int? total) {
+    if (total == null) return 'Ver el listado completo';
+    return total == 1 ? '1 asistente' : '$total asistentes';
   }
-}
 
-class _MiniStat extends StatelessWidget {
-  const _MiniStat({
-    required this.value,
-    required this.label,
-    this.valueColor = AppColors.ink,
-  });
-
-  final String value;
-  final String label;
-  final Color valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.shadowRest,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-              color: valueColor,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
+  static String _subtituloExcel(int? total) {
+    if (total == null) return 'Asistentes registrados';
+    final filas = total == 1 ? '1 fila' : '$total filas';
+    return 'Asistentes registrados · $filas';
   }
 }

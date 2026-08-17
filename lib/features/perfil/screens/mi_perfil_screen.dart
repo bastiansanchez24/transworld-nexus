@@ -190,7 +190,7 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
               physics: const BouncingScrollPhysics(
                 parent: AlwaysScrollableScrollPhysics(),
               ),
-              padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
               children: [
                 _PerfilHeader(
                   perfil: perfil,

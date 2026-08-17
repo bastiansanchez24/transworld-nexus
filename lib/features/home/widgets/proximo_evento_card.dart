@@ -3,24 +3,27 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
-import '../../../core/widgets/pressable.dart';
+import '../../../core/widgets/tw_components.dart';
 import '../models/home_featured_item.dart';
 
 /// Gutter que alinea la card centrada con el resto del home.
 double homeFeaturedSettledInset(double width) {
   final contentWidth = math.min(
     AppSpacing.contentMax,
-    math.max(0.0, width - AppSpacing.screenH * 2),
+    math.max(0.0, width - TwSpacing.screenH * 2),
   );
   return (width - contentWidth) / 2;
 }
 
 /// Card del home: próximo evento, o slider de fijados.
+///
+/// Rediseño: hero navy radio 22, métricas separadas por hairline y dos CTA de
+/// 48 dp (blanco + fantasma), según el prototipo de la pantalla de inicio.
 class ProximoEventoCard extends StatefulWidget {
   const ProximoEventoCard({super.key, required this.items});
 
@@ -84,7 +87,9 @@ class _ProximoEventoCardState extends State<ProximoEventoCard> {
 
   double _alturaCard(BuildContext context) {
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6);
-    return 36 + 280 * scale;
+    // 296 dp cubren el caso peor del mock: título de 2 líneas + métricas + los
+    // dos CTA de 48. Lo que sobre lo comprime el FittedBox del slide.
+    return 36 + 296 * scale;
   }
 
   double _pageValue() {
@@ -106,7 +111,7 @@ class _ProximoEventoCardState extends State<ProximoEventoCard> {
         if (!_esSlider) {
           return Padding(
             padding: EdgeInsets.symmetric(horizontal: settledInset),
-            child: _FeaturedSlide(item: widget.items.first, showPin: false),
+            child: _FeaturedSlide(item: widget.items.first),
           );
         }
 
@@ -134,10 +139,8 @@ class _ProximoEventoCardState extends State<ProximoEventoCard> {
                           child: const IgnorePointer(
                             child: DecoratedBox(
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(26),
-                                ),
-                                boxShadow: AppColors.shadowHeroCard,
+                                borderRadius: TwRadii.hero,
+                                boxShadow: TwShadows.hero,
                               ),
                             ),
                           ),
@@ -184,7 +187,6 @@ class _ProximoEventoCardState extends State<ProximoEventoCard> {
                           child: _FeaturedSlide(
                             key: ValueKey('${item.kind.name}-${item.id}'),
                             item: item,
-                            showPin: item.esFijado,
                             conSombra: false,
                           ),
                         );
@@ -281,8 +283,8 @@ class _PuntoCarrusel extends StatelessWidget {
             height: 8,
             decoration: BoxDecoration(
               color: activo
-                  ? AppColors.heroNavy
-                  : AppColors.identityAccent.withValues(alpha: 0.58),
+                  ? TwColors.hero700
+                  : TwColors.hero700.withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(AppRadius.pill),
             ),
           ),
@@ -293,33 +295,20 @@ class _PuntoCarrusel extends StatelessWidget {
 }
 
 class _FeaturedSlide extends StatelessWidget {
-  const _FeaturedSlide({
-    super.key,
-    required this.item,
-    required this.showPin,
-    this.conSombra = true,
-  });
+  const _FeaturedSlide({super.key, required this.item, this.conSombra = true});
 
   final HomeFeaturedItem item;
-  final bool showPin;
 
   /// En el carrusel la sombra la pinta el fondo del Stack, no cada slide.
   final bool conSombra;
 
-  String get _fechaChip {
-    final raw = DateFormat('d MMM', 'es').format(item.fecha);
-    return raw.replaceAll('.', '').toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final etiquetaColor = showPin ? Colors.white : AppColors.live;
-
     return Container(
       decoration: BoxDecoration(
-        gradient: AppColors.heroGradient,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: conSombra ? AppColors.shadowHeroCard : null,
+        gradient: TwGradients.hero,
+        borderRadius: TwRadii.hero,
+        boxShadow: conSombra ? TwShadows.hero : null,
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -327,36 +316,15 @@ class _FeaturedSlide extends StatelessWidget {
           if (item.tieneImagen)
             Positioned.fill(
               child: EventoHeroFoto(imagenUrl: item.imagenUrl!, velo: 0),
-            )
-          else
-            Positioned(
-              top: -52,
-              right: -38,
-              child: IgnorePointer(
-                child: Container(
-                  width: 168,
-                  height: 168,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.07),
-                  ),
-                ),
-              ),
             ),
           // Velo sobre foto o degradado: el texto blanco y las métricas leen.
           const Positioned.fill(
             child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0x59000000), Color(0xA3000000)],
-                ),
-              ),
+              decoration: BoxDecoration(gradient: TwGradients.homeScrim),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final content = Column(
@@ -365,50 +333,37 @@ class _FeaturedSlide extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        if (showPin)
-                          Icon(
-                            Symbols.push_pin_rounded,
-                            size: 12,
-                            color: etiquetaColor,
-                            fill: 1,
-                          )
-                        else
-                          const _PulseDot(),
+                        Icon(
+                          item.esFijado
+                              ? Symbols.push_pin_rounded
+                              : Symbols.schedule_rounded,
+                          size: 15,
+                          fill: 1,
+                          color: TwColors.whiteA75,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             item.etiqueta,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.9,
-                              color: etiquetaColor,
-                            ),
+                            style: TwText.homeEyebrow,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 9,
-                            vertical: 3,
+                            vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.28),
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.42),
-                            ),
+                            color: TwColors.whiteA16,
+                            borderRadius: TwRadii.pill,
+                            border: Border.all(color: TwColors.whiteA16),
                           ),
                           child: Text(
-                            _fechaChip,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.4,
-                            ),
+                            formatearDiaMesCorto(item.fecha),
+                            style: TwText.homeDateChip,
                           ),
                         ),
                       ],
@@ -418,75 +373,41 @@ class _FeaturedSlide extends StatelessWidget {
                       item.nombre,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w800,
-                        height: 1.28,
-                        letterSpacing: -0.35,
-                        color: Colors.white,
-                      ),
+                      style: TwText.homeHeroTitle,
                     ),
                     if (item.lugar.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Symbols.location_on_rounded,
-                            size: 14,
-                            color: Colors.white.withValues(alpha: 0.92),
-                            fill: 1,
+                            size: 16,
+                            color: TwColors.whiteA66,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 5),
                           Expanded(
                             child: Text(
                               item.lugar,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.white.withValues(alpha: 0.92),
-                              ),
+                              style: TwText.heroMeta,
                             ),
                           ),
                         ],
                       ),
                     ],
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _MetricTile(
-                            value: '${item.registrados}',
-                            label: 'REGISTRADOS',
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _MetricTile(
-                            value: item.porcentajeAcreditados,
-                            label: 'ACREDITADOS',
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _MetricTile(
-                            value: '${item.leads}',
-                            label: 'LEADS',
-                          ),
-                        ),
-                      ],
+                    _HomeStats(
+                      registrados: '${item.registrados}',
+                      acreditados: item.porcentajeAcreditados,
+                      leads: '${item.leads}',
                     ),
-                    const SizedBox(height: 10),
                     _HeroCta(
                       label: item.ctaLabel,
-                      icon: Symbols.arrow_forward_rounded,
-                      iconAlFinal: true,
                       filled: true,
                       onTap: () => context.push(item.routePath),
                     ),
                     if (item.qrRoutePath != null) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       _HeroCta(
                         key: Key('proximo_evento_escanear_qr_${item.id}'),
                         label: 'Escanear QR',
@@ -512,172 +433,121 @@ class _FeaturedSlide extends StatelessWidget {
   }
 }
 
-class _HeroCta extends StatelessWidget {
-  const _HeroCta({
-    super.key,
-    required this.label,
-    required this.icon,
-    this.iconAlFinal = false,
-    this.filled = true,
-    this.onTap,
+/// Métricas del hero del home: tres columnas de igual ancho separadas por un
+/// hairline al 14 % de blanco.
+class _HomeStats extends StatelessWidget {
+  const _HomeStats({
+    required this.registrados,
+    required this.acreditados,
+    required this.leads,
   });
 
-  final String label;
-  final IconData icon;
-  final bool iconAlFinal;
-  final bool filled;
-  final VoidCallback? onTap;
+  final String registrados;
+  final String acreditados;
+  final String leads;
 
   @override
   Widget build(BuildContext context) {
-    final color = filled ? AppColors.heroNavy : Colors.white;
-    final child = Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: filled ? Colors.white : Colors.white.withValues(alpha: 0.34),
-        borderRadius: BorderRadius.circular(15),
-        border: filled
-            ? null
-            : Border.all(color: Colors.white.withValues(alpha: 0.72)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      alignment: Alignment.center,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
+    final columnas = <(String, String)>[
+      (registrados, 'REGISTRADOS'),
+      (acreditados, 'ACREDITADOS'),
+      (leads, 'LEADS'),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 16),
+      child: IntrinsicHeight(
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!iconAlFinal) ...[
-              Icon(icon, size: 19, color: color),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
-                color: color,
+            for (var i = 0; i < columnas.length; i++)
+              Expanded(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: i == 0
+                        ? null
+                        : const Border(
+                            left: BorderSide(color: TwColors.whiteA14),
+                          ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          columnas[i].$1,
+                          maxLines: 1,
+                          style: TwText.homeStatValue,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          columnas[i].$2,
+                          maxLines: 1,
+                          style: TwText.homeStatLabel,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            if (iconAlFinal) ...[
-              const SizedBox(width: 6),
-              Icon(icon, size: 19, color: color),
-            ],
           ],
         ),
       ),
     );
-    if (onTap == null) return child;
-    return Pressable(scale: 0.98, onTap: onTap, child: child);
   }
 }
 
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.value, required this.label});
+/// CTA del hero: blanco (principal) o fantasma sobre el navy.
+class _HeroCta extends StatelessWidget {
+  const _HeroCta({
+    super.key,
+    required this.label,
+    required this.filled,
+    required this.onTap,
+    this.icon,
+  });
 
-  final String value;
   final String label;
+  final IconData? icon;
+  final bool filled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.28),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                height: 1.1,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              maxLines: 1,
-              style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.4,
-                color: Colors.white.withValues(alpha: 0.90),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    final color = filled ? TwColors.deepInk : Colors.white;
 
-class _PulseDot extends StatefulWidget {
-  const _PulseDot();
-
-  @override
-  State<_PulseDot> createState() => _PulseDotState();
-}
-
-class _PulseDotState extends State<_PulseDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (AppMotion.reduceMotion(context)) {
-      return Container(
-        width: 6,
-        height: 6,
-        decoration: const BoxDecoration(
-          color: AppColors.live,
-          shape: BoxShape.circle,
-        ),
-      );
-    }
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, child) {
-        final t = (_ctrl.value < 0.5)
-            ? (_ctrl.value * 2)
-            : (1 - (_ctrl.value - 0.5) * 2);
-        final scale = 1 + 0.5 * t;
-        final opacity = 1 - 0.5 * t;
-        return Transform.scale(
-          scale: scale,
-          child: Opacity(opacity: opacity, child: child),
-        );
-      },
+    return TwPressable(
+      onTap: onTap,
       child: Container(
-        width: 6,
-        height: 6,
-        decoration: const BoxDecoration(
-          color: AppColors.live,
-          shape: BoxShape.circle,
+        height: 48,
+        decoration: BoxDecoration(
+          color: filled ? TwColors.surface : TwColors.whiteA14,
+          borderRadius: TwRadii.button,
+          border: filled
+              ? null
+              : Border.all(color: TwColors.whiteA22),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 20, color: color),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                label,
+                style: filled ? TwText.heroCta : TwText.heroCtaGhost,
+              ),
+            ],
+          ),
         ),
       ),
     );

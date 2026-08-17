@@ -4,19 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/browser_theme_color.dart';
+import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
-import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/permissions_bootstrap.dart';
-import '../../../core/widgets/pressable.dart';
+import '../../../core/widgets/tw_components.dart';
+import '../../../core/widgets/tw_detail_scaffold.dart';
+import '../../../core/widgets/tw_toast.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -66,7 +65,7 @@ class _UsarEventoExternoScreenState
   Future<void> _manejarBloqueoTotal() async {
     if (_bloqueoManejado || !mounted) return;
     _bloqueoManejado = true;
-    NexusToast.show(context, 'No hay eventos operativos disponibles');
+    TwToast.info(context, 'No hay eventos operativos disponibles');
     await ref.read(authRepositoryProvider).cerrarSesion();
     if (!mounted) return;
     context.go(RoutePaths.eventoFinalizado);
@@ -90,7 +89,7 @@ class _UsarEventoExternoScreenState
       context.go(RoutePaths.externoEvento(destino.id));
     } catch (e) {
       if (!mounted) return;
-      NexusToast.show(context, e.toString().replaceFirst('Exception: ', ''));
+      TwToast.error(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -101,9 +100,9 @@ class _UsarEventoExternoScreenState
 
     final elegido = await showModalBottomSheet<Evento>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: TwColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (ctx) {
         return SafeArea(
@@ -112,62 +111,42 @@ class _UsarEventoExternoScreenState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Padding(
-                padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Text(
-                  'Cambiar evento',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
-                  ),
-                ),
+                padding: EdgeInsets.fromLTRB(16, 18, 16, 4),
+                child: TwSectionLabel('Cambiar evento', top: 0),
               ),
               Flexible(
                 child: ListView.separated(
                   shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: autorizados.length,
-                  separatorBuilder: (_, _) =>
-                      const Divider(height: 1, color: AppColors.divider),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final e = autorizados[index];
                     final activo = e.id == widget.eventoId;
                     final operable = eventoExternoOperable(e);
-                    return ListTile(
-                      enabled: operable || activo,
-                      leading: Icon(
-                        activo
+                    return Opacity(
+                      opacity: operable || activo ? 1 : 0.5,
+                      child: TwActionTile(
+                        icon: activo
                             ? Symbols.check_circle_rounded
                             : Symbols.event_rounded,
-                        color: activo
-                            ? AppColors.primary
-                            : AppColors.textSecondary,
+                        iconStyle: activo
+                            ? TwIconBoxStyle.brand
+                            : TwIconBoxStyle.blueTint,
+                        title: e.nombre,
+                        subtitle: operable
+                            ? null
+                            : (e.yaOcurrio ? 'Finalizado' : 'Inactivo'),
+                        onTap: () {
+                          if (!operable) return;
+                          Navigator.of(ctx).pop(e);
+                        },
                       ),
-                      title: Text(
-                        e.nombre,
-                        style: TextStyle(
-                          fontWeight: activo
-                              ? FontWeight.w800
-                              : FontWeight.w600,
-                          color: operable || activo
-                              ? AppColors.ink
-                              : AppColors.textTertiary,
-                        ),
-                      ),
-                      subtitle: !operable
-                          ? Text(
-                              e.yaOcurrio ? 'Finalizado' : 'Inactivo',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            )
-                          : null,
-                      onTap: operable ? () => Navigator.of(ctx).pop(e) : null,
                     );
                   },
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 18),
             ],
           ),
         );
@@ -219,108 +198,54 @@ class _UsarEventoExternoScreenState
       }
     });
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: PermissionsBootstrap(
-        child: Scaffold(
-          backgroundColor: AppColors.background,
-          body: Column(
-            children: [
-              const OfflineBanner(),
-              Expanded(
-                child: eventoAsync.when(
-                  loading: () => const LoadingView(),
-                  error: (e, _) =>
-                      const ErrorView(message: 'No se pudo cargar el evento.'),
-                  data: (evento) {
-                    return Column(
+    return BrowserThemeColor(
+      color: TwColors.bg,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: PermissionsBootstrap(
+          child: Scaffold(
+            backgroundColor: TwColors.bg,
+            body: Column(
+              children: [
+                const OfflineBanner(),
+                Expanded(
+                  child: eventoAsync.when(
+                    loading: () => const LoadingView(),
+                    error: (e, _) => const ErrorView(
+                      message: 'No se pudo cargar el evento.',
+                    ),
+                    data: (evento) => TwDetailScaffold(
+                      eyebrow: 'Evento activo',
+                      title: evento.nombre,
+                      // El externo no tiene a dónde volver: el "atrás" de la
+                      // cabecera es su salida de sesión.
+                      onBack: _cerrarSesion,
+                      backIcon: Symbols.logout_rounded,
+                      backTooltip: 'Cerrar sesión',
+                      backKey: const Key('externo_logout_button'),
                       children: [
-                        Stack(
-                          children: [
-                            _EventoExternoHero(
-                              evento: evento,
-                              puedeCambiar: puedeCambiar,
-                              onTapNombre: puedeCambiar
-                                  ? _mostrarSelectorEventos
-                                  : null,
-                            ),
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              child: CollapsingNavOverlay(
-                                scrollOffset: 0,
-                                title: evento.nombre,
-                                style: CollapsingNavStyle.detail,
-                                alwaysShowActions: true,
-                                trailing: _HeroNavButton(
-                                  key: const Key('externo_logout_button'),
-                                  icon: Symbols.logout_rounded,
-                                  tooltip: 'Cerrar sesión',
-                                  onTap: _cerrarSesion,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Expanded(
-                          child: CustomScrollView(
-                            physics: const BouncingScrollPhysics(
-                              parent: AlwaysScrollableScrollPhysics(),
-                            ),
-                            slivers: [
-                              SliverToBoxAdapter(
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    20,
-                                    18,
-                                    20,
-                                    32,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      _ExternoStatsCards(
-                                        statsAsync: statsAsync,
-                                        onRetry: () => ref.invalidate(
-                                          externoDashboardProvider,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 18),
-                                      StaggeredListItem(
-                                        index: 0,
-                                        child: _PrimaryActionCard(
-                                          key: const Key(
-                                            'externo_scan_qr_button',
-                                          ),
-                                          icon: Symbols.qr_code_scanner_rounded,
-                                          title: 'Escanear QR',
-                                          subtitle:
-                                              'Acredita asistentes o captura leads',
-                                          onTap: () => context.push(
-                                            RoutePaths.acreditarQr(
-                                              widget.eventoId,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SliverToBoxAdapter(
-                                child: SizedBox(height: 40),
-                              ),
-                            ],
+                        _EventoExternoHero(
+                          evento: evento,
+                          puedeCambiar: puedeCambiar,
+                          onTapNombre: puedeCambiar
+                              ? _mostrarSelectorEventos
+                              : null,
+                          onEscanear: () => context.push(
+                            RoutePaths.acreditarQr(widget.eventoId),
                           ),
                         ),
+                        const TwSectionLabel('Resumen'),
+                        _ExternoStatsCards(
+                          statsAsync: statsAsync,
+                          onRetry: () =>
+                              ref.invalidate(externoDashboardProvider),
+                        ),
                       ],
-                    );
-                  },
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -328,63 +253,30 @@ class _UsarEventoExternoScreenState
   }
 }
 
-class _HeroNavButton extends StatelessWidget {
-  const _HeroNavButton({
-    super.key,
-    required this.icon,
-    required this.onTap,
-    this.tooltip,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final button = Pressable(
-      scale: 0.9,
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Icon(icon, size: 18, color: Colors.white),
-      ),
-    );
-
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
-  }
-}
-
+/// Hero del evento activo, con el mismo lenguaje que la card del home:
+/// radio 22, velo sobre la foto, píldora de fecha y CTA blanco de 52.
 class _EventoExternoHero extends StatelessWidget {
   const _EventoExternoHero({
     required this.evento,
     required this.puedeCambiar,
+    required this.onEscanear,
     this.onTapNombre,
   });
 
   final Evento evento;
   final bool puedeCambiar;
+  final VoidCallback onEscanear;
   final VoidCallback? onTapNombre;
 
   @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.paddingOf(context).top;
-    final fechaChip = DateFormat(
-      "EEEE d · MMMM yyyy",
-      'es',
-    ).format(evento.fecha);
     final lugar = [
       if (evento.lugar != null && evento.lugar!.isNotEmpty) evento.lugar,
       if (evento.direccion != null && evento.direccion!.isNotEmpty)
         evento.direccion,
       if (evento.pais != null && evento.pais!.isNotEmpty) evento.pais,
     ].join(' · ');
+    final imagenUrl = evento.imagenUrl;
 
     final nombreWidget = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,19 +284,15 @@ class _EventoExternoHero extends StatelessWidget {
         Expanded(
           child: Text(
             evento.nombre,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-              height: 1.3,
-              letterSpacing: -0.3,
-            ),
+            style: TwText.heroTitle,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         if (puedeCambiar) ...[
           const SizedBox(width: 6),
           const Padding(
-            padding: EdgeInsets.only(top: 4),
+            padding: EdgeInsets.only(top: 3),
             child: Icon(
               Symbols.expand_more_rounded,
               color: Colors.white,
@@ -415,64 +303,80 @@ class _EventoExternoHero extends StatelessWidget {
       ],
     );
 
-    return EventoHeroBanner(
-      imagenUrl: evento.imagenUrl,
-      padding: EdgeInsets.fromLTRB(
-        20,
-        topPad +
-            CollapsingNavMetrics.gapDetail * 2 +
-            CollapsingNavMetrics.titleZone +
-            8,
-        20,
-        24,
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        gradient: TwGradients.hero,
+        borderRadius: TwRadii.hero,
+        boxShadow: TwShadows.hero,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+          if (imagenUrl != null && imagenUrl.isNotEmpty)
+            Positioned.fill(
+              child: EventoHeroFoto(imagenUrl: imagenUrl, velo: 0),
             ),
-            child: Text(
-              fechaChip,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
-              ),
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(gradient: TwGradients.heroScrim),
             ),
           ),
-          const SizedBox(height: 8),
-          if (onTapNombre != null)
-            Pressable(scale: 0.98, onTap: onTapNombre, child: nombreWidget)
-          else
-            nombreWidget,
-          if (lugar.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Symbols.location_on_rounded,
-                  size: 16,
-                  color: Color(0xBFFFFFFF),
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    lugar,
-                    style: const TextStyle(
-                      color: Color(0xBFFFFFFF),
-                      fontSize: 13,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: TwDatePill(formatearFechaLarga(evento.fecha)),
                     ),
+                    const SizedBox(width: 8),
+                    TwStatusPill(
+                      evento.yaOcurrio
+                          ? TwStatus.finalizado
+                          : TwStatus.activo,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (onTapNombre != null)
+                  TwPressable(onTap: onTapNombre, child: nombreWidget)
+                else
+                  nombreWidget,
+                if (lugar.isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Row(
+                    children: [
+                      const Icon(
+                        Symbols.location_on_rounded,
+                        size: 16,
+                        color: TwColors.whiteA66,
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          lugar,
+                          style: TwText.heroMeta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
+                ],
+                const SizedBox(height: 20),
+                TwHeroButton(
+                  key: const Key('externo_scan_qr_button'),
+                  label: 'Escanear QR',
+                  icon: Symbols.qr_code_scanner_rounded,
+                  onTap: onEscanear,
                 ),
               ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -507,24 +411,24 @@ class _ExternoStatsCards extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: StatCard(
+                  child: TwKpiCard(
                     key: const Key('externo_stat_eventos'),
                     value: eventos,
                     label: 'Eventos con acceso',
                     icon: Symbols.calendar_month_rounded,
-                    tint: AppColors.tintNavy,
-                    iconColor: AppColors.primary,
+                    tint: TwColors.blueTint,
+                    iconColor: TwColors.blueInk,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: StatCard(
+                  child: TwKpiCard(
                     key: const Key('externo_stat_leads'),
                     value: leads,
                     label: 'Leads capturados',
                     icon: Symbols.person_search_rounded,
-                    tint: AppColors.successTint,
-                    iconColor: AppColors.success,
+                    tint: TwColors.greenTint,
+                    iconColor: TwColors.greenInk,
                   ),
                 ),
               ],
@@ -532,23 +436,20 @@ class _ExternoStatsCards extends StatelessWidget {
           ),
         ),
         if (stats?.esResumenParcial == true) ...[
-          const SizedBox(height: 8),
-          const Row(
+          const SizedBox(height: 10),
+          Row(
             children: [
-              Icon(
+              const Icon(
                 Symbols.info_rounded,
                 size: 15,
-                color: AppColors.textSecondary,
+                color: TwColors.muted,
               ),
-              SizedBox(width: 6),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Resumen parcial: se muestran las capturas pendientes del dispositivo.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  'Resumen parcial: se muestran las capturas pendientes del '
+                  'dispositivo.',
+                  style: TwText.tileSubtitle.copyWith(fontSize: 11.5),
                 ),
               ),
             ],
@@ -558,123 +459,37 @@ class _ExternoStatsCards extends StatelessWidget {
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-            decoration: BoxDecoration(
-              color: AppColors.dangerTint,
-              borderRadius: BorderRadius.circular(AppRadius.md),
+            decoration: const BoxDecoration(
+              color: Color(0x1FD14343),
+              borderRadius: TwRadii.field,
             ),
             child: Row(
               children: [
                 const Icon(
                   Symbols.error_rounded,
                   size: 18,
-                  color: AppColors.danger,
+                  color: TwColors.danger,
                 ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
                     'No pudimos actualizar tu resumen.',
-                    style: TextStyle(
-                      color: AppColors.danger,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TwText.errorText,
                   ),
                 ),
-                TextButton(onPressed: onRetry, child: const Text('Reintentar')),
+                TextButton(
+                  onPressed: onRetry,
+                  style: TextButton.styleFrom(
+                    foregroundColor: TwColors.brand700,
+                    textStyle: TwText.linkText,
+                  ),
+                  child: const Text('Reintentar'),
+                ),
               ],
             ),
           ),
         ],
       ],
-    );
-  }
-}
-
-class _PrimaryActionCard extends StatelessWidget {
-  const _PrimaryActionCard({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: '$title. $subtitle',
-      child: Pressable(
-        scale: 0.98,
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 96),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: AppColors.headerGradient,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            boxShadow: AppColors.shadowFab,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Icon(icon, color: Colors.white, size: 27),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xCCFFFFFF),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Symbols.arrow_forward_ios_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

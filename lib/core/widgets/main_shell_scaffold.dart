@@ -7,10 +7,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../features/auth/providers/auth_providers.dart';
 import '../theme/app_theme.dart';
 import 'app_widgets.dart';
-import 'glass_bottom_nav_bar.dart';
 import 'permissions_bootstrap.dart';
+import 'tw_bottom_nav_bar.dart';
 
-/// Shell con bottom navbar Liquid Glass flotante.
+/// Shell con la bottom navbar flotante del rediseño.
 ///
 /// Un único [PopScope] en el shell (no por rama) evita que el diálogo de
 /// salida deje de aparecer tras cambiar de tab o volver de rutas hijas.
@@ -82,7 +82,7 @@ class MainShellScaffold extends ConsumerWidget {
                 right: GlassNavTokens.horizontalMargin,
                 bottom: GlassNavTokens.floatingBottomPadding(context),
               ),
-              child: GlassBottomNavBar(
+              child: TwBottomNavBar(
                 selectedIndex: selectedIndex,
                 onItemSelected: (index) {
                   navigationShell.goBranch(
@@ -93,7 +93,7 @@ class MainShellScaffold extends ConsumerWidget {
                 },
                 items: [
                   for (final tab in tabs)
-                    GlassNavItemData(icon: tab.icon, label: tab.label),
+                    TwNavItemData(icon: tab.icon, label: tab.label),
                 ],
               ),
             ),

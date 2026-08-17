@@ -13,11 +13,13 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/browser_theme_color.dart';
+import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/notificaciones_header_button.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
+import '../../../core/widgets/tw_components.dart';
 import '../../../data/models/perfil.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -127,7 +129,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         return false;
       },
       child: RefreshIndicator(
-        color: AppColors.primary,
+        color: TwColors.brand700,
         displacement: safeTop + 72,
         onRefresh: () async {
           ref.invalidate(homeDashboardProvider);
@@ -160,6 +162,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               const SizedBox(height: 18),
               ProximoEventoCard(items: featuredItems),
             ],
+            const SizedBox(height: 20),
             _HomeColumn(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -170,7 +173,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     alignment: Alignment.topCenter,
                     child: _menuCuentaAbierto
                         ? Padding(
-                            padding: const EdgeInsets.only(top: 12),
+                            padding: const EdgeInsets.only(bottom: 12),
                             child: _MenuCuenta(
                               onMiPerfil: () {
                                 setState(() => _menuCuentaAbierto = false);
@@ -190,7 +193,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           )
                         : const SizedBox.shrink(),
                   ),
-                  const SizedBox(height: 12),
                   perfilAsync.when(
                     loading: () => const Padding(
                       padding: EdgeInsets.symmetric(vertical: 48),
@@ -227,12 +229,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           );
 
     return BrowserThemeColor(
-      color: AppColors.background,
+      color: TwColors.bg,
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
         child: UpdateChecker(
           child: Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: TwColors.bg,
             body: Column(
               children: [
                 const OfflineBanner(),
@@ -272,7 +274,7 @@ class _HomeColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
+      padding: const EdgeInsets.symmetric(horizontal: TwSpacing.screenH),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: AppSpacing.contentMax),
@@ -364,15 +366,15 @@ class _HomeCollapseBar extends StatelessWidget {
                       outer: ColorFilter.matrix(_saturationMatrix(1.8)),
                     ),
                     child: ColoredBox(
-                      color: Color.fromRGBO(242, 245, 249, 0.72 * opacity),
+                      color: Color.fromRGBO(238, 241, 247, 0.72 * opacity),
                     ),
                   ),
                 ),
               ),
             Positioned(
               top: safeTop,
-              left: 20,
-              right: 20,
+              left: TwSpacing.screenH,
+              right: TwSpacing.screenH,
               bottom: 0,
               child: Opacity(
                 opacity: titleOpacity,
@@ -384,12 +386,7 @@ class _HomeCollapseBar extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                        color: AppColors.identityInk,
-                      ),
+                      style: TwText.greeting.copyWith(fontSize: 16),
                     ),
                   ),
                 ),
@@ -448,27 +445,24 @@ class _HeaderPerfil extends StatelessWidget {
             children: [
               Text(
                 saludo,
-                style: const TextStyle(
-                  color: AppColors.identityInk,
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                  height: 1.15,
-                ),
+                style: TwText.greeting,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               if (rol.isNotEmpty) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 _HeaderRoleChip(label: rol),
               ],
             ],
           ),
         ),
+        const SizedBox(width: 12),
         _IconChip(
           icon: menuAbierto ? Symbols.close_rounded : Symbols.settings_rounded,
+          tooltip: menuAbierto ? 'Cerrar menú' : 'Ajustes de la cuenta',
           onTap: onToggleMenu,
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         NotificacionesHeaderButton(noLeidas: noLeidas, onTap: onNotificaciones),
       ],
     );
@@ -493,13 +487,17 @@ class _HomeAvatar extends StatelessWidget {
     return Container(
       width: _HomeHeaderMetrics.avatarSize,
       height: _HomeHeaderMetrics.avatarSize,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: AppColors.primary, width: 2),
+      padding: const EdgeInsets.all(2),
+      decoration: const BoxDecoration(
+        color: TwColors.surfaceTint,
+        borderRadius: TwRadii.button,
+        // Marco navy fino: despega la foto del fondo claro del home.
+        border: Border.fromBorderSide(
+          BorderSide(color: TwColors.hero700, width: 1.5),
+        ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: TwRadii.field,
         child: tieneFoto
             ? CachedNetworkImage(
                 imageUrl: fotoUrl!,
@@ -524,11 +522,9 @@ class _Inicial extends StatelessWidget {
     return Center(
       child: Text(
         letra,
-        style: const TextStyle(
+        style: TwText.brandName.copyWith(
           fontSize: 17,
-          fontWeight: FontWeight.w800,
-          color: AppColors.heroNavy,
-          height: 1,
+          color: TwColors.hero700,
         ),
       ),
     );
@@ -536,25 +532,37 @@ class _Inicial extends StatelessWidget {
 }
 
 class _IconChip extends StatelessWidget {
-  const _IconChip({required this.icon, required this.onTap});
+  const _IconChip({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   final IconData icon;
+  final String tooltip;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
-      scale: 0.92,
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+    return Tooltip(
+      message: tooltip,
+      child: Pressable(
+        scale: 0.92,
+        onTap: onTap,
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: TwColors.surface,
+            borderRadius: TwRadii.iconLg,
+            border: Border.fromBorderSide(
+              BorderSide(color: TwColors.border08),
+            ),
+            boxShadow: TwShadows.soft,
+          ),
+          child: Icon(icon, color: TwColors.iconInk, size: 20),
         ),
-        child: Icon(icon, color: AppColors.identityAccent, size: 20),
       ),
     );
   }
@@ -568,20 +576,12 @@ class _HeaderRoleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppColors.identityChip,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: const BoxDecoration(
+        color: TwColors.blueTint,
+        borderRadius: TwRadii.badge,
       ),
-      child: Text(
-        label.toUpperCase(),
-        style: const TextStyle(
-          color: AppColors.identityAccent,
-          fontSize: 10.5,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.4,
-        ),
-      ),
+      child: Text(label.toUpperCase(), style: TwText.roleBadge),
     );
   }
 }
@@ -602,10 +602,11 @@ class _MenuCuenta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        boxShadow: AppColors.shadowLifted,
+      decoration: const BoxDecoration(
+        color: TwColors.surface,
+        borderRadius: TwRadii.card,
+        border: Border.fromBorderSide(BorderSide(color: TwColors.border07)),
+        boxShadow: TwShadows.card,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -615,7 +616,7 @@ class _MenuCuenta extends StatelessWidget {
             label: 'Mi perfil',
             onTap: onMiPerfil,
           ),
-          const Divider(height: 1, indent: 56, color: AppColors.divider),
+          const _CuentaDivider(),
           _CuentaTile(
             icon: kIsWeb
                 ? Symbols.history_rounded
@@ -624,7 +625,7 @@ class _MenuCuenta extends StatelessWidget {
             onTap: onActualizaciones,
           ),
           if (onDesinstalar != null) ...[
-            const Divider(height: 1, indent: 56, color: AppColors.divider),
+            const _CuentaDivider(),
             _CuentaTile(
               icon: Symbols.delete_forever_rounded,
               label: 'Desinstalar',
@@ -632,7 +633,7 @@ class _MenuCuenta extends StatelessWidget {
               onTap: onDesinstalar!,
             ),
           ],
-          const Divider(height: 1, indent: 56, color: AppColors.divider),
+          const _CuentaDivider(),
           _CuentaTile(
             icon: Symbols.logout_rounded,
             label: 'Cerrar sesión',
@@ -643,6 +644,14 @@ class _MenuCuenta extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CuentaDivider extends StatelessWidget {
+  const _CuentaDivider();
+
+  @override
+  Widget build(BuildContext context) =>
+      const Divider(height: 1, indent: 50, color: TwColors.border07);
 }
 
 class _CuentaTile extends StatelessWidget {
@@ -660,8 +669,8 @@ class _CuentaTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = destructivo ? AppColors.danger : AppColors.ink;
-    return Pressable(
+    final color = destructivo ? TwColors.danger : TwColors.ink;
+    return TwPressable(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -672,17 +681,14 @@ class _CuentaTile extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
+                style: TwText.tileTitle.copyWith(fontSize: 14, color: color),
               ),
             ),
             if (!destructivo)
               const Icon(
                 Symbols.chevron_right_rounded,
-                color: AppColors.chevronMuted,
+                size: 22,
+                color: TwColors.chevron,
               ),
           ],
         ),
