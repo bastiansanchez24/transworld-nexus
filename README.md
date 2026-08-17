@@ -294,19 +294,24 @@ si cambia la lógica de instalación. Los binarios vienen siempre del ZIP en Git
 
 1. Genera un keystore (una sola vez) y guárdalo fuera de git.
 2. Copia `android/key.properties.example` → `android/key.properties` y completa.
-3. En CI, configura secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
-   `KEY_PASSWORD`, `KEY_ALIAS`.
 
 Sin keystore, Gradle firma con debug (útil en local; **no** para distribución).
 
 ### Publicar una versión
 
+Los paquetes **no** los genera GitHub Actions: se construyen en local y se
+suben a mano a la Release.
+
 1. Sube `pubspec.yaml` (`version: X.Y.Z+N`) y haz merge a `main`.
 2. Crea y pushea el tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. El workflow [`.github/workflows/release-android.yml`](.github/workflows/release-android.yml)
-   valida que pubspec == tag, construye el APK y el ZIP de Windows, y crea/actualiza
-   el Release con los assets `android-regispro-vX.Y.Z.apk` y `windows-regispro-vX.Y.Z.zip`.
-4. (Opcional) Edita las notas del Release y agrega `[FORCE_UPDATE]` si aplica.
+3. Construye los paquetes:
+   - Android: `flutter build apk --release` → copia a `android-regispro-vX.Y.Z.apk`
+   - Windows: `flutter build windows --release` → ZIP de `build/windows/x64/runner/Release/` como `windows-regispro-vX.Y.Z.zip`
+4. Crea/edita la GitHub Release del tag y sube esos archivos.
+5. Hasta que no queden clientes 1.5.x / 1.4.x, sube también copias con el
+   nombre legacy: `android-nexus-vX.Y.Z.apk` y `windows-nexus-vX.Y.Z.zip`
+   (mismo archivo, otro nombre). Esas apps solo buscan el prefijo `nexus-`.
+6. (Opcional) Edita las notas del Release y agrega `[FORCE_UPDATE]` si aplica.
 
 ### Variables `.env`
 

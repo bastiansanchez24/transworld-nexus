@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -88,14 +88,29 @@ class AppColors {
   ];
 }
 
-/// Métricas de la bottom navbar flotante ([TwBottomNavBar]).
+/// Métricas de la navegación del shell ([TwBottomNavBar] / [TwSideNavRail]).
 ///
-/// El panel es un vidrio de 68 dp (blur sigma 18, como las cabeceras
-/// colapsables) con doble sombra. Aquí solo viven las medidas que otras
-/// pantallas necesitan para reservar espacio bajo su contenido.
+/// En móvil y web el panel es un vidrio flotante de 68 dp. En Windows el menú
+/// pasa a un rail izquierdo del color del contenedor, sin tapar el contenido.
+/// Aquí viven las medidas que otras pantallas usan para reservar espacio.
 abstract final class GlassNavTokens {
   static const height = 68.0;
   static const radius = 26.0;
+
+  /// Ancho del rail de escritorio (icono + etiqueta, como Discord / WhatsApp).
+  static const sideRailWidth = 96.0;
+
+  /// Aire interno del rail: separa los ítems del borde y de la title bar.
+  static const sideRailPadding = EdgeInsets.symmetric(
+    horizontal: 10,
+    vertical: 16,
+  );
+
+  /// Hueco vertical de cada hairline entre ítems (incluye la línea).
+  static const sideRailSeparatorHeight = 24.0;
+
+  /// Sangría del hairline respecto al padding del rail.
+  static const sideRailSeparatorIndent = 14.0;
 
   static const horizontalMargin = 14.0;
 
@@ -124,13 +139,17 @@ abstract final class GlassNavTokens {
   /// Panel + márgenes de flotación (incluye holgura web).
   static double occupiedHeightOf() => occupiedHeight + webBottomGap();
 
+  /// Windows de escritorio: menú en rail izquierdo, no en la barra flotante.
+  static bool get usesSideRail =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
   /// Espacio al final del contenido para que no quede bajo la barra flotante
-  /// ni bajo su zona muerta.
-  static double contentBottomInset(BuildContext context) =>
-      occupiedHeightOf() +
-      deadZone +
-      MediaQuery.viewPaddingOf(context).bottom +
-      AppSpacing.xl;
+  /// ni bajo su zona muerta. En Windows el rail no cubre el cuerpo.
+  static double contentBottomInset(BuildContext context) {
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom + AppSpacing.xl;
+    if (usesSideRail) return safeBottom;
+    return occupiedHeightOf() + deadZone + safeBottom;
+  }
 
   static double floatingBottomPadding(BuildContext context) =>
       MediaQuery.viewPaddingOf(context).bottom + bottomMargin + webBottomGap();
@@ -169,7 +188,8 @@ class AppSpacing {
   /// El Scaffold interno no ve el [bottomNavigationBar] del padre.
   static const shellFabBottom = GlassNavTokens.occupiedHeight + sm;
 
-  static double shellFabBottomOf() => GlassNavTokens.occupiedHeightOf() + sm;
+  static double shellFabBottomOf() =>
+      GlassNavTokens.usesSideRail ? sm : GlassNavTokens.occupiedHeightOf() + sm;
 }
 
 class AppRadius {

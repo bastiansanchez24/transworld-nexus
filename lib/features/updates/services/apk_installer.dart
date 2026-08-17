@@ -1,8 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+const _installChannel = MethodChannel('com.transworld.nexus/apk_installer');
 
 /// Resultado de intentar instalar un APK sideload.
 enum ApkInstallOutcome {
@@ -19,7 +22,51 @@ class ApkInstallResult {
   final String? message;
 }
 
-/// Instala un APK descargado abriendo el instalador del sistema.
+/// Traduce el status de [PackageInstaller] / códigos legacy a un mensaje.
+String mapApkInstallFailure({
+  required int status,
+  required int legacyStatus,
+  String message = '',
+}) {
+  switch (status) {
+    case 2: // STATUS_FAILURE_ABORTED
+      return 'Instalación cancelada.';
+    case 3: // STATUS_FAILURE_BLOCKED
+      return 'El sistema bloqueó la instalación. Revisa el permiso de '
+          'instalar aplicaciones desconocidas.';
+    case 4: // STATUS_FAILURE_CONFLICT
+      return 'No se pudo instalar: ya hay una versión firmada con otra clave. '
+          'Desinstala RegisPro e instala esta actualización.';
+    case 5: // STATUS_FAILURE_INCOMPATIBLE
+      return 'Este paquete no es compatible con el dispositivo.';
+    case 6: // STATUS_FAILURE_INVALID
+      return 'El APK descargado es inválido o está dañado.';
+    case 7: // STATUS_FAILURE_STORAGE
+      return 'No hay espacio suficiente para instalar la actualización.';
+  }
+
+  switch (legacyStatus) {
+    case -7: // INSTALL_FAILED_UPDATE_INCOMPATIBLE
+      return 'No se pudo instalar: la app actual está firmada con otra clave. '
+          'Desinstala RegisPro e instala de nuevo desde esta versión.';
+    case -15: // INSTALL_FAILED_TEST_ONLY
+      return 'No se pudo instalar: la app actual es un build de depuración '
+          '(flutter run). Desinstálala e instala el APK de la Release.';
+    case -25: // INSTALL_FAILED_VERSION_DOWNGRADE
+      return 'No se pudo instalar: el código de versión no es mayor que el '
+          'instalado.';
+    case -103: // INSTALL_PARSE_FAILED_NO_CERTIFICATES
+      return 'El APK no tiene una firma válida.';
+  }
+
+  final detail = message.trim();
+  if (detail.isNotEmpty) {
+    return 'No se instaló la actualización. $detail';
+  }
+  return 'No se instaló la actualización.';
+}
+
+/// Instala un APK descargado con [PackageInstaller] (y OpenFilex de respaldo).
 class ApkInstaller {
   static const installPermissionMessage =
       'Para actualizar RegisPro debes permitir la instalación de aplicaciones. '
@@ -52,7 +99,7 @@ class ApkInstaller {
     return openAppSettings();
   }
 
-  /// Lanza el instalador del sistema sobre [apkFile].
+  /// Instala [apkFile] y espera el resultado del sistema.
   Future<ApkInstallResult> install(File apkFile) async {
     if (kIsWeb || !Platform.isAndroid) {
       return const ApkInstallResult(
@@ -76,6 +123,38 @@ class ApkInstaller {
       );
     }
 
+    try {
+      final raw = await _installChannel.invokeMethod<dynamic>('installApk', {
+        'path': apkFile.path,
+      });
+      if (raw is Map) {
+        final map = Map<String, dynamic>.from(raw);
+        final ok = map['ok'] == true;
+        if (ok) {
+          return const ApkInstallResult(ApkInstallOutcome.launched);
+        }
+        return ApkInstallResult(
+          ApkInstallOutcome.failed,
+          message: mapApkInstallFailure(
+            status: (map['status'] as num?)?.toInt() ?? 1,
+            legacyStatus: (map['legacyStatus'] as num?)?.toInt() ?? 0,
+            message: map['message'] as String? ?? '',
+          ),
+        );
+      }
+    } on MissingPluginException {
+      // Tests / builds sin el channel nativo.
+    } on PlatformException catch (e) {
+      return ApkInstallResult(
+        ApkInstallOutcome.failed,
+        message: e.message ?? 'No se pudo iniciar la instalación.',
+      );
+    }
+
+    return _installWithOpenFilex(apkFile);
+  }
+
+  Future<ApkInstallResult> _installWithOpenFilex(File apkFile) async {
     final result = await OpenFilex.open(
       apkFile.path,
       type: 'application/vnd.android.package-archive',
@@ -87,7 +166,8 @@ class ApkInstaller {
       case ResultType.noAppToOpen:
         return const ApkInstallResult(
           ApkInstallOutcome.failed,
-          message: 'No hay instalador de paquetes disponible en el dispositivo.',
+          message:
+              'No hay instalador de paquetes disponible en el dispositivo.',
         );
       case ResultType.permissionDenied:
         return const ApkInstallResult(

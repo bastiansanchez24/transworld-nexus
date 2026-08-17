@@ -12,7 +12,7 @@
   Owner del repositorio GitHub (default: bastiansanchez24).
 
 .PARAMETER Repo
-  Nombre del repositorio GitHub (default: transworld_project_nexus).
+  Nombre del repositorio GitHub (default: transworld-nexus).
 
 .PARAMETER InstallDir
   Carpeta de destino. Por defecto %LOCALAPPDATA%\RegisPro
@@ -33,7 +33,7 @@
 [CmdletBinding()]
 param(
   [string]$Owner = 'bastiansanchez24',
-  [string]$Repo = 'transworld_project_nexus',
+  [string]$Repo = 'transworld-nexus',
   [string]$InstallDir = '',
   [switch]$DesktopShortcut,
   [switch]$Launch = $true,

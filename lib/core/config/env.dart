@@ -40,7 +40,7 @@ class Env {
 
   /// Nombre del repo GitHub usado como fuente OTA.
   static String get githubRepo =>
-      dotenv.env['GITHUB_REPO'] ?? 'transworld_project_nexus';
+      dotenv.env['GITHUB_REPO'] ?? 'transworld-nexus';
 
   /// Canal de actualizaciones (reservado; v1 solo usa `stable`).
   static String get updateChannel => dotenv.env['UPDATE_CHANNEL'] ?? 'stable';

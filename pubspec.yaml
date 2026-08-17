@@ -80,6 +80,7 @@ dependencies:
   web: ^1.1.1
   file_saver: ^0.4.0
   window_manager: ^0.5.2
+  screen_retriever: ^0.2.2
 
 # Windows: skip upstream native FFI plugin (ATL + MSVC coroutine).
 # Inbox in-app is unaffected; system toasts are Android/iOS only.

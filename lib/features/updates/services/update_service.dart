@@ -112,24 +112,20 @@ class UpdateInstallResult {
 
 const _prefsLastRateLimitMs = 'ota_last_rate_limit_ms';
 const _rateLimitBackoff = Duration(hours: 1);
+
 /// Evita martillar GitHub si el usuario cambia de app muy seguido.
 const _resumeMinInterval = Duration(seconds: 30);
 
 /// Resultado de un check OTA (distingue skip vs al día vs disponible).
 class UpdateCheckOutcome {
-  const UpdateCheckOutcome._({
-    required this.performed,
-    this.info,
-  });
+  const UpdateCheckOutcome._({required this.performed, this.info});
 
-  const UpdateCheckOutcome.skipped()
-      : this._(performed: false);
+  const UpdateCheckOutcome.skipped() : this._(performed: false);
 
-  const UpdateCheckOutcome.upToDate()
-      : this._(performed: true);
+  const UpdateCheckOutcome.upToDate() : this._(performed: true);
 
   const UpdateCheckOutcome.available(AppUpdateInfo info)
-      : this._(performed: true, info: info);
+    : this._(performed: true, info: info);
 
   /// `false` si no se consultó la red (debounce, sesión, backoff, etc.).
   final bool performed;
@@ -146,9 +142,9 @@ class UpdateService {
     ApkDownloader? downloader,
     ApkInstaller? apkInstaller,
     WindowsInstaller? windowsInstaller,
-  })  : _downloader = downloader ?? ApkDownloader(),
-        _apkInstaller = apkInstaller ?? ApkInstaller(),
-        _windowsInstaller = windowsInstaller ?? WindowsInstaller();
+  }) : _downloader = downloader ?? ApkDownloader(),
+       _apkInstaller = apkInstaller ?? ApkInstaller(),
+       _windowsInstaller = windowsInstaller ?? WindowsInstaller();
 
   final UpdateSource _source;
   final SharedPreferences _prefs;
@@ -242,15 +238,27 @@ class UpdateService {
       final forWindows = otaResolvesWindowsAsset;
       final asset = release.resolveNexusAsset(forWindows: forWindows);
       if (asset == null || asset.browserDownloadUrl.isEmpty) {
+        final listed = release.assets
+            .map((a) => a.name)
+            .where((n) => n.isNotEmpty)
+            .join(', ');
         developer.log(
-          'OTA: Release sin asset RegisPro (${forWindows ? 'Windows' : 'Android'}).',
+          'OTA: Release sin asset RegisPro (${forWindows ? 'Windows' : 'Android'}). '
+          'Assets: ${listed.isEmpty ? '(ninguno)' : listed}',
           name: 'UpdateService',
         );
         if (manual) {
+          final tag = stripVersionPrefix(release.tagName);
+          final expected = forWindows
+              ? 'windows-regispro-v$tag.zip'
+              : 'android-regispro-v$tag.apk';
+          final suffix = listed.isEmpty ? '' : ' Archivos publicados: $listed.';
           throw GitHubReleaseException(
             forWindows
-                ? 'La última Release no incluye un paquete Windows de RegisPro.'
-                : 'La última Release no incluye un APK de RegisPro.',
+                ? 'La última Release no incluye un paquete Windows de RegisPro '
+                      '(se esperaba $expected).$suffix'
+                : 'La última Release no incluye un APK de RegisPro '
+                      '(se esperaba $expected).$suffix',
           );
         }
         return const UpdateCheckOutcome.upToDate();
@@ -323,10 +331,7 @@ class UpdateService {
     return ok;
   }
 
-  Future<UpdateInstallResult> install(
-    File file, {
-    AppUpdateInfo? info,
-  }) async {
+  Future<UpdateInstallResult> install(File file, {AppUpdateInfo? info}) async {
     if (Platform.isAndroid) {
       final result = await _apkInstaller.install(file);
       return UpdateInstallResult(
@@ -397,6 +402,5 @@ class UpdateService {
   static bool wouldUpdate({
     required Version installed,
     required Version remote,
-  }) =>
-      isRemoteNewer(installed, remote);
+  }) => isRemoteNewer(installed, remote);
 }

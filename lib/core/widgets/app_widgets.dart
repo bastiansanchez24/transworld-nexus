@@ -41,14 +41,19 @@ class ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 40, color: AppColors.danger),
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 40,
+              color: AppColors.danger,
+            ),
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center),
             if (onRetry != null) ...[
               const SizedBox(height: 16),
               OutlinedButton(
-                  onPressed: onRetry, child: const Text('Reintentar')),
+                onPressed: onRetry,
+                child: const Text('Reintentar'),
+              ),
             ],
           ],
         ),
@@ -77,9 +82,11 @@ class EmptyStateView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 48,
-                color: AppColors.textSecondary.withValues(alpha: 0.5)),
+            Icon(
+              icon,
+              size: 48,
+              color: AppColors.textSecondary.withValues(alpha: 0.5),
+            ),
             const SizedBox(height: 12),
             Text(
               message,
@@ -116,8 +123,7 @@ class AppMenuTile extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: Container(
           width: 48,
           height: 48,
@@ -129,11 +135,15 @@ class AppMenuTile extends StatelessWidget {
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: subtitle != null
-            ? Text(subtitle!,
-                style: const TextStyle(color: AppColors.textSecondary))
+            ? Text(
+                subtitle!,
+                style: const TextStyle(color: AppColors.textSecondary),
+              )
             : null,
-        trailing: const Icon(Icons.chevron_right_rounded,
-            color: AppColors.chevronMuted),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: AppColors.chevronMuted,
+        ),
       ),
     );
   }
@@ -152,6 +162,18 @@ class ButtonProgress extends StatelessWidget {
   }
 }
 
+/// Presente solo bajo [MainShellScaffold], donde la bottom nav está a la vista.
+/// Las rutas push (Actualizaciones, Perfil, etc.) no lo heredan.
+class ShellNavScope extends InheritedWidget {
+  const ShellNavScope({super.key, required super.child});
+
+  static bool visibleOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<ShellNavScope>() != null;
+
+  @override
+  bool updateShouldNotify(ShellNavScope oldWidget) => false;
+}
+
 /// Aviso breve al usuario. Un solo camino para toda la app: el toast del
 /// rediseño ([TwToast]). Antes los errores salían por `SnackBar` y el resto
 /// por otro toast, así que el mismo evento se veía distinto según la pantalla.
@@ -160,13 +182,12 @@ void showAppSnackBar(
   String message, {
   bool isError = false,
 }) {
-  // No se sabe desde aquí si la pantalla lleva la navbar inferior, así que se
-  // despeja siempre: en las que no la tienen el toast queda algo más alto,
-  // que es como se comportaba hasta ahora.
   final bottomOffset =
-      GlassNavTokens.occupiedHeightOf() +
-      GlassNavTokens.deadZone +
-      AppSpacing.sm;
+      ShellNavScope.visibleOf(context) && !GlassNavTokens.usesSideRail
+      ? GlassNavTokens.occupiedHeightOf() +
+            GlassNavTokens.deadZone +
+            AppSpacing.sm
+      : TwToast.kBottom;
 
   if (isError) {
     TwToast.error(context, message, bottomOffset: bottomOffset);

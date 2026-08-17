@@ -10,7 +10,8 @@ import 'app_widgets.dart';
 import 'permissions_bootstrap.dart';
 import 'tw_bottom_nav_bar.dart';
 
-/// Shell con la bottom navbar flotante del rediseño.
+/// Shell con la navegación del rediseño: barra flotante en móvil/web y rail
+/// izquierdo en Windows.
 ///
 /// Un único [PopScope] en el shell (no por rama) evita que el diálogo de
 /// salida deje de aparecer tras cambiar de tab o volver de rutas hijas.
@@ -70,39 +71,83 @@ class MainShellScaffold extends ConsumerWidget {
           SystemNavigator.pop();
         }
       },
-      child: PermissionsBootstrap(
-        child: Scaffold(
-          body: navigationShell,
-          extendBody: true,
-          // Zona muerta: el anillo alrededor del panel absorbe los taps para
-          // que no lleguen al contenido que pasa por debajo (`extendBody`).
-          bottomNavigationBar: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {},
-            child: Material(
-              type: MaterialType.transparency,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  top: GlassNavTokens.deadZone,
-                  left: GlassNavTokens.horizontalMargin,
-                  right: GlassNavTokens.horizontalMargin,
-                  bottom: GlassNavTokens.floatingBottomPadding(context),
-                ),
-                child: TwBottomNavBar(
-                  selectedIndex: selectedIndex,
-                  onItemSelected: (index) {
-                    navigationShell.goBranch(
-                      tabs[index].branch,
-                      initialLocation:
-                          tabs[index].branch == navigationShell.currentIndex,
-                    );
-                  },
-                  items: [
-                    for (final tab in tabs)
-                      TwNavItemData(icon: tab.icon, label: tab.label),
-                  ],
-                ),
-              ),
+      child: ShellNavScope(
+        child: PermissionsBootstrap(
+          child: MainShellNavHost(
+            selectedIndex: selectedIndex,
+            onItemSelected: (index) {
+              navigationShell.goBranch(
+                tabs[index].branch,
+                initialLocation:
+                    tabs[index].branch == navigationShell.currentIndex,
+              );
+            },
+            items: [
+              for (final tab in tabs)
+                TwNavItemData(icon: tab.icon, label: tab.label),
+            ],
+            body: navigationShell,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Coloca el menú abajo (móvil/web) o a la izquierda (Windows).
+class MainShellNavHost extends StatelessWidget {
+  const MainShellNavHost({
+    super.key,
+    required this.body,
+    required this.selectedIndex,
+    required this.onItemSelected,
+    required this.items,
+  });
+
+  final Widget body;
+  final int selectedIndex;
+  final ValueChanged<int> onItemSelected;
+  final List<TwNavItemData> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (GlassNavTokens.usesSideRail) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Row(
+          children: [
+            TwSideNavRail(
+              selectedIndex: selectedIndex,
+              onItemSelected: onItemSelected,
+              items: items,
+            ),
+            Expanded(child: body),
+          ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: body,
+      extendBody: true,
+      // Zona muerta: el anillo alrededor del panel absorbe los taps para
+      // que no lleguen al contenido que pasa por debajo (`extendBody`).
+      bottomNavigationBar: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {},
+        child: Material(
+          type: MaterialType.transparency,
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: GlassNavTokens.deadZone,
+              left: GlassNavTokens.horizontalMargin,
+              right: GlassNavTokens.horizontalMargin,
+              bottom: GlassNavTokens.floatingBottomPadding(context),
+            ),
+            child: TwBottomNavBar(
+              selectedIndex: selectedIndex,
+              onItemSelected: onItemSelected,
+              items: items,
             ),
           ),
         ),

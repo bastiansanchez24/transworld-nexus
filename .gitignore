@@ -73,6 +73,9 @@ windows/flutter/ephemeral/
 .env.*
 !.env.example
 
+# Copias locales de assets OTA (alias android-nexus / windows-nexus).
+/dist/
+
 # Android release signing — nunca versionar keystore ni key.properties.
 android/key.properties
 *.jks

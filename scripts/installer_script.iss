@@ -7,7 +7,7 @@
 #define MyAppPublisher "Transworld"
 #define MyAppExeName "transworld_nexus.exe"
 #define MyRepoOwner "bastiansanchez24"
-#define MyRepoName "transworld_project_nexus"
+#define MyRepoName "transworld-nexus"
 #define MyUninstallKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\{E68BC201-9F31-48C7-9943-41A6673413E0}_is1"
 
 [Setup]

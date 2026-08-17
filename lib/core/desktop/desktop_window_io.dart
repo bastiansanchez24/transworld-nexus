@@ -1,112 +1,59 @@
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_theme.dart';
-import 'windows_title_bar.dart';
-
-/// Se activa solo tras [bootstrapDesktopWindow], para que los tests y
-/// Android/iOS (mismo `dart:io`) no monten chrome ni toquen el plugin.
-var _desktopWindowChromeEnabled = false;
+import 'desktop_window_metrics.dart';
 
 Future<void> bootstrapDesktopWindow() async {
   if (!Platform.isWindows) return;
 
   await windowManager.ensureInitialized();
 
-  const options = WindowOptions(
-    size: Size(1280, 720),
-    minimumSize: Size(900, 600),
+  final sizes = await _resolveWindowSizes();
+
+  final options = WindowOptions(
+    size: sizes.size,
+    minimumSize: sizes.minSize,
     center: true,
-    backgroundColor: AppColors.primaryDeep,
+    backgroundColor: AppColors.background,
     skipTaskbar: false,
     title: 'RegisPro',
-    titleBarStyle: TitleBarStyle.hidden,
-    windowButtonVisibility: false,
+    titleBarStyle: TitleBarStyle.normal,
+    windowButtonVisibility: true,
   );
 
   await windowManager.waitUntilReadyToShow(options);
-
-  _desktopWindowChromeEnabled = true;
 }
 
-/// Barra de título propia encima del navigator. Identidad en toda la app.
+Future<({Size size, Size minSize})> _resolveWindowSizes() async {
+  try {
+    final display = await screenRetriever.getPrimaryDisplay();
+    final work = display.visibleSize ?? display.size;
+    final scale = (display.scaleFactor ?? 1).toDouble();
+    return (
+      size: DesktopWindowMetrics.defaultSizeForWorkArea(work),
+      minSize: DesktopWindowMetrics.minSizeFor(
+        workArea: work,
+        scaleFactor: scale,
+      ),
+    );
+  } catch (_) {
+    return (
+      size: DesktopWindowMetrics.fallbackSize,
+      minSize: DesktopWindowMetrics.minSize,
+    );
+  }
+}
+
+/// El caption es el nativo de Windows. No se pinta otra barra en Flutter.
 class DesktopWindowFrame extends StatelessWidget {
   const DesktopWindowFrame({super.key, required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
-    if (!_desktopWindowChromeEnabled) return child;
-    return Column(
-      children: [
-        const _WindowsTitleBarHost(),
-        Expanded(child: child),
-      ],
-    );
-  }
-}
-
-class _WindowsTitleBarHost extends StatefulWidget {
-  const _WindowsTitleBarHost();
-
-  @override
-  State<_WindowsTitleBarHost> createState() => _WindowsTitleBarHostState();
-}
-
-class _WindowsTitleBarHostState extends State<_WindowsTitleBarHost>
-    with WindowListener {
-  var _maximized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    windowManager.addListener(this);
-    _syncMaximized();
-  }
-
-  @override
-  void dispose() {
-    windowManager.removeListener(this);
-    super.dispose();
-  }
-
-  Future<void> _syncMaximized() async {
-    final maximized = await windowManager.isMaximized();
-    if (!mounted || maximized == _maximized) return;
-    setState(() => _maximized = maximized);
-  }
-
-  Future<void> _toggleMaximize() async {
-    if (await windowManager.isMaximized()) {
-      await windowManager.unmaximize();
-    } else {
-      await windowManager.maximize();
-    }
-  }
-
-  @override
-  void onWindowMaximize() {
-    if (!mounted) return;
-    setState(() => _maximized = true);
-  }
-
-  @override
-  void onWindowUnmaximize() {
-    if (!mounted) return;
-    setState(() => _maximized = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return WindowsTitleBar(
-      isMaximized: _maximized,
-      onMinimize: () => windowManager.minimize(),
-      onToggleMaximize: _toggleMaximize,
-      onClose: () => windowManager.close(),
-      wrapDrag: (child) => DragToMoveArea(child: child),
-    );
-  }
+  Widget build(BuildContext context) => child;
 }
