@@ -5,10 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/tw_tokens.dart';
 import '../theme/browser_theme_color.dart';
 import 'offline_banner.dart';
-import 'pressable.dart';
+import 'tw_components.dart';
 
 /// Plantilla push: header sticky con blur (HANDOFF §4.8).
 class AppScaffold extends StatelessWidget {
@@ -34,11 +34,11 @@ class AppScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BrowserThemeColor(
-      color: AppColors.background,
+      color: TwColors.bg,
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
         child: Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: TwColors.bg,
           floatingActionButton: floatingActionButton,
           body: Column(
             children: [
@@ -73,12 +73,11 @@ class AppScaffold extends StatelessWidget {
   }
 }
 
-/// Chip cuadrado de la cabecera push.
+/// Acción de la cabecera push (atrás, editar, eliminar…).
 ///
-/// Lo usan tanto el botón "atrás" como las acciones de la derecha (eliminar),
-/// para que no queden asimétricos: antes el atrás era un chip con borde y la
-/// acción un `IconButton` desnudo, que además imponía su `minHeight` de 48 y
-/// hacía que la barra midiera distinto según hubiera o no botón eliminar.
+/// Es [TwIconButton] con el nombre que ya usan las pantallas: mismo botón que
+/// los menús de evento y campaña, para que la app no tenga dos estilos de
+/// cabecera conviviendo.
 class NexusHeaderAction extends StatelessWidget {
   const NexusHeaderAction({
     super.key,
@@ -89,9 +88,9 @@ class NexusHeaderAction extends StatelessWidget {
     this.danger = false,
   });
 
-  /// Lado del chip. También es el ancho de los huecos que deja la cabecera
+  /// Lado del botón. También es el ancho de los huecos que deja la cabecera
   /// cuando no hay botón, para que el título siga centrado.
-  static const double size = 40;
+  static const double size = 44;
 
   final IconData icon;
   final VoidCallback? onTap;
@@ -101,38 +100,15 @@ class NexusHeaderAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final habilitado = onTap != null && !loading;
-    final color = !habilitado
-        ? AppColors.textTertiary
-        : (danger ? AppColors.danger : AppColors.ink);
-
-    Widget chip = Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: loading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(icon, size: 18, color: color),
+    return TwIconButton(
+      icon: icon,
+      iconSize: 20,
+      size: size,
+      onTap: onTap,
+      tooltip: tooltip,
+      loading: loading,
+      danger: danger,
     );
-
-    if (habilitado) {
-      chip = Pressable(scale: 0.92, onTap: onTap, child: chip);
-    }
-
-    if (tooltip != null) {
-      chip = Tooltip(message: tooltip!, child: chip);
-    }
-
-    return Semantics(button: true, label: tooltip, child: chip);
   }
 }
 
@@ -152,30 +128,35 @@ class _PushHeader extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Container(
-          padding: EdgeInsets.fromLTRB(12, top + 14, 12, 14),
+          padding: EdgeInsets.fromLTRB(
+            TwSpacing.screenH,
+            top + 14,
+            TwSpacing.screenH,
+            14,
+          ),
           decoration: BoxDecoration(
-            color: AppColors.background.withValues(alpha: 0.92),
+            color: TwColors.bg.withValues(alpha: 0.92),
             border: const Border(
-              bottom: BorderSide(color: AppColors.border, width: 1),
+              bottom: BorderSide(color: TwColors.border07, width: 1),
             ),
           ),
           child: Row(
             children: [
               if (puedeVolver)
                 NexusHeaderAction(
-                  icon: Symbols.arrow_back_ios_new_rounded,
+                  icon: Symbols.arrow_back_rounded,
                   tooltip: 'Volver',
                   onTap: () => context.pop(),
                 )
               else
                 const SizedBox(width: NexusHeaderAction.size),
+              const SizedBox(width: 10),
               Expanded(
                 child: DefaultTextStyle(
-                  style: const TextStyle(
+                  style: TwText.tileTitle.copyWith(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: -0.2,
-                    color: AppColors.ink,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -186,10 +167,16 @@ class _PushHeader extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 10),
               if (actions != null && actions!.isNotEmpty)
                 Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: actions!,
+                  children: [
+                    for (var i = 0; i < actions!.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 10),
+                      actions![i],
+                    ],
+                  ],
                 )
               else
                 const SizedBox(width: NexusHeaderAction.size),

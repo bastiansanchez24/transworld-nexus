@@ -11,7 +11,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../core/widgets/require_permission.dart';
 import '../../../data/models/evento.dart';
@@ -158,9 +157,9 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
 
       if (mounted) {
         if (_esEdicion) {
-          NexusToast.show(context, 'Evento actualizado.');
+          showAppSnackBar(context, 'Evento actualizado.');
         } else {
-          NexusToast.show(context, 'Evento creado correctamente');
+          showAppSnackBar(context, 'Evento creado correctamente');
         }
         context.pop();
       }

@@ -157,7 +157,8 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
       topBanner: const OfflineBanner(),
       alwaysShowActions: true,
       overlayLeading: CollapsingNavButton(
-        icon: Symbols.arrow_back_ios_new_rounded,
+        icon: Symbols.arrow_back_rounded,
+        tooltip: 'Volver',
         onTap: () => context.pop(),
       ),
       pinnedContent: _buildPinnedControls(),
@@ -364,14 +365,30 @@ class _RegistradoTile extends ConsumerWidget {
                   ),
                 ),
               ),
-            IconButton(
-              tooltip: 'Código QR de acreditación',
-              icon: const Icon(
-                Symbols.qr_code_2_rounded,
-                color: AppColors.primary,
+            // Mismo chip que el botón de acreditar de al lado: antes era un
+            // IconButton pelado, con ripple y 48 de alto, y desalineaba la fila.
+            Tooltip(
+              message: 'Código QR de acreditación',
+              child: Pressable(
+                scale: 0.9,
+                onTap: () => _mostrarQr(context, ref),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.tintNavy,
+                    borderRadius: BorderRadius.circular(AppRadius.tile),
+                  ),
+                  child: const Icon(
+                    Symbols.qr_code_2_rounded,
+                    size: 20,
+                    color: AppColors.primary,
+                  ),
+                ),
               ),
-              onPressed: () => _mostrarQr(context, ref),
             ),
+            const SizedBox(width: 8),
             Tooltip(
               message: registrado.acreditado ? 'Acreditado' : 'Acreditar',
               child: Pressable(

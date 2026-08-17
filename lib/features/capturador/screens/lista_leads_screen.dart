@@ -185,7 +185,8 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
       topBanner: const OfflineBanner(),
       alwaysShowActions: true,
       overlayLeading: CollapsingNavButton(
-        icon: Symbols.arrow_back_ios_new_rounded,
+        icon: Symbols.arrow_back_rounded,
+        tooltip: 'Volver',
         onTap: () => context.pop(),
       ),
       pinnedContent: _buildPinnedControls(canViewAllLeads: canViewAllLeads),

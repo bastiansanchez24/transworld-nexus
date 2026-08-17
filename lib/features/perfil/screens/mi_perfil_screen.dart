@@ -9,6 +9,7 @@ import '../../../core/utils/password_policy.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/tw_components.dart';
 import '../../../core/widgets/require_permission.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
@@ -604,14 +605,10 @@ class _DatosUsuarioForm extends StatelessWidget {
               helperText:
                   'Déjalo en blanco para mantener la actual. $kPasswordHelperText',
               helperMaxLines: 3,
-              suffixIcon: IconButton(
-                tooltip: mostrarPassword ? 'Ocultar' : 'Mostrar',
-                onPressed: guardando ? null : onToggleMostrarPassword,
-                icon: Icon(
-                  mostrarPassword
-                      ? Symbols.visibility_off_rounded
-                      : Symbols.visibility_rounded,
-                ),
+              // El mismo ojo que el login, no un IconButton con ripple.
+              suffixIcon: TwPasswordEye(
+                visible: mostrarPassword,
+                onTap: guardando ? null : onToggleMostrarPassword,
               ),
             ),
             // Vacío = no se cambia la contraseña; con contenido, debe ser fuerte.

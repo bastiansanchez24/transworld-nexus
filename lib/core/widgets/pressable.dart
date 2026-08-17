@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import 'tw_components.dart';
 
-/// Escala animada en press (HANDOFF §5 / Pressable).
-class Pressable extends StatefulWidget {
+/// Escala animada en press.
+///
+/// Es [TwPressable] con el nombre que ya usan las pantallas: un solo feedback
+/// táctil en toda la app (0.98 en 90 ms, sin ripple de Material).
+class Pressable extends StatelessWidget {
   const Pressable({
     super.key,
     required this.child,
@@ -20,32 +23,12 @@ class Pressable extends StatefulWidget {
   final bool enabled;
 
   @override
-  State<Pressable> createState() => _PressableState();
-}
-
-class _PressableState extends State<Pressable> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
-    final reduce = AppMotion.reduceMotion(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: widget.enabled && widget.onTap != null
-          ? (_) => setState(() => _pressed = true)
-          : null,
-      onTapUp: widget.enabled && widget.onTap != null
-          ? (_) => setState(() => _pressed = false)
-          : null,
-      onTapCancel: () => setState(() => _pressed = false),
-      onTap: widget.enabled ? widget.onTap : null,
-      onLongPress: widget.enabled ? widget.onLongPress : null,
-      child: AnimatedScale(
-        scale: _pressed && !reduce ? widget.scale : 1,
-        duration: reduce ? Duration.zero : AppMotion.press,
-        curve: AppMotion.ease,
-        child: widget.child,
-      ),
+    return TwPressable(
+      scale: scale,
+      onTap: enabled ? onTap : null,
+      onLongPress: enabled ? onLongPress : null,
+      child: child,
     );
   }
 }

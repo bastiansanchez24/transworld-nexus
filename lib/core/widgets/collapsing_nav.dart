@@ -6,7 +6,8 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/browser_theme_color.dart';
-import 'pressable.dart';
+import '../theme/tw_tokens.dart';
+import 'tw_components.dart';
 
 enum CollapsingNavStyle { standard, home, detail }
 
@@ -19,18 +20,31 @@ class CollapsingNavMetrics {
 
   static const double titleZone = 44;
 
-  /// Aire sobre los botones de la barra. Hace falta en todas las cabeceras:
-  /// en web y en Windows no hay notch ni barra de estado que empuje el
-  /// contenido, así que con [topInset] en 0 el "atrás" quedaba pegado al
-  /// borde superior de la ventana.
-  static const double gapTop = 12;
+  /// Aire sobre (y bajo, si hay acciones) la fila de botones. **El mismo
+  /// valor que [TwDetailBarMetrics.gapVertical]** para que el "atrás" de las
+  /// listas (registrados, leads) quede a la misma altura que el del menú de
+  /// acciones del evento. También hace falta en web y Windows, donde no hay
+  /// notch ni barra de estado que empuje el contenido.
+  static const double gapTop = 14;
+
+  /// Aire bajo los botones cuando la barra muestra acciones (atrás). Igual
+  /// que [gapTop] a propósito: al colapsar el blur ocupa todo el alto y la
+  /// fila tiene que leerse centrada, y el buscador/título no se pegan al chip.
+  static const double gapActionsBottom = 14;
 
   /// Aire bajo los botones en las cabeceras de detalle
   /// ([CollapsingNavStyle.detail]), que van sobre el hero del evento: sin
   /// esto el "atrás" y el lápiz quedan pegados al contenido del hero.
   static const double gapDetail = 12;
 
+  /// Alto de la fila (safe area + aire superior + zona táctil), sin el aire
+  /// inferior de las acciones.
   double get barHeight => topInset + gapTop + titleZone;
+
+  /// Alto real de la overlay: con acciones suma el aire inferior para no
+  /// dejar el título, el buscador y los chips pegados al "atrás".
+  double overlayHeight({required bool conAcciones}) =>
+      conAcciones ? barHeight + gapActionsBottom : barHeight;
 
   double get barWithSearch => barHeight + 56;
 
@@ -44,7 +58,7 @@ class CollapsingNavMetrics {
   /// la barra es el título colapsado, que aparece con el scroll y se superpone
   /// al contenido: reservarle sitio dejaba las listas hundidas media pantalla.
   double contentTop({required bool conAcciones}) =>
-      conAcciones ? barHeight : topInset + gapTop;
+      conAcciones ? overlayHeight(conAcciones: true) : topInset + gapTop;
 
   /// Scroll hasta que el header toca el borde superior (bajo el safe area).
   double collapseStart({required bool conAcciones}) =>
@@ -94,7 +108,11 @@ class CollapsingNavOverlay extends StatelessWidget {
     final metrics = CollapsingNavMetrics(context);
     final isHome = style == CollapsingNavStyle.home;
     final isDetail = style == CollapsingNavStyle.detail;
-    final gapInferior = isDetail ? CollapsingNavMetrics.gapDetail : 0.0;
+    final conAcciones =
+        alwaysShowActions || leading != null || trailing != null;
+    final gapInferior = isDetail
+        ? CollapsingNavMetrics.gapDetail
+        : (conAcciones ? CollapsingNavMetrics.gapActionsBottom : 0.0);
     final height = extendedHeight ?? (metrics.barHeight + gapInferior);
 
     final SystemUiOverlayStyle overlayStyle;
@@ -178,49 +196,46 @@ class CollapsingNavOverlay extends StatelessWidget {
                 ),
               Positioned(
                 top: metrics.topInset + CollapsingNavMetrics.gapTop,
-                left: 0,
-                right: 0,
+                left: TwSpacing.screenH,
+                right: TwSpacing.screenH,
                 height: CollapsingNavMetrics.titleZone,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 44,
-                        height: 44,
-                        child: (showActions && leading != null)
-                            ? Center(child: leading)
-                            : null,
-                      ),
-                      Expanded(
-                        child: Opacity(
-                          opacity: titleOpacity,
-                          child: Transform.translate(
-                            offset: Offset(0, titleTranslateY),
-                            child: Text(
-                              title,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.2,
-                                color: titleColor,
-                              ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: (showActions && leading != null)
+                          ? Center(child: leading)
+                          : null,
+                    ),
+                    Expanded(
+                      child: Opacity(
+                        opacity: titleOpacity,
+                        child: Transform.translate(
+                          offset: Offset(0, titleTranslateY),
+                          child: Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                              color: titleColor,
                             ),
                           ),
                         ),
                       ),
-                      SizedBox(
-                        width: 44,
-                        height: 44,
-                        child: (showActions && trailing != null)
-                            ? Center(child: trailing)
-                            : null,
-                      ),
-                    ],
-                  ),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: (showActions && trailing != null)
+                          ? Center(child: trailing)
+                          : null,
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -231,65 +246,53 @@ class CollapsingNavOverlay extends StatelessWidget {
   }
 }
 
+/// Botón de la barra colapsable. Mismo botón que las cabeceras de detalle:
+/// 44×44 para llenar la zona que le reserva [CollapsingNavOverlay].
 class CollapsingNavButton extends StatelessWidget {
   const CollapsingNavButton({
     super.key,
     required this.icon,
     required this.onTap,
+    this.tooltip,
   });
 
   final IconData icon;
   final VoidCallback onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
-      scale: 0.9,
+    return TwIconButton(
+      icon: icon,
+      iconSize: 20,
       onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Icon(icon, size: 17, color: AppColors.ink),
-      ),
+      tooltip: tooltip,
     );
   }
 }
 
-/// Botón cuadrado al lado del buscador fijado (misma altura y estilo).
+/// Botón cuadrado al lado del buscador fijado. Mismo estilo que el resto de
+/// botones-icono, con el lado del buscador (48) para que calcen en la fila.
 class PinnedSearchActionButton extends StatelessWidget {
   const PinnedSearchActionButton({
     super.key,
     required this.icon,
     required this.onTap,
+    this.tooltip,
   });
 
   final IconData icon;
   final VoidCallback onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
-      scale: 0.9,
+    return TwIconButton(
+      icon: icon,
+      iconSize: 22,
+      size: 48,
       onTap: onTap,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.input),
-          border: Border.all(color: AppColors.border),
-          boxShadow: AppColors.shadowRest,
-        ),
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Icon(icon, size: 22, color: AppColors.ink),
-        ),
-      ),
+      tooltip: tooltip,
     );
   }
 }
@@ -489,7 +492,7 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
       // Ancla justo encima del bloque fijable → extent = alto del título.
       SliverToBoxAdapter(
         child: _PinThresholdAnchor(
-          topSpacer: metrics.barHeight,
+          topSpacer: metrics.overlayHeight(conAcciones: _tieneAccionesFijas),
           onExtent: _onCollapseExtent,
         ),
       ),
@@ -551,7 +554,7 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
     if (widget.onRefresh != null) {
       return RefreshIndicator(
         color: AppColors.primary,
-        edgeOffset: metrics.barHeight,
+        edgeOffset: metrics.overlayHeight(conAcciones: _tieneAccionesFijas),
         onRefresh: widget.onRefresh!,
         child: scrollView,
       );
@@ -564,6 +567,7 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
     final metrics = CollapsingNavMetrics(context);
     final pinnedContent = widget.effectivePinnedContent;
     final hasPinnedContent = pinnedContent != null;
+    final barH = metrics.overlayHeight(conAcciones: _tieneAccionesFijas);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -596,8 +600,8 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
                       builder: (context, scrollY, _) {
                         final overlayH =
                             hasPinnedContent && scrollY >= _collapseExtent
-                            ? metrics.barHeight + widget.pinnedContentHeight
-                            : metrics.barHeight;
+                            ? barH + widget.pinnedContentHeight
+                            : barH;
                         return CollapsingNavOverlay(
                           scrollOffset: scrollY,
                           title: widget.title,
@@ -624,7 +628,7 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
                         // scrollY negativo) acompaña al contenido hacia abajo en
                         // vez de quedarse clavado mientras el resto hace rubber-band.
                         final top =
-                            metrics.barHeight +
+                            barH +
                             (_collapseExtent - scrollY).clamp(
                               0.0,
                               double.infinity,

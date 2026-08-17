@@ -12,7 +12,6 @@ import '../../../core/utils/password_policy.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../eventos/providers/eventos_providers.dart';
@@ -84,7 +83,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
 
   Future<void> _compartir({List<String> eventoNombres = const []}) async {
     if (_emailController.text.trim().isEmpty) {
-      NexusToast.show(context, 'Ingresa un email para compartir.');
+      showAppSnackBar(context, 'Ingresa un email para compartir.');
       return;
     }
     await SharePlus.instance.share(
@@ -96,11 +95,11 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
     setState(() => _intentoGuardar = true);
     if (!_formKey.currentState!.validate()) return;
     if (_rol == null) {
-      NexusToast.show(context, 'Selecciona el tipo de usuario.');
+      showAppSnackBar(context, 'Selecciona el tipo de usuario.');
       return;
     }
     if (_esExterno && _eventoIds.isEmpty) {
-      NexusToast.show(context, 'Selecciona al menos un evento.');
+      showAppSnackBar(context, 'Selecciona al menos un evento.');
       return;
     }
 
@@ -130,7 +129,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
 
       if (mounted) {
         ref.invalidate(usuariosListProvider);
-        NexusToast.show(
+        showAppSnackBar(
           context,
           'Usuario creado. Credenciales enviadas por correo.',
         );

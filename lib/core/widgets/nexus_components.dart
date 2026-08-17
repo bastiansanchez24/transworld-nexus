@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/tw_tokens.dart';
+import 'tw_components.dart';
 import 'pressable.dart';
 
 class AvatarInitials extends StatelessWidget {
@@ -154,21 +156,18 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (bg, fg) = switch (variant) {
-      StatusChipVariant.success => (AppColors.successTint, AppColors.success),
-      StatusChipVariant.warning => (AppColors.warningTint, AppColors.warning),
-      StatusChipVariant.danger => (AppColors.dangerTint, AppColors.danger),
-      StatusChipVariant.navy => (AppColors.primaryDeep, Colors.white),
-      StatusChipVariant.neutral => (AppColors.tintNavy, AppColors.primary),
+      StatusChipVariant.success => (TwColors.greenTint, TwColors.greenInk),
+      StatusChipVariant.warning => (TwColors.amberTint, TwColors.amberInk),
+      StatusChipVariant.danger => (TwColors.dangerTint, TwColors.danger),
+      StatusChipVariant.navy => (TwColors.hero700, Colors.white),
+      StatusChipVariant.neutral => (TwColors.blueTint, TwColors.blueInk),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(color: bg, borderRadius: TwRadii.badge),
       child: Text(
         label,
-        style: TextStyle(
+        style: TwText.tileSubtitle.copyWith(
           fontSize: 10.5,
           fontWeight: FontWeight.w700,
           color: fg,
@@ -203,24 +202,18 @@ class FilterChipBar extends StatelessWidget {
               curve: AppMotion.ease,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                color: selected == opt
-                    ? AppColors.primaryDeep
-                    : AppColors.surface,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
+                color: selected == opt ? TwColors.ink : TwColors.surface,
+                borderRadius: TwRadii.pill,
                 border: Border.all(
-                  color: selected == opt
-                      ? AppColors.primaryDeep
-                      : AppColors.border,
+                  color: selected == opt ? TwColors.ink : TwColors.border10,
                 ),
               ),
               child: Text(
                 opt,
-                style: TextStyle(
+                style: TwText.tileSubtitle.copyWith(
                   fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: selected == opt
-                      ? Colors.white
-                      : AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  color: selected == opt ? Colors.white : TwColors.labelInk,
                 ),
               ),
             ),
@@ -256,29 +249,26 @@ class DateTile extends StatelessWidget {
       width: baseWidth * textScale,
       height: baseHeight * textScale,
       decoration: BoxDecoration(
-        color: muted ? AppColors.background : AppColors.tintNavy,
-        borderRadius: BorderRadius.circular(AppRadius.tile),
+        color: muted ? TwColors.surfaceTint : TwColors.blueTint,
+        borderRadius: TwRadii.iconLg,
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             day,
-            style: TextStyle(
+            style: TwText.kpiValue.copyWith(
               fontSize: hero ? 19 : 18,
-              fontWeight: FontWeight.w800,
-              color: muted ? AppColors.textTertiary : AppColors.primaryDeep,
-              height: 1,
+              color: muted ? TwColors.muted : TwColors.hero700,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             month.replaceAll('.', ''),
-            style: TextStyle(
+            style: TwText.statLabel.copyWith(
               fontSize: hero ? 10 : 9.5,
-              fontWeight: FontWeight.w700,
-              color: muted ? AppColors.textTertiary : AppColors.primary,
               letterSpacing: 0.4,
+              color: muted ? TwColors.muted : TwColors.blueInk,
             ),
           ),
         ],
@@ -287,14 +277,16 @@ class DateTile extends StatelessWidget {
   }
 }
 
+/// Tarjeta de métrica. Es [TwKpiCard], la misma del home y del resumen del
+/// usuario externo.
 class StatCard extends StatelessWidget {
   const StatCard({
     super.key,
     required this.value,
     required this.label,
     required this.icon,
-    this.tint = AppColors.tintNavy,
-    this.iconColor = AppColors.primary,
+    this.tint = TwColors.blueTint,
+    this.iconColor = TwColors.blueInk,
   });
 
   final String value;
@@ -305,47 +297,12 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.shadowRest,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: tint,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(icon, size: 19, color: iconColor, fill: 1),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
+    return TwKpiCard(
+      value: value,
+      label: label,
+      icon: icon,
+      tint: tint,
+      iconColor: iconColor,
     );
   }
 }
@@ -379,18 +336,19 @@ class EventRow extends StatelessWidget {
     final chevron = trailing ??
         const Icon(
           Symbols.chevron_right_rounded,
-          color: AppColors.chevronMuted,
+          size: 22,
+          color: TwColors.chevron,
         );
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: TwColors.surface,
+        borderRadius: TwRadii.tile,
         border: Border.all(
-          color: fijado ? AppColors.primaryLight : AppColors.border,
+          color: fijado ? TwColors.hero700 : TwColors.border07,
           width: fijado ? 1.5 : 1,
         ),
-        boxShadow: AppColors.shadowRest,
+        boxShadow: TwShadows.card,
       ),
       child: Row(
         children: [
@@ -414,7 +372,8 @@ class EventRow extends StatelessWidget {
                                 const Icon(
                                   Symbols.push_pin_rounded,
                                   size: 14,
-                                  color: AppColors.primary,
+                                  fill: 1,
+                                  color: TwColors.hero700,
                                 ),
                                 const SizedBox(width: 6),
                               ],
@@ -423,13 +382,12 @@ class EventRow extends StatelessWidget {
                                   title,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
+                                  style: TwText.tileTitle.copyWith(
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w700,
                                     height: 1.35,
                                     color: finalizado
-                                        ? AppColors.textSecondary
-                                        : AppColors.ink,
+                                        ? TwColors.secondary
+                                        : TwColors.ink,
                                   ),
                                 ),
                               ),
@@ -442,7 +400,7 @@ class EventRow extends StatelessWidget {
                                 const Icon(
                                   Symbols.location_on_rounded,
                                   size: 14,
-                                  color: AppColors.textTertiary,
+                                  color: TwColors.muted,
                                 ),
                                 const SizedBox(width: 4),
                                 Expanded(
@@ -450,9 +408,8 @@ class EventRow extends StatelessWidget {
                                     place,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: TwText.tileSubtitle.copyWith(
                                       fontSize: 12,
-                                      color: AppColors.textSecondary,
                                     ),
                                   ),
                                 ),
@@ -503,40 +460,10 @@ class PrimaryGradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
-      scale: 0.97,
-      onTap: loading ? null : onPressed,
-      enabled: onPressed != null && !loading,
-      child: AbsorbPointer(
-        absorbing: loading || onPressed == null,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            gradient: AppColors.headerGradient,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            boxShadow: AppColors.shadowFab,
-          ),
-          alignment: Alignment.center,
-          child: loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-        ),
-      ),
+    return TwPrimaryButton(
+      label: label,
+      loading: loading,
+      onTap: onPressed,
     );
   }
 }
@@ -555,30 +482,24 @@ class NexusExtendedFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
-      scale: 0.93,
+    return TwPressable(
+      scale: 0.96,
       onTap: onPressed,
       child: Container(
         height: 52,
         padding: const EdgeInsets.symmetric(horizontal: 18),
-        decoration: BoxDecoration(
-          gradient: AppColors.headerGradient,
-          borderRadius: BorderRadius.circular(AppRadius.fab),
-          boxShadow: AppColors.shadowFab,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          gradient: TwGradients.brand,
+          borderRadius: TwRadii.heroBtn,
+          boxShadow: TwShadows.primary,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: Colors.white, size: 22),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+            const SizedBox(width: 9),
+            Text(label, style: TwText.button.copyWith(fontSize: 14)),
           ],
         ),
       ),
@@ -604,21 +525,20 @@ class NexusToggle extends StatelessWidget {
         height: 28,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          color: value ? AppColors.success : AppColors.toggleOff,
+          color: value ? TwColors.greenInk : TwColors.chevron,
           borderRadius: BorderRadius.circular(AppRadius.pill),
         ),
         child: AnimatedAlign(
           duration: AppMotion.toggle,
           curve: AppMotion.ease,
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            width: 22,
-            height: 22,
+          child: const DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: TwColors.surface,
               shape: BoxShape.circle,
-              boxShadow: AppColors.shadowRest,
+              boxShadow: TwShadows.soft,
             ),
+            child: SizedBox(width: 22, height: 22),
           ),
         ),
       ),
@@ -626,6 +546,8 @@ class NexusToggle extends StatelessWidget {
   }
 }
 
+/// Rótulo de sección. Mismo estilo que [TwSectionLabel], pero sin sus
+/// márgenes: las pantallas que lo usan ya ponen su propio espaciado.
 class SectionLabel extends StatelessWidget {
   const SectionLabel(this.text, {super.key});
 
@@ -633,18 +555,11 @@ class SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text.toUpperCase(),
-      style: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 1.2,
-        color: AppColors.textTertiary,
-      ),
-    );
+    return Text(text.toUpperCase(), style: TwText.sectionLabel);
   }
 }
 
+/// Fila de acción. Es [TwActionTile] con el nombre que ya usan las pantallas.
 class NexusActionRow extends StatelessWidget {
   const NexusActionRow({
     super.key,
@@ -661,60 +576,11 @@ class NexusActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
+    return TwActionTile(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.border),
-          boxShadow: AppColors.shadowRest,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.tintNavy,
-                borderRadius: BorderRadius.circular(AppRadius.tile),
-              ),
-              child: Icon(icon, color: AppColors.primary, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const Icon(
-              Symbols.chevron_right_rounded,
-              color: AppColors.chevronMuted,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -741,19 +607,16 @@ class DashedBorderBox extends StatelessWidget {
       onTap: onTap,
       child: CustomPaint(
         painter: circular
-            ? _DashedCirclePainter(color: AppColors.dashedBorder)
-            : _DashedRRectPainter(
-                color: AppColors.dashedBorder,
-                radius: AppRadius.lg,
-              ),
+            ? _DashedCirclePainter(color: TwColors.chevron)
+            : _DashedRRectPainter(color: TwColors.chevron, radius: 17),
         child: Container(
           height: height,
           width: double.infinity,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.tintNavy,
+            color: TwColors.surfaceTint,
             shape: circular ? BoxShape.circle : BoxShape.rectangle,
-            borderRadius: circular ? null : BorderRadius.circular(AppRadius.lg),
+            borderRadius: circular ? null : TwRadii.tile,
           ),
           child: child,
         ),
@@ -864,14 +727,7 @@ class NexusFieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        color: AppColors.textSecondary,
-      ),
-    );
+    return Text(text.toUpperCase(), style: TwText.fieldLabel);
   }
 }
 

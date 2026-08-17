@@ -13,7 +13,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -148,11 +147,11 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
 
   Future<void> _compartir(String nombre) async {
     if (_emailController.text.trim().isEmpty) {
-      NexusToast.show(context, 'No hay correo para compartir.');
+      showAppSnackBar(context, 'No hay correo para compartir.');
       return;
     }
     if (_passwordGenerada == null) {
-      NexusToast.show(
+      showAppSnackBar(
         context,
         'Genera una nueva contraseña para poder compartirla.',
       );
@@ -168,7 +167,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
         ref.read(currentPerfilProvider).valueOrNull?.id == widget.usuarioId ||
         ref.read(authRepositoryProvider).currentUserId == widget.usuarioId;
     if (esCuentaPropia) {
-      NexusToast.show(
+      showAppSnackBar(
         context,
         'No puedes regenerar tu propia contraseña. Usa el menú de cambio de contraseña en tu perfil.',
       );
@@ -188,7 +187,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
           _emailController.text = resultado.email;
         }
       });
-      NexusToast.show(context, 'Nueva contraseña enviada por correo.');
+      showAppSnackBar(context, 'Nueva contraseña enviada por correo.');
     } catch (e) {
       if (mounted) {
         showAppSnackBar(
@@ -206,18 +205,18 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
     setState(() => _intentoGuardar = true);
     if (!_formKey.currentState!.validate()) return;
     if (_rol == AppRole.externo && _rolOriginal != AppRole.externo) {
-      NexusToast.show(
+      showAppSnackBar(
         context,
         'El rol externo solo se asigna al crear el usuario.',
       );
       return;
     }
     if (_rol == AppRole.externo && _eventoIds.isEmpty) {
-      NexusToast.show(context, 'Selecciona al menos un evento.');
+      showAppSnackBar(context, 'Selecciona al menos un evento.');
       return;
     }
     if (_asignaEventos && (!_eventosCargados || _eventosCargaError)) {
-      NexusToast.show(
+      showAppSnackBar(
         context,
         'No se pudieron verificar los eventos autorizados. Intenta nuevamente.',
       );
@@ -228,7 +227,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
         ref.read(currentPerfilProvider).valueOrNull?.id == widget.usuarioId;
 
     if (esCuentaPropia && !_activo) {
-      NexusToast.show(context, 'No puedes desactivar tu propia cuenta.');
+      showAppSnackBar(context, 'No puedes desactivar tu propia cuenta.');
       setState(() => _activo = true);
       return;
     }
@@ -286,7 +285,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
     final esCuentaPropia =
         ref.read(currentPerfilProvider).valueOrNull?.id == widget.usuarioId;
     if (esCuentaPropia) {
-      NexusToast.show(context, 'No puedes eliminar tu propia cuenta.');
+      showAppSnackBar(context, 'No puedes eliminar tu propia cuenta.');
       return;
     }
 

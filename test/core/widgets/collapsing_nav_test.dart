@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:transworld_nexus/core/theme/tw_tokens.dart';
 import 'package:transworld_nexus/core/widgets/collapsing_nav.dart';
+import 'package:transworld_nexus/core/widgets/tw_components.dart';
+import 'package:transworld_nexus/core/widgets/tw_detail_scaffold.dart';
 
 void main() {
   Future<void> montarLista(WidgetTester tester, {required EdgeInsets padding}) {
@@ -49,6 +52,17 @@ void main() {
     );
   });
 
+  testWidgets('el atrás de la lista alinea con el menú de acciones', (
+    tester,
+  ) async {
+    await montarLista(tester, padding: EdgeInsets.zero);
+    await tester.pumpAndSettle();
+
+    final boton = tester.getRect(find.byType(TwIconButton).first);
+    expect(boton.left, TwSpacing.screenH);
+    expect(boton.top, TwDetailBarMetrics.gapVertical);
+  });
+
   testWidgets('el contenido arranca bajo la barra, no debajo del atrás', (
     tester,
   ) async {
@@ -56,15 +70,19 @@ void main() {
     await tester.pumpAndSettle();
 
     final metricas = tester.element(find.byType(CollapsingScrollScaffold));
-    final barHeight = CollapsingNavMetrics(metricas).barHeight;
+    final overlayH = CollapsingNavMetrics(
+      metricas,
+    ).overlayHeight(conAcciones: true);
 
     expect(
-      barHeight,
-      CollapsingNavMetrics.gapTop + CollapsingNavMetrics.titleZone,
+      overlayH,
+      CollapsingNavMetrics.gapTop +
+          CollapsingNavMetrics.titleZone +
+          CollapsingNavMetrics.gapActionsBottom,
     );
     expect(
       tester.getBottomLeft(find.byType(CollapsingNavButton)).dy,
-      lessThanOrEqualTo(barHeight),
+      lessThanOrEqualTo(overlayH),
     );
   });
 

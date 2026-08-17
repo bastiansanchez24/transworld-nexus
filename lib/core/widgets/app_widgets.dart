@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
-import 'nexus_toast.dart';
+import 'tw_toast.dart';
 
 /// Colección pequeña de widgets reutilizables para no repetir boilerplate
 /// de estados de carga / error / vacío en cada pantalla.
@@ -152,23 +152,27 @@ class ButtonProgress extends StatelessWidget {
   }
 }
 
+/// Aviso breve al usuario. Un solo camino para toda la app: el toast del
+/// rediseño ([TwToast]). Antes los errores salían por `SnackBar` y el resto
+/// por otro toast, así que el mismo evento se veía distinto según la pantalla.
 void showAppSnackBar(
   BuildContext context,
   String message, {
   bool isError = false,
 }) {
-  if (!isError) {
-    NexusToast.show(context, message);
-    return;
+  // No se sabe desde aquí si la pantalla lleva la navbar inferior, así que se
+  // despeja siempre: en las que no la tienen el toast queda algo más alto,
+  // que es como se comportaba hasta ahora.
+  final bottomOffset =
+      GlassNavTokens.occupiedHeightOf() +
+      GlassNavTokens.deadZone +
+      AppSpacing.sm;
+
+  if (isError) {
+    TwToast.error(context, message, bottomOffset: bottomOffset);
+  } else {
+    TwToast.success(context, message, bottomOffset: bottomOffset);
   }
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.danger,
-      ),
-    );
 }
 
 Future<bool> confirmDialog(

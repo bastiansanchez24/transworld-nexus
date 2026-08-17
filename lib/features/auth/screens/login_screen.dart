@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/browser_theme_color.dart';
@@ -17,6 +18,7 @@ import '../login_error_message.dart';
 import '../providers/auth_providers.dart';
 
 const _rememberedEmailKey = 'login_remembered_email';
+const _soporteEmail = 'soporte@transworld.cl';
 
 /// Pantalla de login — rediseño §7 de la guía de componentes.
 ///
@@ -248,10 +250,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Widget _supportTile() {
     return TwPressable(
-      onTap: () => TwToast.info(
-        context,
-        'soporte@transworld.cl · +56 2 2422 4000',
-      ),
+      onTap: _escribirASoporte,
       child: const TwCard(
         padding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         child: Row(
@@ -268,10 +267,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 children: [
                   Text('¿Problemas para ingresar?', style: TwText.supportTitle),
                   SizedBox(height: 3),
-                  Text(
-                    'Contactar a soporte Transworld',
-                    style: TwText.supportSub,
-                  ),
+                  Text(_soporteEmail, style: TwText.supportSub),
                 ],
               ),
             ),
@@ -284,6 +280,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
+  }
+
+  /// Abre el cliente de correo con un mensaje nuevo a soporte. El toast solo
+  /// aparece si el dispositivo no tiene con qué abrirlo.
+  Future<void> _escribirASoporte() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _soporteEmail,
+      query: 'subject=${Uri.encodeComponent('Soporte Transworld RegisPro')}',
+    );
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (ok || !mounted) return;
+      TwToast.error(context, 'No se pudo abrir tu correo · $_soporteEmail');
+    } catch (_) {
+      if (!mounted) return;
+      TwToast.error(context, 'No se pudo abrir tu correo · $_soporteEmail');
+    }
   }
 }
 

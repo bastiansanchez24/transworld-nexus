@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../data/offline/pending_photo_store.dart';
 import '../../data/offline/sync_queue_item.dart';
 import '../../data/offline/sync_queue_service.dart';
 import '../theme/app_theme.dart';
+import 'tw_components.dart';
 
 /// Escucha conflictos terminales durante toda la sesión y presenta una sola
 /// alerta por ítem. Los conflictos permanecen en la bandeja hasta descartarse.
@@ -156,10 +158,11 @@ class SyncConflictsTray extends ConsumerWidget {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                 ),
               ),
-              IconButton(
+              TwIconButton(
+                icon: Symbols.close_rounded,
+                iconSize: 20,
                 tooltip: 'Cerrar',
-                onPressed: onClose ?? () => Navigator.maybePop(context),
-                icon: const Icon(Icons.close_rounded),
+                onTap: onClose ?? () => Navigator.maybePop(context),
               ),
             ],
           ),

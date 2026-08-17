@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -11,9 +13,10 @@ class TwNavItemData {
   final String label;
 }
 
-/// Bottom navbar flotante del prototipo: panel blanco sólido de 68 dp,
-/// radio 26 y doble sombra. El ítem activo se marca con un chip 46×30 de
-/// fondo azul tenue, borde navy de 1.5 y el icono en FILL 1.
+/// Bottom navbar flotante del prototipo: panel de 68 dp, radio 26 y doble
+/// sombra, con el mismo blur de las cabeceras colapsables (sigma 18 y velo
+/// al 30%). El ítem activo se marca con un chip 46×30 de fondo azul tenue,
+/// borde navy de 1.5 y el icono en FILL 1.
 ///
 /// La navegación real queda fuera: este widget solo pinta y reporta el índice.
 class TwBottomNavBar extends StatelessWidget {
@@ -27,6 +30,13 @@ class TwBottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
   final List<TwNavItemData> items;
+
+  /// Igual que [CollapsingNavOverlay] / [TwDetailScaffold]: visible sin
+  /// volver a sigma 22 (afectaba el scroll en listas).
+  static const _blurSigma = 18.0;
+
+  /// Tint sobre el blur: el overlay colapsable usa 0.30 de fondo.
+  static const _fillAlpha = 0.30;
 
   /// `0 -2px 30px rgba(16,35,64,.12)` + `0 8px 24px -10px rgba(16,35,64,.2)`.
   static const _shadow = [
@@ -43,31 +53,43 @@ class TwBottomNavBar extends StatelessWidget {
     ),
   ];
 
+  static const _radius = BorderRadius.all(
+    Radius.circular(GlassNavTokens.radius),
+  );
+
   @override
   Widget build(BuildContext context) {
     assert(items.isNotEmpty, 'TwBottomNavBar requiere al menos un ítem');
 
     return RepaintBoundary(
-      child: Container(
-        height: GlassNavTokens.height,
+      child: DecoratedBox(
         decoration: const BoxDecoration(
-          color: TwColors.surface,
-          borderRadius: BorderRadius.all(
-            Radius.circular(GlassNavTokens.radius),
-          ),
+          borderRadius: _radius,
           boxShadow: _shadow,
         ),
-        child: Row(
-          children: [
-            for (var i = 0; i < items.length; i++)
-              Expanded(
-                child: _TwNavItem(
-                  item: items[i],
-                  selected: i == selectedIndex,
-                  onTap: () => onItemSelected(i),
+        child: ClipRRect(
+          borderRadius: _radius,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: _blurSigma, sigmaY: _blurSigma),
+            child: ColoredBox(
+              color: TwColors.surface.withValues(alpha: _fillAlpha),
+              child: SizedBox(
+                height: GlassNavTokens.height,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < items.length; i++)
+                      Expanded(
+                        child: _TwNavItem(
+                          item: items[i],
+                          selected: i == selectedIndex,
+                          onTap: () => onItemSelected(i),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-          ],
+            ),
+          ),
         ),
       ),
     );

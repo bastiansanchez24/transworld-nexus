@@ -6,7 +6,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/nexus_toast.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../usuarios/providers/usuarios_providers.dart';
@@ -64,7 +63,7 @@ class _GestionarAccesoEventoBodyState
       ref.invalidate(usuariosAutorizadosEventoProvider(widget.eventoId));
       ref.invalidate(usuariosListProvider);
       if (!mounted) return;
-      NexusToast.show(context, 'Acceso al evento actualizado.');
+      showAppSnackBar(context, 'Acceso al evento actualizado.');
       context.pop();
     } catch (e) {
       if (!mounted) return;

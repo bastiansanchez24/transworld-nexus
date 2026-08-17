@@ -84,25 +84,51 @@ class TwToast {
     _data.value = null;
   }
 
+  /// El overlay que hospedaba el toast se fue (cambio de árbol, cierre de la
+  /// app, fin de un test). Sin esto el temporizador de auto-cierre quedaba
+  /// vivo apuntando a una entrada muerta.
+  static void _onLayerDisposed() {
+    _timer?.cancel();
+    _timer = null;
+    _entry = null;
+  }
+
   static void _mount(BuildContext context) {
-    if (_entry != null) return;
-    _entry = OverlayEntry(
+    // `mounted` en false = la entrada quedó huérfana de un árbol anterior.
+    if (_entry != null && _entry!.mounted) return;
+    _entry = null;
+    _data.value = null;
+
+    final entry = OverlayEntry(
       builder: (_) => ValueListenableBuilder<_TwToastData?>(
         valueListenable: _data,
         builder: (ctx, data, _) => _TwToastLayer(data: data),
       ),
     );
-    Overlay.of(context, rootOverlay: true).insert(_entry!);
+    _entry = entry;
+    Overlay.of(context, rootOverlay: true).insert(entry);
   }
 }
 
-class _TwToastLayer extends StatelessWidget {
+class _TwToastLayer extends StatefulWidget {
   const _TwToastLayer({required this.data});
 
   final _TwToastData? data;
 
   @override
+  State<_TwToastLayer> createState() => _TwToastLayerState();
+}
+
+class _TwToastLayerState extends State<_TwToastLayer> {
+  @override
+  void dispose() {
+    TwToast._onLayerDisposed();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final data = widget.data;
     final safe = MediaQuery.paddingOf(context).bottom;
     final bottom = (data?.bottomOffset ?? TwToast.kBottom) + safe;
 
@@ -129,7 +155,7 @@ class _TwToastLayer extends StatelessWidget {
           ),
           child: data == null
               ? const SizedBox.shrink(key: ValueKey('tw-toast-empty'))
-              : _TwToastCard(key: ValueKey(data!.seq), data: data!),
+              : _TwToastCard(key: ValueKey(data.seq), data: data),
         ),
       ),
     );

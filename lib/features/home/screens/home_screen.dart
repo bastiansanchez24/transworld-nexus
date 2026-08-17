@@ -366,7 +366,7 @@ class _HomeCollapseBar extends StatelessWidget {
                       outer: ColorFilter.matrix(_saturationMatrix(1.8)),
                     ),
                     child: ColoredBox(
-                      color: Color.fromRGBO(238, 241, 247, 0.72 * opacity),
+                      color: TwColors.bg.withValues(alpha: 0.72 * opacity),
                     ),
                   ),
                 ),

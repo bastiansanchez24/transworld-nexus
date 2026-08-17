@@ -460,7 +460,7 @@ class _ExternoStatsCards extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
             decoration: const BoxDecoration(
-              color: Color(0x1FD14343),
+              color: TwColors.dangerTint,
               borderRadius: TwRadii.field,
             ),
             child: Row(

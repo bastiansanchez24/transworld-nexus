@@ -35,6 +35,65 @@ void main() {
     expect(homeFeaturedSettledInset(1200), (1200 - AppSpacing.contentMax) / 2);
   });
 
+  testWidgets(
+    'métricas y CTA quedan anclados abajo aunque el título ocupe dos líneas',
+    (tester) async {
+      final items = [
+        HomeFeaturedItem(
+          kind: HomeFeaturedKind.eventoFijado,
+          id: 'evento-largo',
+          nombre:
+              'Evento destacado con un nombre suficientemente extenso para dos líneas',
+          fecha: DateTime(2026, 8, 10),
+          lugar: 'Santiago de Chile',
+        ),
+        HomeFeaturedItem(
+          kind: HomeFeaturedKind.eventoFijado,
+          id: 'evento-corto',
+          nombre: 'Expo',
+          fecha: DateTime(2026, 9, 12),
+          lugar: 'Santiago de Chile',
+        ),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 320,
+                child: ProximoEventoCard(items: items),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      double visibleTop(String text) {
+        final viewport = tester.getRect(find.byType(PageView));
+        for (final element in find.text(text).evaluate()) {
+          final rect = tester.getRect(find.byWidget(element.widget));
+          if (viewport.overlaps(rect)) return rect.top;
+        }
+        fail('No hay "$text" visible en el carrusel');
+      }
+
+      final statsLargo = visibleTop('REGISTRADOS');
+      final ctaLargo = visibleTop('Ver evento');
+      final tituloLargo = visibleTop(
+        'Evento destacado con un nombre suficientemente extenso para dos líneas',
+      );
+
+      await tester.tap(find.byKey(const Key('proximo_evento_punto_1')));
+      await tester.pumpAndSettle();
+
+      expect(visibleTop('REGISTRADOS'), statsLargo);
+      expect(visibleTop('Ver evento'), ctaLargo);
+      expect(visibleTop('Expo'), closeTo(tituloLargo, 1));
+    },
+  );
+
   testWidgets('desliza las cards sin cambiar la altura máxima', (tester) async {
     final items = _items;
 

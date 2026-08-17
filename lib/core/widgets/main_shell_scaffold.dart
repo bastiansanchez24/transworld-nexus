@@ -74,27 +74,34 @@ class MainShellScaffold extends ConsumerWidget {
         child: Scaffold(
           body: navigationShell,
           extendBody: true,
-          bottomNavigationBar: Material(
-            type: MaterialType.transparency,
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: GlassNavTokens.horizontalMargin,
-                right: GlassNavTokens.horizontalMargin,
-                bottom: GlassNavTokens.floatingBottomPadding(context),
-              ),
-              child: TwBottomNavBar(
-                selectedIndex: selectedIndex,
-                onItemSelected: (index) {
-                  navigationShell.goBranch(
-                    tabs[index].branch,
-                    initialLocation:
-                        tabs[index].branch == navigationShell.currentIndex,
-                  );
-                },
-                items: [
-                  for (final tab in tabs)
-                    TwNavItemData(icon: tab.icon, label: tab.label),
-                ],
+          // Zona muerta: el anillo alrededor del panel absorbe los taps para
+          // que no lleguen al contenido que pasa por debajo (`extendBody`).
+          bottomNavigationBar: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {},
+            child: Material(
+              type: MaterialType.transparency,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: GlassNavTokens.deadZone,
+                  left: GlassNavTokens.horizontalMargin,
+                  right: GlassNavTokens.horizontalMargin,
+                  bottom: GlassNavTokens.floatingBottomPadding(context),
+                ),
+                child: TwBottomNavBar(
+                  selectedIndex: selectedIndex,
+                  onItemSelected: (index) {
+                    navigationShell.goBranch(
+                      tabs[index].branch,
+                      initialLocation:
+                          tabs[index].branch == navigationShell.currentIndex,
+                    );
+                  },
+                  items: [
+                    for (final tab in tabs)
+                      TwNavItemData(icon: tab.icon, label: tab.label),
+                  ],
+                ),
               ),
             ),
           ),

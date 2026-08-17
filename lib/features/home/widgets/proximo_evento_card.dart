@@ -87,8 +87,9 @@ class _ProximoEventoCardState extends State<ProximoEventoCard> {
 
   double _alturaCard(BuildContext context) {
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6);
-    // 296 dp cubren el caso peor del mock: título de 2 líneas + métricas + los
-    // dos CTA de 48. Lo que sobre lo comprime el FittedBox del slide.
+    // 296 dp cubren el caso peor: título de 2 líneas + métricas + dos CTA de
+    // 48. El aire extra queda entre el título y las métricas, para que los
+    // botones coincidan de una card a otra.
     return 36 + 296 * scale;
   }
 
@@ -108,14 +109,17 @@ class _ProximoEventoCardState extends State<ProximoEventoCard> {
             : MediaQuery.sizeOf(context).width;
         final settledInset = homeFeaturedSettledInset(width);
 
+        final cardHeight = _alturaCard(context);
+
         if (!_esSlider) {
           return Padding(
             padding: EdgeInsets.symmetric(horizontal: settledInset),
-            child: _FeaturedSlide(item: widget.items.first),
+            child: SizedBox(
+              height: cardHeight,
+              child: _FeaturedSlide(item: widget.items.first),
+            ),
           );
         }
-
-        final cardHeight = _alturaCard(context);
 
         return Column(
           children: [
@@ -305,6 +309,8 @@ class _FeaturedSlide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
+      height: double.infinity,
       decoration: BoxDecoration(
         gradient: TwGradients.hero,
         borderRadius: TwRadii.hero,
@@ -312,6 +318,7 @@ class _FeaturedSlide extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
+        fit: StackFit.expand,
         children: [
           if (item.tieneImagen)
             Positioned.fill(
@@ -325,106 +332,96 @@ class _FeaturedSlide extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final content = Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          item.esFijado
-                              ? Symbols.push_pin_rounded
-                              : Symbols.schedule_rounded,
-                          size: 15,
-                          fill: 1,
-                          color: TwColors.whiteA75,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            item.etiqueta,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TwText.homeEyebrow,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 9,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: TwColors.whiteA16,
-                            borderRadius: TwRadii.pill,
-                            border: Border.all(color: TwColors.whiteA16),
-                          ),
-                          child: Text(
-                            formatearDiaMesCorto(item.fecha),
-                            style: TwText.homeDateChip,
-                          ),
-                        ),
-                      ],
+                    Icon(
+                      item.esFijado
+                          ? Symbols.push_pin_rounded
+                          : Symbols.schedule_rounded,
+                      size: 15,
+                      fill: 1,
+                      color: TwColors.whiteA75,
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      item.nombre,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TwText.homeHeroTitle,
-                    ),
-                    if (item.lugar.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(
-                            Symbols.location_on_rounded,
-                            size: 16,
-                            color: TwColors.whiteA66,
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              item.lugar,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TwText.heroMeta,
-                            ),
-                          ),
-                        ],
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        item.etiqueta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TwText.homeEyebrow,
                       ),
-                    ],
-                    _HomeStats(
-                      registrados: '${item.registrados}',
-                      acreditados: item.porcentajeAcreditados,
-                      leads: '${item.leads}',
                     ),
-                    _HeroCta(
-                      label: item.ctaLabel,
-                      filled: true,
-                      onTap: () => context.push(item.routePath),
-                    ),
-                    if (item.qrRoutePath != null) ...[
-                      const SizedBox(height: 10),
-                      _HeroCta(
-                        key: Key('proximo_evento_escanear_qr_${item.id}'),
-                        label: 'Escanear QR',
-                        icon: Symbols.qr_code_scanner_rounded,
-                        filled: false,
-                        onTap: () => context.push(item.qrRoutePath!),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 6,
                       ),
-                    ],
+                      decoration: BoxDecoration(
+                        color: TwColors.whiteA16,
+                        borderRadius: TwRadii.pill,
+                        border: Border.all(color: TwColors.whiteA16),
+                      ),
+                      child: Text(
+                        formatearDiaMesCorto(item.fecha),
+                        style: TwText.homeDateChip,
+                      ),
+                    ),
                   ],
-                );
-                if (!constraints.maxHeight.isFinite) return content;
-                return FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(width: constraints.maxWidth, child: content),
-                );
-              },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  item.nombre,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TwText.homeHeroTitle,
+                ),
+                if (item.lugar.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Symbols.location_on_rounded,
+                        size: 16,
+                        color: TwColors.whiteA66,
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          item.lugar,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TwText.heroMeta,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const Spacer(),
+                _HomeStats(
+                  registrados: '${item.registrados}',
+                  acreditados: item.porcentajeAcreditados,
+                  leads: '${item.leads}',
+                ),
+                _HeroCta(
+                  label: item.ctaLabel,
+                  filled: true,
+                  onTap: () => context.push(item.routePath),
+                ),
+                if (item.qrRoutePath != null) ...[
+                  const SizedBox(height: 10),
+                  _HeroCta(
+                    key: Key('proximo_evento_escanear_qr_${item.id}'),
+                    label: 'Escanear QR',
+                    icon: Symbols.qr_code_scanner_rounded,
+                    filled: false,
+                    onTap: () => context.push(item.qrRoutePath!),
+                  ),
+                ],
+              ],
             ),
           ),
         ],

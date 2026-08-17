@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transworld_nexus/core/network/connectivity_service.dart';
-import 'package:transworld_nexus/core/theme/app_theme.dart';
+import 'package:transworld_nexus/core/theme/tw_tokens.dart';
 import 'package:transworld_nexus/core/widgets/app_scaffold.dart';
 import 'package:transworld_nexus/data/offline/sync_queue_service.dart';
 
@@ -125,7 +125,7 @@ void main() {
     final icono = tester.widget<Icon>(
       find.byIcon(Symbols.delete_outline_rounded),
     );
-    expect(icono.color, AppColors.textTertiary);
+    expect(icono.color, TwColors.muted);
   });
 
   testWidgets('una acción activa usa el color de peligro', (tester) async {
@@ -143,7 +143,7 @@ void main() {
     final icono = tester.widget<Icon>(
       find.byIcon(Symbols.delete_outline_rounded),
     );
-    expect(icono.color, AppColors.danger);
+    expect(icono.color, TwColors.danger);
   });
 
   testWidgets('en estado loading muestra el spinner en lugar del icono',

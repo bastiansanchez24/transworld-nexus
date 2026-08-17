@@ -15,7 +15,15 @@ class TwColors {
   TwColors._();
 
   // ---------- Superficies ----------
-  static const bg = Color(0xFFEEF1F7); // fondo de TODA pantalla rediseñada
+
+  /// Fondo de TODA pantalla rediseñada.
+  ///
+  /// La guía especifica `#EEF1F7`, pero se mantiene el `#F2F5F9` histórico
+  /// (= `AppColors.background`, el que siguen usando las listas de eventos y
+  /// campañas): en la PWA de iOS la barra de herramientas del navegador tiene
+  /// un color fijo y el contenedor de la app lo iguala para que no se vea la
+  /// separación. Cambiar este valor rompe ese calce.
+  static const bg = Color(0xFFF2F5F9);
   static const surface = Color(0xFFFFFFFF); // tarjetas y tiles
   static const surfaceTint = Color(0xFFEEF2F9); // caja de icono neutro
   static const fieldBg = Color(0xFFF4F6FA); // fondo de input
@@ -72,6 +80,7 @@ class TwColors {
 
   // ---------- Estado ----------
   static const danger = Color(0xFFD14343); // error de formulario
+  static const dangerTint = Color(0xFFFBEAEA); // fondo de aviso de error
   static const statusActive = Color(0xFF7CE0B0);
   static const statusActiveBg = Color(0x1F7CE0B0); // 12%
   static const statusActiveBd = Color(0x477CE0B0); // 28%

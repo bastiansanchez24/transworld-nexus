@@ -35,31 +35,59 @@ class TwSectionLabel extends StatelessWidget {
 enum TwIconButtonStyle { plain, brand }
 
 /// Botón-icono de cabecera: 44×44, radio 14.
+///
+/// Es el único botón de acción de las cabeceras (atrás, editar, compartir,
+/// eliminar). Admite estado deshabilitado (`onTap` nulo), de carga y
+/// destructivo, para que ninguna pantalla tenga que dibujarse el suyo.
 class TwIconButton extends StatelessWidget {
   const TwIconButton({
     super.key,
     required this.icon,
     required this.onTap,
     this.iconSize = 22,
+    this.size = 44,
     this.variant = TwIconButtonStyle.plain,
     this.tooltip,
+    this.danger = false,
+    this.loading = false,
   });
 
   final IconData icon;
   final VoidCallback? onTap;
   final double iconSize;
+
+  /// Lado del botón. 44 salvo cuando tiene que calzar con otro control (el
+  /// buscador fijado de las listas mide 48).
+  final double size;
+
   final TwIconButtonStyle variant;
   final String? tooltip;
+
+  /// Acción destructiva: tiñe el icono de rojo.
+  final bool danger;
+
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     final isBrand = variant == TwIconButtonStyle.brand;
-    final boton = GestureDetector(
+    final habilitado = onTap != null && !loading;
+
+    final Color fg;
+    if (isBrand) {
+      fg = Colors.white;
+    } else if (!habilitado) {
+      fg = TwColors.muted;
+    } else {
+      fg = danger ? TwColors.danger : TwColors.inkSoft;
+    }
+
+    Widget boton = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+      onTap: habilitado ? onTap : null,
       child: Container(
-        width: 44,
-        height: 44,
+        width: size,
+        height: size,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isBrand ? null : TwColors.surface,
@@ -68,15 +96,23 @@ class TwIconButton extends StatelessWidget {
           border: isBrand ? null : Border.all(color: TwColors.border08),
           boxShadow: isBrand ? TwShadows.brandButton : TwShadows.soft,
         ),
-        child: Icon(
-          icon,
-          size: iconSize,
-          color: isBrand ? Colors.white : TwColors.inkSoft,
-        ),
+        child: loading
+            ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: isBrand ? Colors.white : TwColors.brand700,
+                ),
+              )
+            : Icon(icon, size: iconSize, color: fg),
       ),
     );
-    if (tooltip == null) return boton;
-    return Tooltip(message: tooltip!, child: boton);
+
+    if (tooltip != null) {
+      boton = Tooltip(message: tooltip!, child: boton);
+    }
+    return Semantics(button: true, label: tooltip, child: boton);
   }
 }
 
@@ -434,7 +470,9 @@ class TwPasswordEye extends StatelessWidget {
   const TwPasswordEye({super.key, required this.visible, required this.onTap});
 
   final bool visible;
-  final VoidCallback onTap;
+
+  /// `null` lo deja atenuado y sin respuesta (p. ej. mientras se guarda).
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -454,7 +492,7 @@ class TwPasswordEye extends StatelessWidget {
                   ? Symbols.visibility_off_rounded
                   : Symbols.visibility_rounded,
               size: 21,
-              color: TwColors.iconEye,
+              color: onTap == null ? TwColors.chevron : TwColors.iconEye,
             ),
           ),
         ),
