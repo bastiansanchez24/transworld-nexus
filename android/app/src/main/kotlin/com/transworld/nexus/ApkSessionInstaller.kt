@@ -23,6 +23,10 @@ object ApkSessionInstaller {
     const val CHANNEL = "com.transworld.nexus/apk_installer"
     const val ACTION_INSTALL_STATUS = "com.transworld.nexus.INSTALL_STATUS"
 
+    // PackageInstaller.EXTRA_LEGACY_STATUS is @hide/@SystemApi and is stripped
+    // from android.jar, so the public SDK cannot resolve the constant.
+    private const val EXTRA_LEGACY_STATUS = "android.content.pm.extra.LEGACY_STATUS"
+
     @Volatile
     private var pendingResult: MethodChannel.Result? = null
 
@@ -147,7 +151,7 @@ object ApkSessionInstaller {
             else -> complete(
                 ok = false,
                 status = status,
-                legacyStatus = intent.getIntExtra(PackageInstaller.EXTRA_LEGACY_STATUS, 0),
+                legacyStatus = intent.getIntExtra(EXTRA_LEGACY_STATUS, 0),
                 message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE),
             )
         }
