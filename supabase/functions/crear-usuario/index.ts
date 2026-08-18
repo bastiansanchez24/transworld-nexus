@@ -176,6 +176,8 @@ Deno.serve(async (req) => {
         nombre: nombreCompleto,
         email,
         password,
+        rol,
+        motivo: "cuenta_nueva",
       });
     } catch (mailErr) {
       await adminClient.auth.admin.deleteUser(userId);

@@ -34,8 +34,8 @@ Deno.serve(async (req) => {
       return json({ error: "Falta user_id" }, 400);
     }
 
-    const { data: userData, error: userError } =
-      await adminClient.auth.admin.getUserById(userId);
+    const { data: userData, error: userError } = await adminClient.auth.admin
+      .getUserById(userId);
     if (userError || !userData.user?.email) {
       return json({ error: "Usuario no encontrado" }, 404);
     }
@@ -43,12 +43,11 @@ Deno.serve(async (req) => {
     const email = userData.user.email.toLowerCase();
     const { data: perfil } = await adminClient
       .from("perfiles")
-      .select("nombre_completo")
+      .select("nombre_completo, rol")
       .eq("id", userId)
       .maybeSingle();
 
-    const nombre =
-      (perfil?.nombre_completo as string | undefined)?.trim() ||
+    const nombre = (perfil?.nombre_completo as string | undefined)?.trim() ||
       (userData.user.user_metadata?.nombre_completo as string | undefined) ||
       email.split("@")[0] ||
       "usuario";
@@ -76,6 +75,8 @@ Deno.serve(async (req) => {
       nombre,
       email,
       password,
+      rol: perfil?.rol as string | undefined,
+      motivo: "password_restablecida",
     });
 
     return json({

@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
 
     const { data: perfil } = await adminClient
       .from("perfiles")
-      .select("nombre_completo, activo")
+      .select("nombre_completo, rol, activo")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -46,8 +46,7 @@ Deno.serve(async (req) => {
       return genericOk();
     }
 
-    const nombre =
-      (perfil?.nombre_completo as string | undefined)?.trim() ||
+    const nombre = (perfil?.nombre_completo as string | undefined)?.trim() ||
       (user.user_metadata?.nombre_completo as string | undefined) ||
       email.split("@")[0] ||
       "usuario";
@@ -74,6 +73,8 @@ Deno.serve(async (req) => {
         nombre,
         email,
         password,
+        rol: perfil?.rol as string | undefined,
+        motivo: "password_restablecida",
       });
     } catch (mailErr) {
       console.error("reset-password email", mailErr);
