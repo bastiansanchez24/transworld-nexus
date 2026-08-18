@@ -36,12 +36,15 @@ void main() {
     try {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       expect(GlassNavTokens.usesSideRail, isFalse);
+      expect(GlassNavTokens.usesNativeIosTabBar, isFalse);
 
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       expect(GlassNavTokens.usesSideRail, isFalse);
+      expect(GlassNavTokens.usesNativeIosTabBar, isTrue);
 
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
       expect(GlassNavTokens.usesSideRail, isTrue);
+      expect(GlassNavTokens.usesNativeIosTabBar, isFalse);
     } finally {
       debugDefaultTargetPlatformOverride = previous;
     }
@@ -89,6 +92,41 @@ void main() {
       expect(
         AppSpacing.shellFabBottomOf(),
         GlassNavTokens.occupiedHeightOf() + AppSpacing.sm,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = previous;
+    }
+  });
+
+  testWidgets('contentBottomInset reserva el UITabBar nativo en iOS', (
+    tester,
+  ) async {
+    final previous = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await tester.pumpWidget(
+        const MediaQuery(
+          data: MediaQueryData(
+            size: Size(390, 844),
+            viewPadding: EdgeInsets.only(bottom: 34),
+          ),
+          child: SizedBox(),
+        ),
+      );
+      final context = tester.element(find.byType(SizedBox));
+      // La barra nativa va pegada al borde y ya cubre el home indicator, así
+      // que el safe area no se suma otra vez.
+      expect(
+        GlassNavTokens.contentBottomInset(context),
+        GlassNavTokens.nativeIosOccupied + AppSpacing.xl,
+      );
+      expect(
+        AppSpacing.shellFabBottomOf(),
+        GlassNavTokens.nativeIosOccupied + AppSpacing.sm,
+      );
+      expect(
+        GlassNavTokens.shellToastLift(),
+        GlassNavTokens.nativeIosHeight + AppSpacing.sm,
       );
     } finally {
       debugDefaultTargetPlatformOverride = previous;

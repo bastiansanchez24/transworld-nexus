@@ -184,9 +184,7 @@ void showAppSnackBar(
 }) {
   final bottomOffset =
       ShellNavScope.visibleOf(context) && !GlassNavTokens.usesSideRail
-      ? GlassNavTokens.occupiedHeightOf() +
-            GlassNavTokens.deadZone +
-            AppSpacing.sm
+      ? GlassNavTokens.shellToastLift()
       : TwToast.kBottom;
 
   if (isError) {

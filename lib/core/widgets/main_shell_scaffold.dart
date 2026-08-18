@@ -7,11 +7,12 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../features/auth/providers/auth_providers.dart';
 import '../theme/app_theme.dart';
 import 'app_widgets.dart';
+import 'ios_native_tab_bar.dart';
 import 'permissions_bootstrap.dart';
 import 'tw_bottom_nav_bar.dart';
 
-/// Shell con la navegación del rediseño: barra flotante en móvil/web y rail
-/// izquierdo en Windows.
+/// Shell con la navegación del rediseño: `UITabBar` nativo en iOS, barra
+/// flotante en Android/web y rail izquierdo en Windows.
 ///
 /// Un único [PopScope] en el shell (no por rama) evita que el diálogo de
 /// salida deje de aparecer tras cambiar de tab o volver de rutas hijas.
@@ -35,22 +36,34 @@ class MainShellScaffold extends ConsumerWidget {
         icon: Symbols.home_rounded,
         label: 'Inicio',
         branch: _branchInicio,
+        sfSymbol: 'house',
+        sfSymbolActive: 'house.fill',
       ),
       const _TabItem(
         icon: Symbols.calendar_month_rounded,
         label: 'Eventos',
         branch: _branchEventos,
+        sfSymbol: 'calendar',
+        sfSymbolActive: 'calendar.fill',
       ),
+      // SF Symbols de proporción cuadrada a propósito: `UITabBar` mide cada
+      // ítem por su icono, así que los símbolos anchos (`person.3`,
+      // `person.crop.circle.badge.magnifyingglass`) estiraban su celda y
+      // dejaban la fila descompensada.
       const _TabItem(
         icon: Symbols.person_search_rounded,
         label: 'Leads',
         branch: _branchCapturador,
+        sfSymbol: 'person.crop.circle',
+        sfSymbolActive: 'person.crop.circle.fill',
       ),
       if (puedeGestionarUsuarios)
         const _TabItem(
           icon: Symbols.group_rounded,
           label: 'Usuarios',
           branch: _branchUsuarios,
+          sfSymbol: 'person.2',
+          sfSymbolActive: 'person.2.fill',
         ),
     ];
 
@@ -84,7 +97,12 @@ class MainShellScaffold extends ConsumerWidget {
             },
             items: [
               for (final tab in tabs)
-                TwNavItemData(icon: tab.icon, label: tab.label),
+                TwNavItemData(
+                  icon: tab.icon,
+                  label: tab.label,
+                  sfSymbol: tab.sfSymbol,
+                  sfSymbolActive: tab.sfSymbolActive,
+                ),
             ],
             body: navigationShell,
           ),
@@ -94,7 +112,7 @@ class MainShellScaffold extends ConsumerWidget {
   }
 }
 
-/// Coloca el menú abajo (móvil/web) o a la izquierda (Windows).
+/// Coloca el menú abajo (iOS nativo / Android / web) o a la izquierda (Windows).
 class MainShellNavHost extends StatelessWidget {
   const MainShellNavHost({
     super.key,
@@ -123,6 +141,19 @@ class MainShellNavHost extends StatelessWidget {
             ),
             Expanded(child: body),
           ],
+        ),
+      );
+    }
+
+    if (GlassNavTokens.usesNativeIosTabBar) {
+      return Scaffold(
+        body: body,
+        extendBody: true,
+        bottomNavigationBar: IosNativeTabBar(
+          currentIndex: selectedIndex,
+          onTap: onItemSelected,
+          items: items,
+          tint: AppColors.primary,
         ),
       );
     }
@@ -161,9 +192,13 @@ class _TabItem {
     required this.icon,
     required this.label,
     required this.branch,
+    required this.sfSymbol,
+    this.sfSymbolActive,
   });
 
   final IconData icon;
   final String label;
   final int branch;
+  final String sfSymbol;
+  final String? sfSymbolActive;
 }

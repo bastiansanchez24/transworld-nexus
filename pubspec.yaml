@@ -81,6 +81,8 @@ dependencies:
   file_saver: ^0.4.0
   window_manager: ^0.5.2
   screen_retriever: ^0.2.2
+  # UITabBar nativo con Liquid Glass en iOS 26. Android/web/Windows no lo usan.
+  cupertino_native_better: ^1.5.4
 
 # Windows: skip upstream native FFI plugin (ATL + MSVC coroutine).
 # Inbox in-app is unaffected; system toasts are Android/iOS only.

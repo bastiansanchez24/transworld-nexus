@@ -88,14 +88,30 @@ class AppColors {
   ];
 }
 
-/// Métricas de la navegación del shell ([TwBottomNavBar] / [TwSideNavRail]).
+/// Métricas de la navegación del shell ([TwBottomNavBar] / [TwSideNavRail] /
+/// tab bar nativa iOS).
 ///
-/// En móvil y web el panel es un vidrio flotante de 68 dp. En Windows el menú
-/// pasa a un rail izquierdo del color del contenedor, sin tapar el contenido.
+/// En Android y web el panel es un vidrio flotante de 68 dp. En iOS nativo
+/// (no PWA) es un `UITabBar` de ~49 dp. En Windows el menú pasa a un rail
+/// izquierdo del color del contenedor, sin tapar el contenido.
 /// Aquí viven las medidas que otras pantallas usan para reservar espacio.
 abstract final class GlassNavTokens {
   static const height = 68.0;
   static const radius = 26.0;
+
+  /// Alto visual del `UITabBar` nativo, sin home indicator.
+  static const nativeIosHeight = 49.0;
+
+  /// Aire que el plugin reserva sobre la barra para la píldora de selección
+  /// de iOS 26 (se anima hasta ~14 pt por encima del borde superior).
+  static const nativeIosPillRoom = 14.0;
+
+  /// Alto real que ocupa el platform view de la tab bar nativa.
+  static const nativeIosOccupied = nativeIosHeight + nativeIosPillRoom;
+
+  /// Lado del SF Symbol. Por debajo del defecto de UIKit (25): con 25 los
+  /// iconos se veían desproporcionados frente al resto de la app.
+  static const nativeIosIconSize = 20.0;
 
   /// Ancho del rail de escritorio (icono + etiqueta, como Discord / WhatsApp).
   static const sideRailWidth = 96.0;
@@ -143,12 +159,26 @@ abstract final class GlassNavTokens {
   static bool get usesSideRail =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
+  /// iPhone/iPad nativo: `UITabBar` Liquid Glass. Safari/PWA sigue con el
+  /// panel Flutter — no hay UIKit.
+  static bool get usesNativeIosTabBar =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
   /// Espacio al final del contenido para que no quede bajo la barra flotante
-  /// ni bajo su zona muerta. En Windows el rail no cubre el cuerpo.
+  /// ni bajo su zona muerta. En Windows el rail no cubre el cuerpo. En iOS
+  /// nativo la barra va pegada al borde y ya cubre el home indicator, así que
+  /// el safe area no se suma aparte.
   static double contentBottomInset(BuildContext context) {
     final safeBottom = MediaQuery.viewPaddingOf(context).bottom + AppSpacing.xl;
     if (usesSideRail) return safeBottom;
+    if (usesNativeIosTabBar) return nativeIosOccupied + AppSpacing.xl;
     return occupiedHeightOf() + deadZone + safeBottom;
+  }
+
+  /// Holgura extra de toasts cuando el shell muestra barra inferior.
+  static double shellToastLift() {
+    if (usesNativeIosTabBar) return nativeIosHeight + AppSpacing.sm;
+    return occupiedHeightOf() + deadZone + AppSpacing.sm;
   }
 
   static double floatingBottomPadding(BuildContext context) =>
@@ -188,8 +218,13 @@ class AppSpacing {
   /// El Scaffold interno no ve el [bottomNavigationBar] del padre.
   static const shellFabBottom = GlassNavTokens.occupiedHeight + sm;
 
-  static double shellFabBottomOf() =>
-      GlassNavTokens.usesSideRail ? sm : GlassNavTokens.occupiedHeightOf() + sm;
+  static double shellFabBottomOf() {
+    if (GlassNavTokens.usesSideRail) return sm;
+    if (GlassNavTokens.usesNativeIosTabBar) {
+      return GlassNavTokens.nativeIosOccupied + sm;
+    }
+    return GlassNavTokens.occupiedHeightOf() + sm;
+  }
 }
 
 class AppRadius {

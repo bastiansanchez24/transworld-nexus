@@ -164,4 +164,44 @@ void main() {
       debugDefaultTargetPlatformOverride = previous;
     }
   });
+
+  testWidgets('el toast en iOS deja holgura sobre el UITabBar nativo', (
+    tester,
+  ) async {
+    final previous = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ShellNavScope(
+            child: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () =>
+                      showAppSnackBar(context, 'Evento creado correctamente'),
+                  child: const Text('Mostrar'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Mostrar'));
+      await tester.pump();
+
+      final toast = find.text('Evento creado correctamente');
+      expect(toast, findsOneWidget);
+      final positioned = tester.widget<Positioned>(
+        find.ancestor(of: toast, matching: find.byType(Positioned)).first,
+      );
+      final safe = MediaQuery.paddingOf(tester.element(toast)).bottom;
+      expect(
+        positioned.bottom,
+        GlassNavTokens.nativeIosHeight + AppSpacing.sm + safe,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = previous;
+    }
+  });
 }

@@ -43,6 +43,7 @@ import 'page_transitions.dart';
 import 'route_paths.dart';
 import 'session_boot_route.dart';
 import 'user_event_route_policy.dart';
+import '../widgets/ios_native_tab_bar.dart';
 import '../widgets/main_shell_scaffold.dart';
 
 /// Rutas que no requieren sesión iniciada.
@@ -98,6 +99,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: (showAnimatedSplash || authClient.currentSession != null)
         ? RoutePaths.splash
         : RoutePaths.login,
+    observers: [CNTabBarRouteObserver()],
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final location = state.matchedLocation;

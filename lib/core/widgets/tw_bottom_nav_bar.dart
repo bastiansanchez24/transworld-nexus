@@ -7,10 +7,21 @@ import '../theme/tw_tokens.dart';
 import 'pressable.dart';
 
 class TwNavItemData {
-  const TwNavItemData({required this.icon, required this.label});
+  const TwNavItemData({
+    required this.icon,
+    required this.label,
+    required this.sfSymbol,
+    this.sfSymbolActive,
+  });
 
   final IconData icon;
   final String label;
+
+  /// Nombre SF Symbol para la tab bar nativa de iOS (p. ej. `house`).
+  final String sfSymbol;
+
+  /// Variante rellena del SF Symbol; si falta se usa [sfSymbol].
+  final String? sfSymbolActive;
 }
 
 /// Bottom navbar flotante del prototipo: panel de 68 dp, radio 26 y doble
