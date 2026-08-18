@@ -46,7 +46,7 @@ function base64UrlEncode(data: Uint8Array | string): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-async function importPrivateKey(pem: string): Promise<CryptoKey> {
+function importPrivateKey(pem: string): Promise<CryptoKey> {
   const cleaned = pem
     .replace(/-----BEGIN PRIVATE KEY-----/, "")
     .replace(/-----END PRIVATE KEY-----/, "")

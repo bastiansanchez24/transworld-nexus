@@ -1,4 +1,8 @@
-import { createClient, type SupabaseClient, type User } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import {
+  createClient,
+  type SupabaseClient,
+  type User,
+} from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { json } from "./cors.ts";
 
 export type CallerAuthOk = {

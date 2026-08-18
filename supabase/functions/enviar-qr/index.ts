@@ -4,20 +4,24 @@ import { enviarCorreoBrevo, remitenteContacto } from "../_shared/brevo.ts";
 
 // --- 1. CABECERAS CORS (Obligatorias para llamar desde React) ---
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+// Ambas las inyecta el runtime de Supabase; mismo criterio que el resto de
+// las funciones (crear-usuario, reset-password, ...).
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-const PIE_DE_FIRMA_URL = "https://evjocwzmlsyjixzihxep.supabase.co/storage/v1/object/public/imagenes/PIE-DE-FIRMA.png"; 
+const PIE_DE_FIRMA_URL =
+  "https://evjocwzmlsyjixzihxep.supabase.co/storage/v1/object/public/imagenes/PIE-DE-FIRMA.png";
 
 serve(async (req) => {
   // --- 2. MANEJO DE PREFLIGHT (CORS) ---
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
@@ -25,9 +29,9 @@ serve(async (req) => {
     const registro = payload.record;
 
     if (!registro || !registro.email) {
-      return new Response("Sin email destinatario", { 
-        status: 200, 
-        headers: corsHeaders 
+      return new Response("Sin email destinatario", {
+        status: 200,
+        headers: corsHeaders,
       });
     }
 
@@ -45,60 +49,73 @@ serve(async (req) => {
     // 3. Obtener el nombre del usuario de la App que hizo el registro
     let nombreRegistrador = "nuestro equipo";
     if (registro.ingresado_por) {
-        const { data: perfil } = await supabase
-            .from("perfiles")
-            .select("nombre_completo")
-            .eq("id", registro.ingresado_por)
-            .single();
-            
-        if (perfil?.nombre_completo) {
-            nombreRegistrador = perfil.nombre_completo;
-        }
+      const { data: perfil } = await supabase
+        .from("perfiles")
+        .select("nombre_completo")
+        .eq("id", registro.ingresado_por)
+        .single();
+
+      if (perfil?.nombre_completo) {
+        nombreRegistrador = perfil.nombre_completo;
+      }
     }
-    
-    // 4. Formatear la fecha 
+
+    // 4. Formatear la fecha
     let fechaTexto = evento?.fecha || "[Fecha]";
     let anio = "2026", mes = "01", dia = "01";
-    
-    if (evento?.fecha && evento.fecha.includes('-')) {
-        [anio, mes, dia] = evento.fecha.split('-');
-        fechaTexto = `${dia}-${mes}-${anio}`;
+
+    if (evento?.fecha && evento.fecha.includes("-")) {
+      [anio, mes, dia] = evento.fecha.split("-");
+      fechaTexto = `${dia}-${mes}-${anio}`;
     }
 
     // Calcular el día siguiente para el calendario
     const fechaObj = new Date(parseInt(anio), parseInt(mes) - 1, parseInt(dia));
     fechaObj.setDate(fechaObj.getDate() + 1);
     const anioFin = fechaObj.getFullYear();
-    const mesFin = String(fechaObj.getMonth() + 1).padStart(2, '0');
-    const diaFin = String(fechaObj.getDate()).padStart(2, '0');
+    const mesFin = String(fechaObj.getMonth() + 1).padStart(2, "0");
+    const diaFin = String(fechaObj.getDate()).padStart(2, "0");
 
     const lugarEvento = evento?.lugar || "Lugar del evento";
     const direccionEvento = evento?.direccion || "nuestras dependencias";
-    
+
     // --- ENLACES PARA BOTONES DE CALENDARIO ---
     const ubicacion = `${direccionEvento}, ${lugarEvento}`;
     let desc = "";
-    
+
     if (evento?.tipo_registro === "cliente") {
-        desc = "Recuerda presentar tu código QR enviado al correo para la acreditación.";
+      desc =
+        "Recuerda presentar tu código QR enviado al correo para la acreditación.";
     } else {
-        desc = `Te esperamos en ${nombreEvento}. Contacto: contacto@transworld.cl`;
+      desc =
+        `Te esperamos en ${nombreEvento}. Contacto: contacto@transworld.cl`;
     }
-    
-    const googleCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(nombreEvento)}&dates=${anio}${mes}${dia}/${anioFin}${mesFin}${diaFin}&details=${encodeURIComponent(desc)}&location=${encodeURIComponent(ubicacion)}`;
-    const outlookCalUrl = `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=${encodeURIComponent(nombreEvento)}&startdt=${anio}-${mes}-${dia}&enddt=${anioFin}-${mesFin}-${diaFin}&allday=true&body=${encodeURIComponent(desc)}&location=${encodeURIComponent(ubicacion)}`;
+
+    const googleCalUrl =
+      `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${
+        encodeURIComponent(nombreEvento)
+      }&dates=${anio}${mes}${dia}/${anioFin}${mesFin}${diaFin}&details=${
+        encodeURIComponent(desc)
+      }&location=${encodeURIComponent(ubicacion)}`;
+    const outlookCalUrl =
+      `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=${
+        encodeURIComponent(nombreEvento)
+      }&startdt=${anio}-${mes}-${dia}&enddt=${anioFin}-${mesFin}-${diaFin}&allday=true&body=${
+        encodeURIComponent(desc)
+      }&location=${encodeURIComponent(ubicacion)}`;
     // ------------------------------------------
 
     // 5. CONSTRUCCIÓN DEL CORREO (DOS PLANTILLAS)
     let htmlContent = "";
 
     if (evento?.tipo_registro === "cliente") {
-        // ==========================================
-        // PLANTILLA 1: EVENTO CON QR (Cliente)
-        // ==========================================
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${registro.id}`;
-        
-        htmlContent = `
+      // ==========================================
+      // PLANTILLA 1: EVENTO CON QR (Cliente)
+      // ==========================================
+      const qrUrl =
+        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${registro.id}`;
+
+      htmlContent = `
           <!DOCTYPE html>
           <html>
             <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; color: #000; margin: 0;">
@@ -169,10 +186,10 @@ serve(async (req) => {
           </html>
         `;
     } else {
-        // ==========================================
-        // PLANTILLA 2: EVENTO SIN QR (Comercial)
-        // ==========================================
-        htmlContent = `
+      // ==========================================
+      // PLANTILLA 2: EVENTO SIN QR (Comercial)
+      // ==========================================
+      htmlContent = `
           <!DOCTYPE html>
           <html>
             <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; color: #000; margin: 0;">
@@ -251,9 +268,9 @@ serve(async (req) => {
     });
 
     if (!res.ok) {
-        const errorData = await res.text();
-        console.error("Error Brevo:", errorData);
-        throw new Error(`Error enviando email: ${errorData}`);
+      const errorData = await res.text();
+      console.error("Error Brevo:", errorData);
+      throw new Error(`Error enviando email: ${errorData}`);
     }
 
     const data = await res.json();
@@ -261,10 +278,10 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-
   } catch (error) {
-    console.error("Error Edge Function:", error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const mensaje = error instanceof Error ? error.message : String(error);
+    console.error("Error Edge Function:", mensaje);
+    return new Response(JSON.stringify({ error: mensaje }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

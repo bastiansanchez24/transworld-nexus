@@ -1,9 +1,36 @@
+/**
+ * Forma mínima del usuario de Auth que consumen las funciones.
+ * No se tipa contra `User` de supabase-js para no acoplar `_shared` a la
+ * versión del cliente que importe cada función.
+ */
+export interface AuthUserLite {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+}
+
+/** Respuesta de PostgREST: `{ data, error }`, ambos de tipo desconocido acá. */
+type RespuestaRpc = PromiseLike<{ data: unknown; error: unknown }>;
+
+interface AdminClientRpc {
+  rpc: (fn: string, args: Record<string, unknown>) => RespuestaRpc;
+}
+
+interface AdminClientAuth extends AdminClientRpc {
+  auth: {
+    admin: {
+      getUserById: (
+        id: string,
+      ) => Promise<
+        { data: { user: AuthUserLite | null } | null; error: unknown }
+      >;
+    };
+  };
+}
+
 /** Comprueba email vía RPC (evita auth.admin.listUsers, que falla con "Database error finding users"). */
 export async function emailYaRegistrado(
-  // deno-lint-ignore no-explicit-any
-  adminClient: {
-    rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<any>;
-  },
+  adminClient: AdminClientRpc,
   email: string,
 ): Promise<boolean> {
   const { data, error } = await adminClient.rpc(
@@ -21,13 +48,9 @@ export async function emailYaRegistrado(
  * RPC → id, luego admin.getUserById.
  */
 export async function findAuthUserByEmail(
-  // deno-lint-ignore no-explicit-any
-  adminClient: {
-    rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<any>;
-    auth: { admin: { getUserById: (id: string) => Promise<any> } };
-  },
+  adminClient: AdminClientAuth,
   email: string,
-) {
+): Promise<AuthUserLite | null> {
   const { data: userId, error } = await adminClient.rpc(
     "rpe_auth_user_id_por_email",
     { email_input: email.trim().toLowerCase() },
