@@ -19,6 +19,8 @@ import '../../../core/widgets/tw_detail_scaffold.dart';
 import '../../../core/widgets/tw_toast.dart';
 import '../../../data/models/evento.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../capturador/providers/capturador_providers.dart';
+import '../../capturador/services/evento_lead_interno_service.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
 
@@ -40,12 +42,38 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
   @override
   String get refreshWhenLocation => RoutePaths.usarEvento(widget.eventoId);
 
+  bool _creandoEventoLead = false;
+
   /// Al volver al menú (tras registrar, editar, eliminar o acreditar) se
   /// recarga la lista para que las tarjetas no queden con los conteos viejos.
   @override
   void onBecomeVisible() {
     ref.invalidate(eventoByIdProvider(widget.eventoId));
     ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+    ref.invalidate(eventoLeadInternoProvider(widget.eventoId));
+  }
+
+  /// Crea el evento de leads interno de este evento y lo abre. La otra vía es
+  /// capturar un lead desde los registrados: ambas resuelven al mismo id.
+  Future<void> _crearEventoLead(Evento evento) async {
+    if (_creandoEventoLead) return;
+    setState(() => _creandoEventoLead = true);
+    try {
+      final eventoLead = await obtenerOCrearEventoLeadInterno(ref, evento);
+      ref.invalidate(eventoLeadInternoProvider(widget.eventoId));
+      if (!mounted) return;
+      await context.push(RoutePaths.usarEventoLead(eventoLead.id));
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'No se pudo crear el evento de leads.',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _creandoEventoLead = false);
+    }
   }
 
   Future<void> _compartir(String nombreEvento) async {
@@ -75,6 +103,9 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
     final puedeExportar = ref.watch(canExportDataProvider);
     final esAdmin = ref.watch(isAdminProvider);
     final resumen = ref.watch(registradosResumenProvider(widget.eventoId));
+    final eventoLead = ref
+        .watch(eventoLeadInternoProvider(widget.eventoId))
+        .valueOrNull;
 
     return BrowserThemeColor(
       color: TwColors.bg,
@@ -145,6 +176,27 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
                           onTap: () => context.push(
                             RoutePaths.accesoEvento(widget.eventoId),
                           ),
+                        ),
+                        const SizedBox(height: TwSpacing.tileGap),
+                      ],
+                      if (eventoLead != null) ...[
+                        TwActionTile(
+                          icon: Symbols.person_search_rounded,
+                          title: 'Ver evento de leads',
+                          subtitle: 'Captura de oportunidades de este evento',
+                          onTap: () => context.push(
+                            RoutePaths.usarEventoLead(eventoLead.id),
+                          ),
+                        ),
+                        const SizedBox(height: TwSpacing.tileGap),
+                      ] else if (puedeEditar) ...[
+                        TwActionTile(
+                          icon: Symbols.person_search_rounded,
+                          title: 'Crear evento de leads',
+                          subtitle: _creandoEventoLead
+                              ? 'Creando…'
+                              : 'Capturar oportunidades en este evento',
+                          onTap: () => _crearEventoLead(evento),
                         ),
                         const SizedBox(height: TwSpacing.tileGap),
                       ],

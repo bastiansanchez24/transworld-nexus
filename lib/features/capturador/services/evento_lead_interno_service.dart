@@ -7,12 +7,14 @@ import '../../../data/models/evento_lead.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
 import '../providers/capturador_providers.dart';
 
-/// Resuelve o crea una campaña de leads a partir del nombre y metadatos
-/// de un evento de registro/acreditación.
+/// Resuelve o crea el evento de leads interno de un evento de registro.
+///
+/// El vínculo es por id (`evento_origen_id`), no por nombre: dos eventos
+/// homónimos ya no comparten sus leads y renombrar uno no rompe la relación.
 ///
 /// La creación vía QR está permitida a `user`/`externo` por RLS; el botón
-/// "Nueva campaña" de la UI sigue oculto si `!canCreateContent`.
-Future<EventoLead> obtenerOCrearCampanaDesdeEvento(
+/// "Nuevo evento" de la UI sigue oculto si `!canCreateContent`.
+Future<EventoLead> obtenerOCrearEventoLeadInterno(
   WidgetRef ref,
   Evento evento,
 ) async {
@@ -21,27 +23,24 @@ Future<EventoLead> obtenerOCrearCampanaDesdeEvento(
 
   EventoLead? existente;
   if (isOnline) {
-    existente = await repo.buscarPorNombre(evento.nombre);
+    existente = await repo.buscarPorEventoOrigen(evento.id);
   } else {
     final cache = ref.read(eventosLeadsListProvider).valueOrNull ?? [];
-    final nombreLower = evento.nombre.trim().toLowerCase();
-    existente = cache
-        .where((c) => c.nombre.trim().toLowerCase() == nombreLower)
-        .firstOrNull;
+    existente = cache.where((e) => e.eventoOrigenId == evento.id).firstOrNull;
   }
 
   if (existente != null) return existente;
 
   if (!isOnline) {
     throw Exception(
-      'Se necesita conexión para crear la campaña "${evento.nombre}".',
+      'Se necesita conexión para crear el evento de leads de "${evento.nombre}".',
     );
   }
 
-  final creada = await repo.crear(
-    EventoLead(
-      id: '',
-      nombre: evento.nombre.trim(),
+  final creado = await repo.crear(
+    EventoLead.internoDesdeEvento(
+      eventoOrigenId: evento.id,
+      nombre: evento.nombre,
       fecha: evento.fecha,
       pais: evento.pais,
       tematica: evento.tematica,
@@ -49,5 +48,5 @@ Future<EventoLead> obtenerOCrearCampanaDesdeEvento(
     ),
   );
   ref.invalidate(eventosLeadsListProvider);
-  return creada;
+  return creado;
 }

@@ -3,19 +3,21 @@
 --  (proyecto anteriormente conocido como "Registro Pro")
 --  Esquema: public (según definición del proyecto).
 --
---  Este archivo es la FUSIÓN de todas las migraciones sueltas que
---  antes vivían en supabase/migrations/ (y, históricamente, en
---  supabase/migracion_*.sql). Refleja el estado final
---  acordado (la política más reciente gana ante conflictos), en orden
---  de dependencias, y es válido tanto en una base de datos NUEVA como
---  sobre la de producción ya existente.
+--  Fuente única: fusiona las migraciones históricas (antes en
+--  supabase/migrations/ y supabase/migracion_*.sql). La carpeta
+--  migrations queda vacía a propósito. Aplicar este script en el SQL
+--  Editor sobre una base nueva o ya existente; no usar `db push`.
 --
 --  Migraciones fusionadas aquí (orden cronológico):
 --    fusion_leads · leads_policies · registrados_columnas ·
 --    fix_invite_externo · roles_4_usuarios · obtener_email_usuario ·
 --    auth_user_id_por_email · eliminar_usuario (+ reasignar_todas_fks) ·
 --    campana_qr_roles · externo_multi_eventos · externo_leads_amarrados ·
---    delete_solo_admin.
+--    delete_solo_admin · utm_registrados · restricciones_usuario_externo ·
+--    acceso_user_y_privacidad_leads · completar_auditoria_registrados ·
+--    configurar_acceso_evento · resumen_campana_leads ·
+--    resumen_campana_acceso · normalizar_email_registrados ·
+--    evento_lead_origen_interno_externo.
 --
 --  Es idempotente y (en su mayoría) no destructivo: usa
 --  IF NOT EXISTS / OR REPLACE. Las correcciones de RLS SÍ
@@ -110,6 +112,31 @@ CREATE TABLE IF NOT EXISTS public.eventos (
   CONSTRAINT eventos_creado_por_fkey FOREIGN KEY (creado_por) REFERENCES public.perfiles (id) ON DELETE SET NULL
 );
 
+-- CREATE TABLE IF NOT EXISTS no agrega columnas ni endurece nullability.
+ALTER TABLE public.eventos
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT timezone('utc', now());
+ALTER TABLE public.eventos ALTER COLUMN certificacion_capacitacion SET DEFAULT false;
+UPDATE public.eventos SET certificacion_capacitacion = false
+  WHERE certificacion_capacitacion IS NULL;
+ALTER TABLE public.eventos ALTER COLUMN certificacion_capacitacion SET NOT NULL;
+ALTER TABLE public.eventos ALTER COLUMN activo SET DEFAULT true;
+UPDATE public.eventos SET activo = true WHERE activo IS NULL;
+ALTER TABLE public.eventos ALTER COLUMN activo SET NOT NULL;
+ALTER TABLE public.eventos ALTER COLUMN tipo_registro SET DEFAULT 'comercial';
+UPDATE public.eventos SET tipo_registro = 'comercial' WHERE tipo_registro IS NULL;
+ALTER TABLE public.eventos ALTER COLUMN tipo_registro SET NOT NULL;
+ALTER TABLE public.eventos DROP CONSTRAINT IF EXISTS eventos_creado_por_fkey;
+ALTER TABLE public.eventos
+  ADD CONSTRAINT eventos_creado_por_fkey
+  FOREIGN KEY (creado_por) REFERENCES public.perfiles (id) ON DELETE SET NULL;
+
+ALTER TABLE public.perfiles ALTER COLUMN rol SET DEFAULT 'user';
+UPDATE public.perfiles SET rol = 'user' WHERE rol IS NULL;
+ALTER TABLE public.perfiles ALTER COLUMN rol SET NOT NULL;
+ALTER TABLE public.perfiles ALTER COLUMN cambiar_pass SET DEFAULT false;
+UPDATE public.perfiles SET cambiar_pass = false WHERE cambiar_pass IS NULL;
+ALTER TABLE public.perfiles ALTER COLUMN cambiar_pass SET NOT NULL;
+
 -- FK circular perfiles.evento_asignado_id → eventos: se agrega ahora que
 -- ambas tablas existen. Idempotente (solo si aún no está creada).
 DO $$
@@ -155,6 +182,27 @@ CREATE TABLE IF NOT EXISTS public.registrados (
   CONSTRAINT registrados_evento_email_unique UNIQUE (evento_id, email)
 );
 
+ALTER TABLE public.registrados ALTER COLUMN acreditado SET DEFAULT false;
+UPDATE public.registrados SET acreditado = false WHERE acreditado IS NULL;
+ALTER TABLE public.registrados ALTER COLUMN acreditado SET NOT NULL;
+ALTER TABLE public.registrados ALTER COLUMN email_confirmacion_enviado SET DEFAULT false;
+UPDATE public.registrados SET email_confirmacion_enviado = false
+  WHERE email_confirmacion_enviado IS NULL;
+ALTER TABLE public.registrados ALTER COLUMN email_confirmacion_enviado SET NOT NULL;
+ALTER TABLE public.registrados DROP CONSTRAINT IF EXISTS registrados_ingresado_por_fkey;
+ALTER TABLE public.registrados
+  ADD CONSTRAINT registrados_ingresado_por_fkey
+  FOREIGN KEY (ingresado_por) REFERENCES public.perfiles (id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'registrados_evento_email_unique'
+  ) THEN
+    ALTER TABLE public.registrados
+      ADD CONSTRAINT registrados_evento_email_unique UNIQUE (evento_id, email);
+  END IF;
+END $$;
+
 -- Bloques de asistencia por evento (cupos / franjas del formulario público).
 -- `registrados.bloque_id` referencia esta tabla; el nombre visible es `etiqueta`.
 CREATE TABLE IF NOT EXISTS public.evento_bloques (
@@ -170,6 +218,25 @@ CREATE TABLE IF NOT EXISTS public.evento_bloques (
 
 CREATE INDEX IF NOT EXISTS idx_evento_bloques_evento_id
   ON public.evento_bloques (evento_id, orden);
+CREATE INDEX IF NOT EXISTS idx_evento_bloques_evento_activo
+  ON public.evento_bloques (evento_id, activo, orden);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'evento_bloques_cupo_positivo'
+  ) THEN
+    ALTER TABLE public.evento_bloques
+      ADD CONSTRAINT evento_bloques_cupo_positivo
+      CHECK (cupo_maximo IS NULL OR cupo_maximo > 0);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'evento_bloques_etiqueta_unica'
+  ) THEN
+    ALTER TABLE public.evento_bloques
+      ADD CONSTRAINT evento_bloques_etiqueta_unica UNIQUE (evento_id, etiqueta);
+  END IF;
+END $$;
 
 -- Columna añadida después del CREATE original de registrados: idempotente
 -- para bases ya desplegadas.
@@ -182,9 +249,16 @@ BEGIN
       AND column_name = 'bloque_id'
   ) THEN
     ALTER TABLE public.registrados
-      ADD COLUMN bloque_id uuid REFERENCES public.evento_bloques (id) ON DELETE SET NULL;
+      ADD COLUMN bloque_id uuid REFERENCES public.evento_bloques (id) ON DELETE RESTRICT;
   END IF;
 END $$;
+
+-- Producción ya usa RESTRICT: no se puede borrar un bloque con registrados.
+ALTER TABLE public.registrados
+  DROP CONSTRAINT IF EXISTS registrados_bloque_id_fkey;
+ALTER TABLE public.registrados
+  ADD CONSTRAINT registrados_bloque_id_fkey
+  FOREIGN KEY (bloque_id) REFERENCES public.evento_bloques (id) ON DELETE RESTRICT;
 
 -- UTM (migración 20260729172353): opcionales; la app aún no las escribe.
 ALTER TABLE public.registrados
@@ -198,6 +272,8 @@ ALTER TABLE public.registrados
 
 CREATE INDEX IF NOT EXISTS idx_registrados_bloque_id
   ON public.registrados (bloque_id);
+CREATE INDEX IF NOT EXISTS idx_registrados_evento_bloque
+  ON public.registrados (evento_id, bloque_id);
 
 -- Autorizaciones usuario↔evento (M:N). Para rol global `externo`,
 -- `rol_evento = 'externo'` define los eventos operables; el activo/preferido
@@ -223,8 +299,12 @@ WHERE p.rol = 'externo'
   AND p.evento_asignado_id IS NOT NULL
 ON CONFLICT (usuario_id, evento_id) DO NOTHING;
 
--- Módulo Capturador de leads (app hermana fusionada). Independiente de
--- public.eventos (registro/acreditación); leads.evento_id NUNCA apunta a eventos.
+-- Módulo Capturador de leads (app hermana fusionada). leads.evento_id NUNCA
+-- apunta a eventos: siempre a eventos_leads.
+--
+-- Un evento de leads es interno (nace de un evento de registro, vía el menú de
+-- Evento o la primera captura desde registrados) o externo (alta manual, sin
+-- evento de origen). El tipo se persiste, no se deduce del NULL.
 CREATE TABLE IF NOT EXISTS public.eventos_leads (
   id                          uuid NOT NULL DEFAULT gen_random_uuid(),
   nombre                      text NOT NULL,
@@ -233,11 +313,43 @@ CREATE TABLE IF NOT EXISTS public.eventos_leads (
   tematica                    text,
   certificacion_capacitacion  boolean DEFAULT false,
   perfil_id                   uuid,
+  evento_origen_id            uuid,
+  tipo_evento_lead            text NOT NULL DEFAULT 'externo',
   created_at                  timestamptz DEFAULT now(),
   CONSTRAINT eventos_leads_pkey PRIMARY KEY (id),
   CONSTRAINT eventos_leads_perfil_id_fkey FOREIGN KEY (perfil_id)
     REFERENCES public.perfiles (id)
 );
+
+-- Instalaciones previas: CREATE TABLE IF NOT EXISTS no agrega columnas.
+ALTER TABLE public.eventos_leads
+  ADD COLUMN IF NOT EXISTS evento_origen_id uuid;
+ALTER TABLE public.eventos_leads
+  ADD COLUMN IF NOT EXISTS tipo_evento_lead text NOT NULL DEFAULT 'externo';
+
+-- RESTRICT: borrar el evento de origen exigiría decidir qué pasa con los leads
+-- ya capturados, así que la app obliga a eliminar antes el evento de leads.
+ALTER TABLE public.eventos_leads
+  DROP CONSTRAINT IF EXISTS eventos_leads_evento_origen_id_fkey;
+ALTER TABLE public.eventos_leads
+  ADD CONSTRAINT eventos_leads_evento_origen_id_fkey
+  FOREIGN KEY (evento_origen_id) REFERENCES public.eventos (id)
+  ON DELETE RESTRICT;
+
+ALTER TABLE public.eventos_leads
+  DROP CONSTRAINT IF EXISTS eventos_leads_tipo_evento_lead_check;
+ALTER TABLE public.eventos_leads
+  ADD CONSTRAINT eventos_leads_tipo_evento_lead_check
+  CHECK (tipo_evento_lead IN ('interno', 'externo'));
+
+ALTER TABLE public.eventos_leads
+  DROP CONSTRAINT IF EXISTS eventos_leads_tipo_origen_check;
+ALTER TABLE public.eventos_leads
+  ADD CONSTRAINT eventos_leads_tipo_origen_check
+  CHECK (
+    (tipo_evento_lead = 'interno' AND evento_origen_id IS NOT NULL)
+    OR (tipo_evento_lead = 'externo' AND evento_origen_id IS NULL)
+  );
 
 CREATE TABLE IF NOT EXISTS public.leads (
   id                 uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -345,6 +457,10 @@ CREATE INDEX IF NOT EXISTS idx_eventos_creado_por         ON public.eventos (cre
 CREATE INDEX IF NOT EXISTS idx_eventos_activo_fecha       ON public.eventos (activo, fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_usuarios_eventos_evento_id ON public.usuarios_eventos (evento_id);
 CREATE INDEX IF NOT EXISTS idx_eventos_leads_perfil_id ON public.eventos_leads (perfil_id);
+-- Un evento de registro no puede tener dos eventos de leads internos.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_eventos_leads_evento_origen_unique
+  ON public.eventos_leads (evento_origen_id)
+  WHERE evento_origen_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_leads_evento_id ON public.leads (evento_id);
 CREATE INDEX IF NOT EXISTS idx_leads_perfil_id ON public.leads (perfil_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_evento_email_normalizado_unique
@@ -524,7 +640,23 @@ AS $$
   );
 $$;
 
--- Campaña (eventos_leads) homónima a un evento autorizado del externo.
+-- Evento de leads interno cuyo evento de origen tiene autorizado el externo.
+CREATE OR REPLACE FUNCTION public.cl_externo_evento_origen_autorizado(
+  p_evento_origen_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT p_evento_origen_id IS NOT NULL
+     AND public.rpe_is_externo()
+     AND public.rpe_externo_tiene_evento(p_evento_origen_id);
+$$;
+
+-- Con evento_origen_id manda el id; sin él se conserva el match por nombre para
+-- no cortarle el acceso a las filas anteriores al vínculo por id.
 CREATE OR REPLACE FUNCTION public.cl_externo_campana_autorizada(p_campana_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -536,7 +668,10 @@ AS $$
     SELECT 1
     FROM public.eventos_leads el
     JOIN public.eventos e
-      ON lower(trim(e.nombre)) = lower(trim(el.nombre))
+      ON CASE
+           WHEN el.evento_origen_id IS NOT NULL THEN e.id = el.evento_origen_id
+           ELSE lower(trim(e.nombre)) = lower(trim(el.nombre))
+         END
     WHERE el.id = p_campana_id
       AND public.rpe_is_externo()
       AND public.rpe_externo_tiene_evento(e.id)
@@ -907,7 +1042,8 @@ AS $$
   LIMIT 1;
 $$;
 
-REVOKE ALL ON FUNCTION public.rpe_auth_user_id_por_email(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.rpe_auth_user_id_por_email(text)
+  FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.rpe_auth_user_id_por_email(text) TO service_role;
 
 -- Admin: email de auth.users para formularios de gestión.
@@ -1616,6 +1752,8 @@ $$;
 -- Permisos para que la app (rol authenticated) pueda invocar RPCs vía PostgREST.
 -- Sin estos GRANT, signUp/login funcionan pero las llamadas .rpc() fallan con
 -- "permission denied for function ...".
+GRANT EXECUTE ON FUNCTION public.rpe_is_admin() TO authenticated;
+REVOKE ALL ON FUNCTION public.rpe_is_admin() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.marcar_recuperacion_pass(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.verificar_usuario_registrado(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.rpe_actualizar_rol_usuario(uuid, text) TO authenticated;
@@ -1635,12 +1773,14 @@ REVOKE ALL ON FUNCTION public.rpe_sincronizar_eventos_usuario(uuid, uuid[]) FROM
 REVOKE ALL ON FUNCTION public.rpe_configurar_acceso_evento(uuid, uuid[]) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.cl_guardar_lead(
   uuid, text, text, text, text, text, text, uuid
-) FROM PUBLIC;
+) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.cl_guardar_lead(
   uuid, text, text, text, text, text, text, uuid
 ) TO authenticated;
 REVOKE ALL ON FUNCTION public.cl_resumen_campana(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.cl_resumen_campana(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.cl_externo_evento_origen_autorizado(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cl_externo_evento_origen_autorizado(uuid) TO authenticated;
 
 -- ----------------------------------------------------------------
 -- 5. RLS
@@ -1796,18 +1936,27 @@ CREATE POLICY cl_eventos_leads_select ON public.eventos_leads
   FOR SELECT TO authenticated
   USING (
     public.rpe_is_internal_user()
-    OR public.cl_externo_nombre_campana_autorizado(nombre)
+    OR public.cl_externo_evento_origen_autorizado(evento_origen_id)
+    OR (
+      evento_origen_id IS NULL
+      AND public.cl_externo_nombre_campana_autorizado(nombre)
+    )
   );
 
--- INSERT: internos conservan la capacidad de materializar campañas; externo
--- solo campañas homónimas a eventos autorizados desde el escáner.
+-- INSERT: internos conservan la capacidad de materializar eventos de leads; el
+-- externo solo los internos de un evento que tenga autorizado (o, legacy, el
+-- homónimo) desde el escáner.
 DROP POLICY IF EXISTS cl_eventos_leads_insert ON public.eventos_leads;
 CREATE POLICY cl_eventos_leads_insert ON public.eventos_leads
   FOR INSERT TO authenticated
   WITH CHECK (
     (
       public.rpe_is_internal_user()
-      OR public.cl_externo_nombre_campana_autorizado(nombre)
+      OR public.cl_externo_evento_origen_autorizado(evento_origen_id)
+      OR (
+        evento_origen_id IS NULL
+        AND public.cl_externo_nombre_campana_autorizado(nombre)
+      )
     )
     AND (perfil_id IS NULL OR perfil_id = auth.uid())
   );

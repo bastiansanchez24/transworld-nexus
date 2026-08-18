@@ -3,7 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/app_theme.dart';
 
-/// Menú inferior al mantener presionado un evento o campaña.
+/// Menú inferior al mantener presionado un evento o evento de leads.
 Future<EventoListMenuAction?> showEventoListContextMenu(
   BuildContext context, {
   required String titulo,

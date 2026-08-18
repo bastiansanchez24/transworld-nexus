@@ -25,7 +25,7 @@ class CrearEditarEventoLeadScreen extends StatelessWidget {
     return RequirePermission(
       allowed: (p) => p.canCreateContent,
       deniedMessage:
-          'Solo administradores y organizadores pueden crear o editar campañas.',
+          'Solo administradores y organizadores pueden crear o editar eventos.',
       builder: (context) => _CrearEditarEventoLeadForm(eventoId: eventoId),
     );
   }
@@ -100,7 +100,7 @@ class _CrearEditarEventoLeadFormState
 
       final repo = ref.read(eventosLeadsRepositoryProvider);
       if (_esEdicion) {
-        await repo.actualizar(widget.eventoId!, evento.toInsertMap());
+        await repo.actualizar(widget.eventoId!, evento.toUpdateMap());
       } else {
         await repo.crear(evento);
       }
@@ -170,12 +170,12 @@ class _CrearEditarEventoLeadFormState
     }
 
     return AppScaffold(
-      title: _esEdicion ? 'Editar campaña' : 'Nueva campaña',
+      title: _esEdicion ? 'Editar evento' : 'Nuevo evento',
       actions: [
         if (_esEdicion && esAdmin)
           NexusHeaderAction(
             icon: Symbols.delete_outline_rounded,
-            tooltip: 'Eliminar campaña',
+            tooltip: 'Eliminar evento',
             danger: true,
             onTap: _guardando ? null : _eliminar,
           ),
@@ -189,12 +189,12 @@ class _CrearEditarEventoLeadFormState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const _FieldLabel('Nombre de la campaña'),
+                    const _FieldLabel('Nombre del evento'),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _nombreController,
                       decoration: const InputDecoration(
-                        hintText: 'Ej. Campaña retail 2026',
+                        hintText: 'Ej. Feria retail 2026',
                       ),
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Requerido' : null,
@@ -260,7 +260,7 @@ class _CrearEditarEventoLeadFormState
                     ),
                     const SizedBox(height: 24),
                     PrimaryGradientButton(
-                      label: _esEdicion ? 'Guardar cambios' : 'Crear campaña',
+                      label: _esEdicion ? 'Guardar cambios' : 'Crear evento',
                       loading: _guardando,
                       onPressed: _guardando ? null : _guardar,
                     ),

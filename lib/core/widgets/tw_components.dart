@@ -247,6 +247,47 @@ class TwStatusPill extends StatelessWidget {
   }
 }
 
+/// Origen de un evento de leads, con el mismo patrón que [TwStatusPill].
+///
+/// Interno: nació de un evento organizado por Transworld. Externo: alta manual
+/// en la lista de leads, sin evento de registro detrás.
+class TwOriginPill extends StatelessWidget {
+  const TwOriginPill({super.key, required this.interno});
+
+  final bool interno;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = interno ? TwColors.originInternal : TwColors.originExternal;
+    final bg = interno ? TwColors.originInternalBg : TwColors.originExternalBg;
+    final bd = interno ? TwColors.originInternalBd : TwColors.originExternalBd;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: TwRadii.pill,
+        border: Border.all(color: bd),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            interno ? 'INTERNO' : 'EXTERNO',
+            style: TwText.statusPill.copyWith(color: fg),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Píldora de fecha del hero: `martes 25 · agosto 2026`.
 class TwDatePill extends StatelessWidget {
   const TwDatePill(this.text, {super.key});
@@ -834,7 +875,7 @@ class TwKpiCard extends StatelessWidget {
   }
 }
 
-/// Fila de acción de las pantallas-menú (Evento y Campaña).
+/// Fila de acción de las pantallas-menú (Evento y Evento de leads).
 class TwActionTile extends StatelessWidget {
   const TwActionTile({
     super.key,
@@ -935,7 +976,7 @@ class TwHeroCard extends StatelessWidget {
   final VoidCallback onCta;
   final Widget? photo;
 
-  /// La campaña usa 1.22 en vez del 1.20 por defecto (§9).
+  /// El evento de leads usa 1.22 en vez del 1.20 por defecto (§9).
   final double? titleHeight;
 
   @override

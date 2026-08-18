@@ -137,6 +137,8 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen>
       ref.invalidate(eventosFijadosProvider);
       ref.invalidate(homeFeaturedItemsProvider);
       ref.invalidate(eventoByIdProvider(evento.id));
+    } on EventoConEventoLeadException catch (e) {
+      if (mounted) showAppSnackBar(context, e.toString(), isError: true);
     } catch (_) {
       if (mounted) {
         showAppSnackBar(

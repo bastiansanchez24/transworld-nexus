@@ -105,14 +105,22 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
+  remove_alpha_ios: true
+  image_path: "assets/images/icon-app/logo-blanco-1024.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/icon-app/logo-blanco-1024.png"
+  web:
+    generate: true
+    image_path: "assets/images/icon-app/logo-blanco-512.png"
+    background_color: "#F2F5F9"
+    theme_color: "#F2F5F9"
   windows:
     generate: true
-    image_path: "assets/images/logo_nexus_transparente.png"
+    image_path: "assets/images/icon-app/logo-blanco-256.png"
     icon_size: 256
-  remove_alpha_ios: true
-  image_path: "assets/images/logo_nexus.png"
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/logo_nexus.png"
+  macos:
+    generate: true
+    image_path: "assets/images/icon-app/logo-blanco-1024.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -128,6 +136,7 @@ flutter:
   assets:
     - .env
     - assets/images/
+    - assets/images/icon-app/
     - assets/motion/
 
   # To add assets to your application, add an assets section, like this:

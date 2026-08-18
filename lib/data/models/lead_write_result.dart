@@ -22,7 +22,7 @@ class LeadWriteResult {
   bool get esDuplicado => outcome == LeadWriteOutcome.duplicado;
 
   String get mensajeDuplicado {
-    if (esPropio) return 'Ya registraste este lead en esta campaña';
+    if (esPropio) return 'Ya registraste este lead en este evento';
     final nombre = primerCapturadorNombre?.trim();
     if (nombre == null || nombre.isEmpty) {
       return 'Este lead ya fue registrado por otro usuario';

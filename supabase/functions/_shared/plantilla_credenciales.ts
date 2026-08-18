@@ -1,3 +1,5 @@
+import { LARGO_MINIMO_PASSWORD } from "./password.ts";
+
 /**
  * Plantilla del correo de credenciales de RegisPro (diseño "Correo
  * Credenciales RegisPro").
@@ -62,12 +64,16 @@ const COPY = {
   },
 } as const;
 
-/** Requisitos reales de `password.ts` / `password_policy.dart`. */
+/**
+ * Espejo de `validarContrasenaFuerte` / `kPasswordHelperText`.
+ * Solo cuentan los símbolos `! # % $`; el resto no pasa la validación.
+ */
 const REQUISITOS = [
-  "Mínimo 8 caracteres.",
-  "Al menos una mayúscula, una minúscula y un número.",
-  "Un carácter especial (! # % $).",
-  "No reutilice contraseñas de otros servicios.",
+  `Mínimo ${LARGO_MINIMO_PASSWORD} caracteres.`,
+  "Debe incluir una mayúscula.",
+  "Debe incluir una minúscula.",
+  "Debe incluir un número.",
+  "Debe incluir un símbolo (! # % $).",
 ];
 
 /** Los pasos admiten HTML en línea (solo `<strong>`). */

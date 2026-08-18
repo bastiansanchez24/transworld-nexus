@@ -12,7 +12,7 @@ import '../../../data/models/registrado.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
-import '../../capturador/services/campana_desde_evento_service.dart';
+import '../../capturador/services/evento_lead_interno_service.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
 import '../scanner/qr_scanner_service.dart';
@@ -142,13 +142,13 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
 
   Future<void> _navegarACaptura(Registrado registrado) async {
     final evento = await ref.read(eventoByIdProvider(widget.eventoId).future);
-    final campana = await obtenerOCrearCampanaDesdeEvento(ref, evento);
+    final eventoLead = await obtenerOCrearEventoLeadInterno(ref, evento);
 
     if (!mounted) return;
     await _scanner.pauseCamera();
     if (!mounted) return;
     await context.push(
-      RoutePaths.capturarLead(campana.id, desdeEvento: widget.eventoId),
+      RoutePaths.capturarLead(eventoLead.id, desdeEvento: widget.eventoId),
       extra: CapturarLeadRouteExtra(
         prefill: LeadPrefill.fromRegistrado(registrado),
         eventoRegistroId: widget.eventoId,

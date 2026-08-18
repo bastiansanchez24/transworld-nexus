@@ -5,6 +5,17 @@ import '../../core/constants/supabase_tables.dart';
 import '../models/evento.dart';
 import '../supabase/supabase_client_provider.dart';
 
+/// El evento no se puede borrar porque su evento de leads interno lo
+/// referencia (`eventos_leads.evento_origen_id`, FK con ON DELETE RESTRICT).
+class EventoConEventoLeadException implements Exception {
+  const EventoConEventoLeadException();
+
+  @override
+  String toString() =>
+      'Este evento tiene un evento de leads asociado. Elimina primero el '
+      'evento de leads desde el menú Leads.';
+}
+
 /// CRUD de eventos.
 ///
 /// Crear/editar exige admin u organizador (`rpe_can_create_content`).
@@ -12,6 +23,8 @@ import '../supabase/supabase_client_provider.dart';
 /// abierto a usuarios internos; externos solo ven eventos autorizados.
 class EventosRepository {
   EventosRepository(this._client);
+
+  static const _foreignKeyViolation = '23503';
 
   final SupabaseClient _client;
 
@@ -47,7 +60,20 @@ class EventosRepository {
   }
 
   Future<void> eliminar(String id) async {
-    await _client.from(SupabaseTables.eventos).delete().eq('id', id);
+    try {
+      await _client.from(SupabaseTables.eventos).delete().eq('id', id);
+    } on PostgrestException catch (e) {
+      throw errorDeBorrado(e);
+    }
+  }
+
+  /// El único FK que apunta a `eventos` con RESTRICT es el del evento de leads
+  /// interno; el resto de las tablas hijas borran en cascada.
+  static Object errorDeBorrado(PostgrestException e) {
+    if (e.code == _foreignKeyViolation) {
+      return const EventoConEventoLeadException();
+    }
+    return e;
   }
 
   Future<int> contarCreadosPor(String perfilId) async {

@@ -324,7 +324,7 @@ class _LoginBrand extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(6),
             child: Image.asset(
-              'assets/images/logo_nexus_transparente.png',
+              'assets/images/icon-app/logo-blanco-256.png',
               fit: BoxFit.contain,
             ),
           ),

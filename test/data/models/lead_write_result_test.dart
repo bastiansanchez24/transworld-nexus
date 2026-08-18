@@ -13,7 +13,7 @@ void main() {
     ]);
 
     expect(result.esDuplicado, isTrue);
-    expect(result.mensajeDuplicado, 'Ya registraste este lead en esta campaña');
+    expect(result.mensajeDuplicado, 'Ya registraste este lead en este evento');
   });
 
   test('duplicado ajeno identifica al primer capturador', () {

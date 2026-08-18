@@ -578,8 +578,10 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
           : Padding(
               // Scaffold anidado bajo MainShellScaffold: el FAB no se eleva
               // solo con extendBody del padre; hay que despejar la tab bar.
-              // En Windows el rail no cubre el cuerpo y el padding extra es 0.
-              padding: EdgeInsets.only(bottom: AppSpacing.shellFabBottomOf()),
+              // Con rail (Windows / web de PC) el menú no cubre el cuerpo.
+              padding: EdgeInsets.only(
+                bottom: AppSpacing.shellFabBottomOf(context),
+              ),
               child: widget.floatingActionButton,
             ),
       body: Column(

@@ -7,7 +7,7 @@ import '../theme/app_theme.dart';
 
 /// Safari (PWA de iPhone/iPad) anima el pop con el gesto de atrás del
 /// historial. Si Flutter aplica SharedAxis encima, el menú de debajo
-/// (evento / campaña) parpadea: el snapshot del gesto no coincide con la
+/// (evento / evento de leads) parpadea: el snapshot del gesto no coincide con la
 /// página desplazada por [secondaryAnimation].
 bool browserOwnsBackSwipe({
   bool? isWeb,

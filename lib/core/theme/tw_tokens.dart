@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 ///
 /// Regla del diseño: **cero colores libres y cero estilos libres**. Todo lo que
 /// pinta o tipografía las pantallas rediseñadas (Login, Home, menú de Evento y
-/// menú de Campaña) sale de este archivo.
+/// menú de Evento de leads) sale de este archivo.
 ///
 /// Convive con [AppColors] (`app_theme.dart`), que sigue vistiendo el resto de
 /// la app; no se toca para no arrastrar el rediseño a pantallas fuera de
@@ -20,7 +20,7 @@ class TwColors {
   ///
   /// La guía especifica `#EEF1F7`, pero se mantiene el `#F2F5F9` histórico
   /// (= `AppColors.background`, el que siguen usando las listas de eventos y
-  /// campañas): en la PWA de iOS la barra de herramientas del navegador tiene
+  /// eventos de leads): en la PWA de iOS la barra del navegador tiene
   /// un color fijo y el contenedor de la app lo iguala para que no se vea la
   /// separación. Cambiar este valor rompe ese calce.
   static const bg = Color(0xFFF2F5F9);
@@ -87,6 +87,16 @@ class TwColors {
   static const statusEnded = Color(0xFFF3B4B4);
   static const statusEndedBg = Color(0x1FF3B4B4); // 12%
   static const statusEndedBd = Color(0x42F3B4B4); // 26%
+
+  // Origen del evento de leads: lima de marca (interno) y naranjo (externo).
+  // Las tintas son las versiones oscuras de ambas familias porque este pill
+  // vive sobre tarjeta blanca, no sobre el hero como los de estado.
+  static const originInternal = Color(0xFF6B9E14); // lima legible
+  static const originInternalBg = Color(0x1F6B9E14); // 12%
+  static const originInternalBd = Color(0x476B9E14); // 28%
+  static const originExternal = Color(0xFFB4691F); // naranjo
+  static const originExternalBg = Color(0x1FB4691F); // 12%
+  static const originExternalBd = Color(0x47B4691F); // 28%
 
   // ---------- Blancos translúcidos (solo sobre hero) ----------
   static const whiteA14 = Color(0x24FFFFFF); // divisores de stats

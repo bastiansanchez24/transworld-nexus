@@ -31,8 +31,24 @@ class EventosLeadsRepository {
         .toList();
   }
 
-  /// Busca campaña por nombre exacto (case-insensitive), sin comodines ILIKE.
-  /// Si hay homónimos legacy, devuelve la más antigua (`created_at`).
+  /// Evento de leads interno de un evento de registro. El índice único parcial
+  /// de `evento_origen_id` garantiza que haya como máximo uno.
+  Future<EventoLead?> buscarPorEventoOrigen(String eventoOrigenId) async {
+    if (eventoOrigenId.isEmpty) return null;
+
+    final row = await _client
+        .from(SupabaseTables.eventosLeads)
+        .select()
+        .eq('evento_origen_id', eventoOrigenId)
+        .maybeSingle();
+
+    if (row == null) return null;
+    return EventoLead.fromMap(Map<String, dynamic>.from(row));
+  }
+
+  /// Busca por nombre exacto (case-insensitive), sin comodines ILIKE. Solo para
+  /// los eventos de leads previos al vínculo por id, que no tienen origen.
+  /// Si hay homónimos legacy, devuelve el más antiguo (`created_at`).
   Future<EventoLead?> buscarPorNombre(String nombre) async {
     final nombreNormalizado = nombre.trim();
     if (nombreNormalizado.isEmpty) return null;

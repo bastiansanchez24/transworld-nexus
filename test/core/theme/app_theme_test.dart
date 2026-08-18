@@ -31,7 +31,7 @@ void main() {
     expect(scheme.tertiaryContainer, AppColors.tintLime);
   });
 
-  test('usesSideRail solo en Windows de escritorio', () {
+  test('usesSideRail en Windows nativo, no en Android ni iOS', () {
     final previous = debugDefaultTargetPlatformOverride;
     try {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -50,6 +50,95 @@ void main() {
     }
   });
 
+  test('usesSideRail en web de PC y no en web móvil', () {
+    expect(
+      GlassNavTokens.usesSideRailFor(
+        isWeb: true,
+        platform: TargetPlatform.windows,
+      ),
+      isTrue,
+    );
+    expect(
+      GlassNavTokens.usesSideRailFor(
+        isWeb: true,
+        platform: TargetPlatform.macOS,
+      ),
+      isTrue,
+    );
+    expect(
+      GlassNavTokens.usesSideRailFor(
+        isWeb: true,
+        platform: TargetPlatform.linux,
+      ),
+      isTrue,
+    );
+    expect(
+      GlassNavTokens.usesSideRailFor(isWeb: true, platform: TargetPlatform.iOS),
+      isFalse,
+    );
+    expect(
+      GlassNavTokens.usesSideRailFor(
+        isWeb: true,
+        platform: TargetPlatform.android,
+      ),
+      isFalse,
+    );
+    expect(
+      GlassNavTokens.usesSideRailFor(
+        isWeb: false,
+        platform: TargetPlatform.macOS,
+      ),
+      isFalse,
+    );
+    expect(
+      GlassNavTokens.usesSideRailFor(
+        isWeb: false,
+        platform: TargetPlatform.linux,
+      ),
+      isFalse,
+    );
+  });
+
+  testWidgets('usesSideRailOf en web solo con viewport de escritorio', (
+    tester,
+  ) async {
+    Future<bool> railFor({required Size size}) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: MediaQueryData(size: size),
+          child: const SizedBox(),
+        ),
+      );
+      final context = tester.element(find.byType(SizedBox));
+      return GlassNavTokens.usesSideRailOf(
+        context,
+        isWeb: true,
+        platform: TargetPlatform.windows,
+      );
+    }
+
+    expect(await railFor(size: const Size(1280, 720)), isTrue);
+    expect(await railFor(size: const Size(840, 600)), isTrue);
+    expect(await railFor(size: const Size(839, 600)), isFalse);
+    expect(await railFor(size: const Size(390, 844)), isFalse);
+
+    await tester.pumpWidget(
+      const MediaQuery(
+        data: MediaQueryData(size: Size(1280, 720)),
+        child: SizedBox(),
+      ),
+    );
+    final wide = tester.element(find.byType(SizedBox));
+    expect(
+      GlassNavTokens.usesSideRailOf(
+        wide,
+        isWeb: true,
+        platform: TargetPlatform.iOS,
+      ),
+      isFalse,
+    );
+  });
+
   testWidgets('contentBottomInset no reserva la tab bar en Windows', (
     tester,
   ) async {
@@ -64,7 +153,7 @@ void main() {
       );
       final context = tester.element(find.byType(SizedBox));
       expect(GlassNavTokens.contentBottomInset(context), AppSpacing.xl);
-      expect(AppSpacing.shellFabBottomOf(), AppSpacing.sm);
+      expect(AppSpacing.shellFabBottomOf(context), AppSpacing.sm);
     } finally {
       debugDefaultTargetPlatformOverride = previous;
     }
@@ -90,7 +179,7 @@ void main() {
             AppSpacing.xl,
       );
       expect(
-        AppSpacing.shellFabBottomOf(),
+        AppSpacing.shellFabBottomOf(context),
         GlassNavTokens.occupiedHeightOf() + AppSpacing.sm,
       );
     } finally {
@@ -121,7 +210,7 @@ void main() {
         GlassNavTokens.nativeIosOccupied + AppSpacing.xl,
       );
       expect(
-        AppSpacing.shellFabBottomOf(),
+        AppSpacing.shellFabBottomOf(context),
         GlassNavTokens.nativeIosOccupied + AppSpacing.sm,
       );
       expect(

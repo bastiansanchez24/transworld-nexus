@@ -37,11 +37,14 @@ class HomeFeaturedItem {
   String get etiqueta => switch (kind) {
     HomeFeaturedKind.proximoEvento => 'PRÓXIMO EVENTO',
     HomeFeaturedKind.eventoFijado => 'EVENTO FIJADO',
-    HomeFeaturedKind.campanaFijada => 'CAMPAÑA FIJADA',
+    HomeFeaturedKind.campanaFijada => 'EVENTO DE LEADS FIJADO',
   };
 
-  String get ctaLabel =>
-      kind == HomeFeaturedKind.campanaFijada ? 'Ver campaña' : 'Ver evento';
+  /// Se distingue del evento de registro para que dos fijados homónimos no
+  /// ofrezcan el mismo botón.
+  String get ctaLabel => kind == HomeFeaturedKind.campanaFijada
+      ? 'Ver evento de leads'
+      : 'Ver evento';
 
   bool get puedeEscanearQr => kind != HomeFeaturedKind.campanaFijada;
 

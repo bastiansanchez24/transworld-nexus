@@ -42,7 +42,7 @@ final homeFeaturedItemsProvider =
             final campana = await campanasRepo.obtenerPorId(id);
             fijados.add(HomeFeaturedItem.campanaFijada(campana));
           } catch (_) {
-            // Campaña borrada o inaccesible: omitir.
+            // Evento de leads borrado o inaccesible: omitir.
           }
         }
       }
@@ -86,12 +86,16 @@ Future<HomeFeaturedItem> _conMetricas({
     final resumen = await registradosRepo.obtenerResumenPorEvento(item.id);
     var leads = 0;
     try {
-      final campana = await campanasRepo.buscarPorNombre(item.nombre);
-      if (campana != null) {
-        leads = (await leadsRepo.obtenerResumenCampana(campana.id)).total;
+      // El homónimo solo cubre los eventos de leads anteriores al vínculo por
+      // id, que no tienen `evento_origen_id`.
+      final eventoLead =
+          await campanasRepo.buscarPorEventoOrigen(item.id) ??
+          await campanasRepo.buscarPorNombre(item.nombre);
+      if (eventoLead != null) {
+        leads = (await leadsRepo.obtenerResumenCampana(eventoLead.id)).total;
       }
     } catch (_) {
-      // Sin campaña homónima o sin permiso: leads queda en 0.
+      // Sin evento de leads asociado o sin permiso: leads queda en 0.
     }
     return item.copyWith(
       registrados: resumen.total,

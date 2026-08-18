@@ -1,3 +1,4 @@
+/// <reference path="../deno.d.ts" />
 import { createAdminClient } from "../_shared/admin_client.ts";
 import { resolveCallerAuth } from "../_shared/caller_auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";

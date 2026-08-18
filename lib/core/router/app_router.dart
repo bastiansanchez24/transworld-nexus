@@ -89,14 +89,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     usuarioEventosAutorizadosProvider,
     (_, _) => refreshListenable.refresh(),
   );
-  ref.listen(splashReadyProvider, (_, _) => refreshListenable.refresh());
   ref.listen(
     splashNavigationTimedOutProvider,
     (_, _) => refreshListenable.refresh(),
   );
 
   return GoRouter(
-    initialLocation: (showAnimatedSplash || authClient.currentSession != null)
+    initialLocation: authClient.currentSession != null
         ? RoutePaths.splash
         : RoutePaths.login,
     observers: [CNTabBarRouteObserver()],
@@ -115,14 +114,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final session = authClient.currentSession;
       final esPublica = _esRutaPublica(location);
       final enSplash = location == RoutePaths.splash;
-      final splashReady = ref.read(splashReadyProvider);
       final splashTimedOut = ref.read(splashNavigationTimedOutProvider);
-
-      // Animación Lottie solo en Windows/Android. En web el splash se usa
-      // como espera de perfil cuando ya hay sesión, sin bloquear el arranque.
-      if (showAnimatedSplash && !splashReady) {
-        return enSplash ? null : RoutePaths.splash;
-      }
 
       if (session == null && (!esPublica || enSplash)) {
         return RoutePaths.login;
@@ -322,7 +314,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: RoutePaths.splash,
-        builder: (context, state) => const SplashScreen(),
+        builder: (context, state) =>
+            const SplashScreen(armProfileTimeout: true),
       ),
       GoRoute(
         path: RoutePaths.login,

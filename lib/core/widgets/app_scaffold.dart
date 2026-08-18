@@ -76,7 +76,7 @@ class AppScaffold extends StatelessWidget {
 /// Acción de la cabecera push (atrás, editar, eliminar…).
 ///
 /// Es [TwIconButton] con el nombre que ya usan las pantallas: mismo botón que
-/// los menús de evento y campaña, para que la app no tenga dos estilos de
+/// los menús de evento y evento de leads, para que la app no tenga dos estilos de
 /// cabecera conviviendo.
 class NexusHeaderAction extends StatelessWidget {
   const NexusHeaderAction({

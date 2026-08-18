@@ -319,6 +319,7 @@ class EventRow extends StatelessWidget {
     this.fijado = false,
     this.trailing,
     this.actions,
+    this.chip,
   });
 
   final DateTime date;
@@ -330,6 +331,10 @@ class EventRow extends StatelessWidget {
   final bool fijado;
   final Widget? trailing;
   final List<Widget>? actions;
+
+  /// Distintivo extra bajo el título, junto al estado (p. ej. el origen de un
+  /// evento de leads).
+  final Widget? chip;
 
   @override
   Widget build(BuildContext context) {
@@ -416,11 +421,19 @@ class EventRow extends StatelessWidget {
                               ],
                             ),
                           ],
-                          if (finalizado) ...[
+                          if (chip != null || finalizado) ...[
                             const SizedBox(height: 6),
-                            const StatusChip(
-                              label: 'Evento finalizado',
-                              variant: StatusChipVariant.danger,
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                ?chip,
+                                if (finalizado)
+                                  const StatusChip(
+                                    label: 'Evento finalizado',
+                                    variant: StatusChipVariant.danger,
+                                  ),
+                              ],
                             ),
                           ],
                         ],

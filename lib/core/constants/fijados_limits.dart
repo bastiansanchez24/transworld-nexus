@@ -1,4 +1,4 @@
-/// Límite de fijados personales por tipo (eventos / campañas).
+/// Límite de fijados personales por tipo (eventos / eventos de leads).
 const int kMaxFijadosPorTipo = 3;
 
 /// Se lanza al intentar fijar más de [kMaxFijadosPorTipo] ítems del mismo tipo.

@@ -73,7 +73,7 @@ class LeadsRepository implements SyncExecutor {
         .eq('perfil_id', perfilId);
   }
 
-  /// Conteos de la campaña para roles internos. No devuelve filas de leads.
+  /// Conteos del evento de leads para roles internos. No devuelve filas.
   Future<({int total, int empresas})> obtenerResumenCampana(
     String eventoId,
   ) async {

@@ -25,7 +25,7 @@ class SupabaseTables {
   static const notificacionesOcultas = 'notificaciones_ocultas';
   static const deviceTokens = 'device_tokens';
 
-  /// Fijados personales por usuario (independientes entre eventos y campañas).
+  /// Fijados personales por usuario (eventos y eventos de leads, por separado).
   static const usuariosEventosFijados = 'usuarios_eventos_fijados';
   static const usuariosEventosLeadsFijados = 'usuarios_eventos_leads_fijados';
 

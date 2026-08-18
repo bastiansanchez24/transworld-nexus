@@ -9,10 +9,12 @@ import 'package:transworld_nexus/features/auth/screens/splash_screen.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('SplashScreen renders Lottie on brand background', (tester) async {
+  testWidgets('SplashScreen renders looping Lottie on brand background', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(home: SplashScreen()),
+        child: MaterialApp(home: SplashScreen(armProfileTimeout: true)),
       ),
     );
 
@@ -21,28 +23,31 @@ void main() {
     expect(scaffold.backgroundColor, AppColors.background);
     expect(find.byType(Lottie), findsOneWidget);
 
-    // Completa fallback + timeout de navegación para no dejar timers pendientes.
-    await tester.pump(const Duration(milliseconds: 2500));
+    await tester.pump();
     await tester.pump(const Duration(seconds: 8));
   });
 
-  testWidgets('splashReady becomes true after fallback timeout', (tester) async {
+  testWidgets('splashReady is true on first frame, without waiting animation', (
+    tester,
+  ) async {
     late ProviderContainer container;
     await tester.pumpWidget(
       ProviderScope(
         child: Builder(
           builder: (context) {
             container = ProviderScope.containerOf(context);
-            return const MaterialApp(home: SplashScreen());
+            return const MaterialApp(
+              home: SplashScreen(armProfileTimeout: true),
+            );
           },
         ),
       ),
     );
 
-    expect(container.read(splashReadyProvider), isFalse);
+    expect(container.read(splashReadyProvider), isTrue);
+    expect(container.read(splashNavigationTimedOutProvider), isFalse);
 
     await tester.pump(const Duration(milliseconds: 2500));
-
     expect(container.read(splashReadyProvider), isTrue);
     expect(container.read(splashNavigationTimedOutProvider), isFalse);
 

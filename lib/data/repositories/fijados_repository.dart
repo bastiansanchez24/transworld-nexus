@@ -77,7 +77,7 @@ class FijadosRepository {
     final actuales = await listarCampanasFijadas();
     if (actuales.contains(eventoLeadId)) return;
     if (actuales.length >= kMaxFijadosPorTipo) {
-      throw const FijadosLimitException('campañas');
+      throw const FijadosLimitException('eventos de leads');
     }
 
     await _client.from(SupabaseTables.usuariosEventosLeadsFijados).upsert({

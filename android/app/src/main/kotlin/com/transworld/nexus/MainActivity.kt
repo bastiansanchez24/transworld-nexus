@@ -29,7 +29,18 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        skipSystemSplashExitAnimation()
         preferHighestRefreshRate()
+    }
+
+    /// Android 12+ anima el icono al salir del splash nativo. Esa animacion
+    /// se suma al Lottie de Flutter y deja el logo congelado encima de la
+    /// UI hasta que termina. Al primer frame, quitar el splash de golpe.
+    private fun skipSystemSplashExitAnimation() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        splashScreen.setOnExitAnimationListener { splashView ->
+            splashView.remove()
+        }
     }
 
     override fun onAttachedToWindow() {

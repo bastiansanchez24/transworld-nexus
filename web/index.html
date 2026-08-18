@@ -28,20 +28,24 @@
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F5F9">
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#F2F5F9">
 
-  <!-- iOS meta tags & icons -->
+  <!-- iOS meta tags & icons. 512/1024 evitan pixelado al agregar a inicio en iPhone. -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Transworld | RegisPro">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" href="icons/Icon-512.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/Icon-512.png">
+  <link rel="apple-touch-icon" sizes="1024x1024" href="icons/Icon-1024.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Favicon (pestaña del navegador; 64px basta). -->
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png"/>
 
   <title>Transworld | RegisPro</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body style="background-color: #F2F5F9;">
+  <!-- Mismo fondo que el splash Flutter (#F2F5F9) hasta que pinta el engine. -->
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

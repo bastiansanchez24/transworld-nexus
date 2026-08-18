@@ -91,9 +91,10 @@ class AppColors {
 /// Métricas de la navegación del shell ([TwBottomNavBar] / [TwSideNavRail] /
 /// tab bar nativa iOS).
 ///
-/// En Android y web el panel es un vidrio flotante de 68 dp. En iOS nativo
-/// (no PWA) es un `UITabBar` de ~49 dp. En Windows el menú pasa a un rail
-/// izquierdo del color del contenedor, sin tapar el contenido.
+/// En Android, iOS nativo y web móvil el menú va abajo: vidrio flotante de
+/// 68 dp, o `UITabBar` de ~49 dp en iPhone/iPad nativo. En Windows y en la
+/// web de PC el menú pasa a un rail izquierdo del color del contenedor, sin
+/// tapar el contenido.
 /// Aquí viven las medidas que otras pantallas usan para reservar espacio.
 abstract final class GlassNavTokens {
   static const height = 68.0;
@@ -115,6 +116,10 @@ abstract final class GlassNavTokens {
 
   /// Ancho del rail de escritorio (icono + etiqueta, como Discord / WhatsApp).
   static const sideRailWidth = 96.0;
+
+  /// Umbral de escritorio en web: por debajo se mantiene la barra flotante
+  /// (ventana estrecha o preview móvil). Encima, el rail de Windows.
+  static const sideRailMinWidth = 840.0;
 
   /// Aire interno del rail: separa los ítems del borde y de la title bar.
   static const sideRailPadding = EdgeInsets.symmetric(
@@ -150,14 +155,36 @@ abstract final class GlassNavTokens {
   /// Panel + margen de flotación, sin safe area ni holgura web.
   static const occupiedHeight = height + bottomMargin;
 
-  static double webBottomGap() => kIsWeb ? webBottomExtra : 0;
+  static double webBottomGap() =>
+      kIsWeb && !usesSideRailFor() ? webBottomExtra : 0;
 
   /// Panel + márgenes de flotación (incluye holgura web).
   static double occupiedHeightOf() => occupiedHeight + webBottomGap();
 
-  /// Windows de escritorio: menú en rail izquierdo, no en la barra flotante.
-  static bool get usesSideRail =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+  /// Plataformas de PC: Windows nativo, y web cuyo UA es windows / macOS /
+  /// linux. Android e iOS (app o PWA) quedan fuera.
+  static bool usesSideRailFor({bool? isWeb, TargetPlatform? platform}) {
+    final web = isWeb ?? kIsWeb;
+    final p = platform ?? defaultTargetPlatform;
+    if (!web) return p == TargetPlatform.windows;
+    return p == TargetPlatform.windows ||
+        p == TargetPlatform.macOS ||
+        p == TargetPlatform.linux;
+  }
+
+  /// Windows nativo siempre. En web, solo con viewport de escritorio.
+  static bool usesSideRailOf(
+    BuildContext context, {
+    bool? isWeb,
+    TargetPlatform? platform,
+  }) {
+    if (!usesSideRailFor(isWeb: isWeb, platform: platform)) return false;
+    final web = isWeb ?? kIsWeb;
+    if (!web) return true;
+    return MediaQuery.sizeOf(context).width >= sideRailMinWidth;
+  }
+
+  static bool get usesSideRail => usesSideRailFor();
 
   /// iPhone/iPad nativo: `UITabBar` Liquid Glass. Safari/PWA sigue con el
   /// panel Flutter — no hay UIKit.
@@ -165,12 +192,12 @@ abstract final class GlassNavTokens {
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   /// Espacio al final del contenido para que no quede bajo la barra flotante
-  /// ni bajo su zona muerta. En Windows el rail no cubre el cuerpo. En iOS
-  /// nativo la barra va pegada al borde y ya cubre el home indicator, así que
-  /// el safe area no se suma aparte.
+  /// ni bajo su zona muerta. Con rail (Windows / web de PC) el menú no cubre
+  /// el cuerpo. En iOS nativo la barra va pegada al borde y ya cubre el home
+  /// indicator, así que el safe area no se suma aparte.
   static double contentBottomInset(BuildContext context) {
     final safeBottom = MediaQuery.viewPaddingOf(context).bottom + AppSpacing.xl;
-    if (usesSideRail) return safeBottom;
+    if (usesSideRailOf(context)) return safeBottom;
     if (usesNativeIosTabBar) return nativeIosOccupied + AppSpacing.xl;
     return occupiedHeightOf() + deadZone + safeBottom;
   }
@@ -218,8 +245,11 @@ class AppSpacing {
   /// El Scaffold interno no ve el [bottomNavigationBar] del padre.
   static const shellFabBottom = GlassNavTokens.occupiedHeight + sm;
 
-  static double shellFabBottomOf() {
-    if (GlassNavTokens.usesSideRail) return sm;
+  static double shellFabBottomOf([BuildContext? context]) {
+    final rail = context == null
+        ? GlassNavTokens.usesSideRail
+        : GlassNavTokens.usesSideRailOf(context);
+    if (rail) return sm;
     if (GlassNavTokens.usesNativeIosTabBar) {
       return GlassNavTokens.nativeIosOccupied + sm;
     }

@@ -12,7 +12,7 @@ import 'permissions_bootstrap.dart';
 import 'tw_bottom_nav_bar.dart';
 
 /// Shell con la navegación del rediseño: `UITabBar` nativo en iOS, barra
-/// flotante en Android/web y rail izquierdo en Windows.
+/// flotante en Android y web móvil, y rail izquierdo en Windows y web de PC.
 ///
 /// Un único [PopScope] en el shell (no por rama) evita que el diálogo de
 /// salida deje de aparecer tras cambiar de tab o volver de rutas hijas.
@@ -112,7 +112,8 @@ class MainShellScaffold extends ConsumerWidget {
   }
 }
 
-/// Coloca el menú abajo (iOS nativo / Android / web) o a la izquierda (Windows).
+/// Coloca el menú abajo (iOS nativo / Android / web móvil) o a la izquierda
+/// (Windows y web de PC).
 class MainShellNavHost extends StatelessWidget {
   const MainShellNavHost({
     super.key,
@@ -129,7 +130,7 @@ class MainShellNavHost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (GlassNavTokens.usesSideRail) {
+    if (GlassNavTokens.usesSideRailOf(context)) {
       return Scaffold(
         backgroundColor: AppColors.background,
         body: Row(

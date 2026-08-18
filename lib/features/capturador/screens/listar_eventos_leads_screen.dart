@@ -12,6 +12,7 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/evento_list_context_menu.dart';
 import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/tw_components.dart';
 import '../../../data/models/evento_lead.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
 import '../../../data/repositories/fijados_repository.dart';
@@ -78,7 +79,7 @@ class _ListarEventosLeadsScreenState
     return filtrados;
   }
 
-  Future<void> _mostrarMenuCampana(
+  Future<void> _mostrarMenuEventoLead(
     EventoLead evento,
     Set<String> fijados,
   ) async {
@@ -108,7 +109,7 @@ class _ListarEventosLeadsScreenState
           if (mounted) {
             showAppSnackBar(
               context,
-              'No se pudo fijar la campaña.',
+              'No se pudo fijar el evento.',
               isError: true,
             );
           }
@@ -121,16 +122,16 @@ class _ListarEventosLeadsScreenState
         if (!mounted) return;
         context.push(RoutePaths.editarEventoLead(evento.id));
       case EventoListMenuAction.eliminar:
-        await _eliminarCampana(evento);
+        await _eliminarEventoLead(evento);
     }
   }
 
-  Future<void> _eliminarCampana(EventoLead evento) async {
+  Future<void> _eliminarEventoLead(EventoLead evento) async {
     final confirmado = await confirmDialog(
       context,
-      title: 'Eliminar campaña',
+      title: 'Eliminar evento',
       message:
-          'Esta acción no se puede deshacer. ¿Eliminar la campaña de captura?',
+          'Esta acción no se puede deshacer. ¿Eliminar el evento de captura?',
       confirmLabel: 'Eliminar',
     );
     if (!confirmado || !mounted) return;
@@ -146,7 +147,7 @@ class _ListarEventosLeadsScreenState
       if (mounted) {
         showAppSnackBar(
           context,
-          'No se pudo eliminar la campaña.',
+          'No se pudo eliminar el evento.',
           isError: true,
         );
       }
@@ -168,7 +169,7 @@ class _ListarEventosLeadsScreenState
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          hintText: 'Buscar campaña…',
+          hintText: 'Buscar evento…',
           hintStyle: const TextStyle(color: AppColors.placeholder),
           prefixIcon: const Icon(
             Symbols.search_rounded,
@@ -244,7 +245,7 @@ class _ListarEventosLeadsScreenState
         ),
         const SizedBox(height: 2),
         const Text(
-          'Registre campañas y capture oportunidades potenciales de negocio.',
+          'Registre eventos y capture oportunidades potenciales de negocio.',
           style: TextStyle(
             fontSize: 13,
             color: AppColors.textSecondary,
@@ -253,7 +254,7 @@ class _ListarEventosLeadsScreenState
         if (total != null && proximos != null) ...[
           const SizedBox(height: 6),
           Text(
-            '$total campañas · $proximos próximas',
+            '$total eventos · $proximos próximos',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
@@ -331,8 +332,8 @@ class _ListarEventosLeadsScreenState
                         ? Icons.search_off_rounded
                         : Icons.filter_list_off_rounded,
                     message: porBusqueda
-                        ? 'No hay campañas que coincidan con la búsqueda.'
-                        : 'No hay campañas en este filtro.',
+                        ? 'No hay eventos que coincidan con la búsqueda.'
+                        : 'No hay eventos en este filtro.',
                   ),
                 ),
               ];
@@ -354,9 +355,11 @@ class _ListarEventosLeadsScreenState
                         place: evento.pais ?? '',
                         finalizado: evento.yaOcurrio,
                         fijado: fijado,
+                        chip: TwOriginPill(interno: evento.esInterno),
                         onTap: () =>
                             context.push(RoutePaths.usarEventoLead(evento.id)),
-                        onLongPress: () => _mostrarMenuCampana(evento, fijados),
+                        onLongPress: () =>
+                            _mostrarMenuEventoLead(evento, fijados),
                       ),
                     );
                   },

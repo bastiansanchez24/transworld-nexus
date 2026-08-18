@@ -22,6 +22,15 @@ final eventoLeadByIdProvider = FutureProvider.autoDispose
       return ref.watch(eventosLeadsRepositoryProvider).obtenerPorId(id);
     });
 
+/// Evento de leads interno de un evento de registro, o `null` si todavía no se
+/// ha creado. El menú de Evento lo usa para ofrecer crearlo o abrirlo.
+final eventoLeadInternoProvider = FutureProvider.autoDispose
+    .family<EventoLead?, String>((ref, eventoOrigenId) {
+      return ref
+          .watch(eventosLeadsRepositoryProvider)
+          .buscarPorEventoOrigen(eventoOrigenId);
+    });
+
 Iterable<SyncQueueItem> leadQueueItemsForOverlay(
   Iterable<SyncQueueItem> items,
 ) {
@@ -125,7 +134,7 @@ LeadsResumen aplicarColaAResumen({
   );
 }
 
-/// RPC de conteos de campaña. Lo puede pedir todo el que abre la campaña
+/// RPC de conteos del evento de leads. Lo puede pedir todo el que lo abre
 /// —incluido el externo autorizado—, porque devuelve conteos y no filas: el
 /// recorte a "mis leads" es de la lista, no del resumen. Se cachea sin PII.
 final leadsResumenRemotoProvider = FutureProvider.autoDispose
@@ -154,7 +163,7 @@ final leadsResumenRemotoProvider = FutureProvider.autoDispose
           : filas.first;
     });
 
-/// Conteos del hub: RPC de campaña para internos, con cola local encima.
+/// Conteos del hub: RPC del evento de leads para internos, con cola local.
 final leadsResumenLocalProvider = Provider.autoDispose
     .family<LeadsResumen?, String>((ref, eventoId) {
       final perfil = ref.watch(currentPerfilProvider).valueOrNull;
@@ -182,7 +191,7 @@ final leadsResumenLocalProvider = Provider.autoDispose
       // Sin resumen del servidor solo se puede contar lo que hay en caché, y
       // eso únicamente sirve si el perfil ve todos los leads: para `user` o
       // externo serían sus propias filas haciéndose pasar por el total de la
-      // campaña (de ahí los ceros del hub). Mejor dejarlo en "—".
+      // evento (de ahí los ceros del hub). Mejor dejarlo en "—".
       if (!perfil.canViewAllLeads) return null;
 
       final local = cache.leerLocal(

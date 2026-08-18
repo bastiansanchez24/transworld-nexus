@@ -99,9 +99,8 @@ docs/
   Android, iOS, Web y escritorio.
 - **  Backend**: Supabase (Postgres + Auth + Storage + Edge Functions),
   esquema `public`. Ver `supabase/schema.sql` para el modelo completo,
-  políticas RLS, triggers y funciones RPC. Las migraciones incrementales
-  en `supabase/migrations/` documentan cambios aplicados sobre
-  entornos ya existentes; el schema es la fuente de verdad consolidada.
+  políticas RLS, triggers y funciones RPC. Es la fuente de verdad
+  consolidada; `supabase/migrations/` se mantiene vacío a propósito.
 
 ## Cómo correr el proyecto
 
@@ -118,11 +117,8 @@ docs/
    cp .env.example .env
    ```
 
-3. Aplica `supabase/schema.sql` en tu proyecto Supabase (SQL Editor o
-   `supabase db push` si usas el CLI). Es idempotente: puede ejecutarse
-   varias veces sin duplicar objetos. Si el proyecto ya tenía un schema
-   anterior, también puedes aplicar solo las migraciones pendientes en
-   `supabase/migrations/`.
+3. Aplica `supabase/schema.sql` en tu proyecto Supabase (SQL Editor).
+   Es idempotente: puede ejecutarse varias veces sin duplicar objetos.
 
 4. (Opcional — push FCM) Copia el stub y genera opciones reales:
    `cp lib/firebase_options.stub.dart lib/firebase_options.dart` y luego

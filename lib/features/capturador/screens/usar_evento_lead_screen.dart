@@ -18,7 +18,7 @@ import '../../../data/offline/sync_queue_service.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capturador_providers.dart';
 
-/// Hub operativo de una campaña de captura de leads — rediseño §9.
+/// Hub operativo de un evento de captura de leads — rediseño §9.
 ///
 /// Misma estructura que el menú de Evento, con tres diferencias: la cabecera
 /// no lleva botón compartir, el hero muestra 2 métricas y el CTA es
@@ -66,20 +66,20 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
                   skipLoadingOnReload: true,
                   loading: () => const LoadingView(),
                   error: (e, _) => const ErrorView(
-                    message: 'No se pudo cargar la campaña.',
+                    message: 'No se pudo cargar el evento.',
                   ),
                   data: (evento) => TwDetailScaffold(
-                    eyebrow: 'Detalle de la campaña',
+                    eyebrow: 'Detalle del evento',
                     title: evento.nombre,
                     onBack: () => context.pop(),
                     actions: [
-                      // Sin botón compartir: la campaña no tiene formulario
-                      // público que enlazar (§9).
+                      // Sin botón compartir: el evento de leads no tiene
+                      // formulario público que enlazar (§9).
                       if (puedeEditar)
                         TwIconButton(
                           icon: Symbols.edit_rounded,
                           iconSize: 19,
-                          tooltip: 'Editar campaña',
+                          tooltip: 'Editar evento',
                           onTap: () => context.push(
                             RoutePaths.editarEventoLead(widget.eventoId),
                           ),
@@ -87,7 +87,7 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
                     ],
                     children: [
                       _hero(context, evento, resumen),
-                      const TwSectionLabel('Acciones de la campaña'),
+                      const TwSectionLabel('Acciones del evento'),
                       TwActionTile(
                         icon: Symbols.contacts_rounded,
                         title: 'Ver leads',
@@ -107,9 +107,9 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
                           onTap: () => showSyncConflictsSheet(context, ref),
                         ),
                       ],
-                      // §9 lista además un tile "KPI de la campaña"; no se
-                      // monta porque `KpiScreen` solo sabe leer
-                      // `eventos`/`registrados` y una campaña la haría fallar.
+                      // §9 lista además un tile "KPI del evento"; no se monta
+                      // porque `KpiScreen` solo sabe leer `eventos`/
+                      // `registrados` y un evento de leads la haría fallar.
                       // Queda pendiente su pantalla propia.
                       if (puedeExportar) ...[
                         const TwSectionLabel('Administración'),
@@ -166,8 +166,8 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
   static String _valor(int? n) => n?.toString() ?? '—';
 
   static String _subtituloExcel(int? total) {
-    if (total == null) return 'Leads de la campaña';
+    if (total == null) return 'Leads del evento';
     final filas = total == 1 ? '1 fila' : '$total filas';
-    return 'Leads de la campaña · $filas';
+    return 'Leads del evento · $filas';
   }
 }

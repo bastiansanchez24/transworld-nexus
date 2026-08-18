@@ -278,7 +278,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('la campaña fijada no muestra escanear QR', (tester) async {
+  testWidgets('el evento de leads fijado no muestra escanear QR', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -289,8 +291,8 @@ void main() {
                 items: [
                   HomeFeaturedItem(
                     kind: HomeFeaturedKind.campanaFijada,
-                    id: 'campana-1',
-                    nombre: 'Campaña destacada',
+                    id: 'evento-lead-1',
+                    nombre: 'Evento de leads destacado',
                     fecha: DateTime(2026, 9, 12),
                   ),
                 ],
@@ -302,7 +304,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Ver campaña'), findsOneWidget);
+    expect(find.text('Ver evento de leads'), findsOneWidget);
     expect(find.text('Escanear QR'), findsNothing);
     expect(tester.takeException(), isNull);
   });

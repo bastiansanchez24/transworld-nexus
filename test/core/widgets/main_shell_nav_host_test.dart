@@ -113,6 +113,33 @@ void main() {
     }
   });
 
+  testWidgets('en macOS nativo el menú sigue abajo', (tester) async {
+    final previous = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: MainShellNavHost(
+            selectedIndex: 0,
+            onItemSelected: (_) {},
+            items: _items,
+            body: const ColoredBox(
+              color: Colors.red,
+              child: SizedBox.expand(child: Text('cuerpo')),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(TwBottomNavBar), findsOneWidget);
+      expect(find.byType(TwSideNavRail), findsNothing);
+      expect(find.byType(IosNativeTabBar), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = previous;
+    }
+  });
+
   testWidgets('el rail reporta el ítem pulsado', (tester) async {
     final previous = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;

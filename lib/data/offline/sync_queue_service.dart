@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/config/app_bootstrap.dart';
 import '../supabase/supabase_client_provider.dart';
 import 'sync_queue_item.dart';
 
@@ -408,10 +409,7 @@ class SyncQueueService extends StateNotifier<List<SyncQueueItem>> {
 }
 
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError(
-    'sharedPreferencesProvider debe sobreescribirse en main.dart con '
-    'ProviderScope(overrides: [...]) usando la instancia ya inicializada.',
-  );
+  return ref.watch(appBootstrapProvider).requireValue.sharedPreferences;
 });
 
 final syncQueueServiceProvider =

@@ -190,6 +190,8 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
       ref.invalidate(eventosListProvider);
       ref.invalidate(eventoByIdProvider(widget.eventoId!));
       if (mounted) context.go(RoutePaths.eventos);
+    } on EventoConEventoLeadException catch (e) {
+      if (mounted) showAppSnackBar(context, e.toString(), isError: true);
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, 'No se pudo eliminar el evento.', isError: true);
