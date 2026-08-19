@@ -37,4 +37,23 @@ void main() {
     expect(find.text('Evento'), findsOneWidget);
     expect(find.byType(EventoHeroFoto), findsOneWidget);
   });
+
+  testWidgets('un rebuild del padre conserva EventoHeroFoto', (tester) async {
+    Widget app() => const MaterialApp(
+      home: SizedBox.expand(
+        child: EventoHeroFoto(
+          imagenUrl: 'https://example.com/evento.jpg',
+          velo: 0,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(app());
+    await tester.pump();
+    expect(find.byType(EventoHeroFoto), findsOneWidget);
+
+    await tester.pumpWidget(app());
+    await tester.pump();
+    expect(find.byType(EventoHeroFoto), findsOneWidget);
+  });
 }

@@ -5,8 +5,7 @@ class SupabaseRowParsers {
 
   static String asString(dynamic value) => value.toString();
 
-  static String? asStringOrNull(dynamic value) =>
-      value?.toString();
+  static String? asStringOrNull(dynamic value) => value?.toString();
 
   static DateTime parseDate(dynamic value) {
     if (value is DateTime) return value;

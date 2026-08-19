@@ -28,15 +28,16 @@ class ExcelExportService {
     'Fecha de registro',
   ];
 
-  Uint8List generar(List<Registrado> registrados, {required String tituloHoja}) {
+  Uint8List generar(
+    List<Registrado> registrados, {
+    required String tituloHoja,
+  }) {
     final excel = xls.Excel.createExcel();
     final nombreHojaOriginal = excel.getDefaultSheet()!;
     excel.rename(nombreHojaOriginal, tituloHoja);
     final sheet = excel[tituloHoja];
 
-    sheet.appendRow([
-      for (final h in _cabeceras) xls.TextCellValue(h),
-    ]);
+    sheet.appendRow([for (final h in _cabeceras) xls.TextCellValue(h)]);
 
     final formatoFecha = DateFormat('dd/MM/yyyy HH:mm');
     for (final r in registrados) {
@@ -51,7 +52,9 @@ class ExcelExportService {
         // Nombre del bloque (`evento_bloques.etiqueta`), no el UUID.
         xls.TextCellValue(r.bloqueEtiqueta ?? ''),
         xls.TextCellValue(r.acreditado ? 'Sí' : 'No'),
-        xls.TextCellValue(r.createdAt != null ? formatoFecha.format(r.createdAt!) : ''),
+        xls.TextCellValue(
+          r.createdAt != null ? formatoFecha.format(r.createdAt!) : '',
+        ),
       ]);
     }
 

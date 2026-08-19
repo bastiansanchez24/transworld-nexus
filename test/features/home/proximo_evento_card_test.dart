@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:transworld_nexus/core/theme/app_theme.dart';
 import 'package:transworld_nexus/core/theme/tw_tokens.dart';
 import 'package:transworld_nexus/core/widgets/evento_hero_banner.dart';
@@ -275,6 +276,64 @@ void main() {
 
     expect(find.text('Taller ALTAI: Título por confirmar'), findsOneWidget);
     expect(find.byType(EventoHeroFoto), findsOneWidget);
+    expect(
+      tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .any(
+            (box) =>
+                box.decoration is BoxDecoration &&
+                (box.decoration as BoxDecoration).gradient ==
+                    TwGradients.heroScrim,
+          ),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deslizar el carrusel sigue mostrando la foto de cada card', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: ProximoEventoCard(
+                items: [
+                  HomeFeaturedItem(
+                    kind: HomeFeaturedKind.eventoFijado,
+                    id: 'evento-1',
+                    nombre: 'Evento con foto',
+                    fecha: DateTime(2026, 8, 10),
+                    imagenUrl: 'https://example.com/evento.jpg',
+                  ),
+                  HomeFeaturedItem(
+                    kind: HomeFeaturedKind.campanaFijada,
+                    id: 'campana-1',
+                    nombre: 'Actividad con foto',
+                    fecha: DateTime(2026, 9, 12),
+                    imagenUrl: 'https://example.com/actividad.jpg',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(EventoHeroFoto), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('proximo_evento_punto_1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Actividad con foto'), findsOneWidget);
+    expect(find.byType(EventoHeroFoto), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('proximo_evento_punto_0')));
+    await tester.pumpAndSettle();
+    expect(find.text('Evento con foto'), findsOneWidget);
+    expect(find.byType(EventoHeroFoto), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -307,6 +366,11 @@ void main() {
     expect(find.text('ACTIVIDAD FIJADA'), findsOneWidget);
     expect(find.text('Capturar lead'), findsOneWidget);
     expect(find.text('Ver actividad'), findsOneWidget);
+    expect(find.byIcon(Symbols.person_add_rounded), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Ver actividad')).dy,
+      lessThan(tester.getTopLeft(find.text('Capturar lead')).dy),
+    );
     expect(find.text('Escanear QR'), findsNothing);
     expect(tester.takeException(), isNull);
   });

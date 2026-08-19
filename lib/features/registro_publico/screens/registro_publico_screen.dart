@@ -29,7 +29,8 @@ class RegistroPublicoScreen extends ConsumerStatefulWidget {
   final String eventoId;
 
   @override
-  ConsumerState<RegistroPublicoScreen> createState() => _RegistroPublicoScreenState();
+  ConsumerState<RegistroPublicoScreen> createState() =>
+      _RegistroPublicoScreenState();
 }
 
 class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
@@ -100,7 +101,9 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
         }
         await repo.crear(registrado);
       } else {
-        await ref.read(syncQueueServiceProvider.notifier).enqueueInsert(
+        await ref
+            .read(syncQueueServiceProvider.notifier)
+            .enqueueInsert(
               table: SupabaseTables.registrados,
               payload: registrado.toInsertMap(),
             );
@@ -134,15 +137,19 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
           children: [
             const OfflineBanner(),
             Expanded(
-              child: Center(
+              child: Align(
+                alignment: Alignment.topCenter,
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
+                  padding: AppSpacing.form,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 480),
+                    constraints: const BoxConstraints(
+                      maxWidth: AppSpacing.contentMax,
+                    ),
                     child: eventoAsync.when(
                       loading: () => const LoadingView(),
                       error: (e, _) => const ErrorView(
-                        message: 'Este evento no existe o ya no acepta registros.',
+                        message:
+                            'Este evento no existe o ya no acepta registros.',
                       ),
                       data: (evento) {
                         if (_enviado) {
@@ -176,7 +183,9 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
                               const Text(
                                 'Tu registro fue recibido. Te esperamos en el evento.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: AppColors.textSecondary),
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                             ],
                           );
@@ -210,7 +219,9 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
                                 const Text(
                                   'Completa tus datos para registrarte',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(color: AppColors.textSecondary),
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                                 const SizedBox(height: 24),
                                 CamposRegistroAsistente(

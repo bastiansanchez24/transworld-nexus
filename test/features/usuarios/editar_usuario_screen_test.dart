@@ -40,8 +40,9 @@ class FakeAuthRepository extends AuthRepository {
       'usuario@transworld.cl';
 
   @override
-  Future<List<String>> listarEventosAutorizadosUsuario(String usuarioId) async =>
-      const [];
+  Future<List<String>> listarEventosAutorizadosUsuario(
+    String usuarioId,
+  ) async => const [];
 
   @override
   Future<void> actualizarNombre(String id, String nuevoNombre) async {}
@@ -124,41 +125,39 @@ Future<void> _montar(
 }
 
 void main() {
-  testWidgets(
-    'oculta regenerar contraseña al editar la cuenta propia',
-    (tester) async {
-      await _montar(
-        tester,
-        usuarioId: _adminId,
-        editado: _adminPerfil,
-        sessionUserId: _adminId,
-      );
+  testWidgets('oculta regenerar contraseña al editar la cuenta propia', (
+    tester,
+  ) async {
+    await _montar(
+      tester,
+      usuarioId: _adminId,
+      editado: _adminPerfil,
+      sessionUserId: _adminId,
+    );
 
-      expect(
-        find.text('Para cambiar tu contraseña usa Mi perfil.'),
-        findsOneWidget,
-      );
-      expect(find.byIcon(Symbols.refresh_rounded), findsNothing);
-    },
-  );
+    expect(
+      find.text('Para cambiar tu contraseña usa Mi perfil.'),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Symbols.refresh_rounded), findsNothing);
+  });
 
-  testWidgets(
-    'muestra regenerar contraseña al editar otro usuario',
-    (tester) async {
-      await _montar(
-        tester,
-        usuarioId: _otroId,
-        editado: _otroPerfil,
-        sessionUserId: _adminId,
-      );
+  testWidgets('muestra regenerar contraseña al editar otro usuario', (
+    tester,
+  ) async {
+    await _montar(
+      tester,
+      usuarioId: _otroId,
+      editado: _otroPerfil,
+      sessionUserId: _adminId,
+    );
 
-      expect(
-        find.text('Para cambiar tu contraseña usa Mi perfil.'),
-        findsNothing,
-      );
-      expect(find.byIcon(Symbols.refresh_rounded), findsOneWidget);
-    },
-  );
+    expect(
+      find.text('Para cambiar tu contraseña usa Mi perfil.'),
+      findsNothing,
+    );
+    expect(find.byIcon(Symbols.refresh_rounded), findsOneWidget);
+  });
 
   testWidgets('guardar un usuario vuelve a la lista', (tester) async {
     tester.view.physicalSize = const Size(1000, 2000);
@@ -191,7 +190,9 @@ void main() {
           connectivityStreamProvider.overrideWith((ref) => Stream.value(true)),
           authRepositoryProvider.overrideWithValue(repo),
           currentPerfilProvider.overrideWith((ref) async => _adminPerfil),
-          usuarioPorIdProvider(_otroId).overrideWith((ref) async => _otroPerfil),
+          usuarioPorIdProvider(
+            _otroId,
+          ).overrideWith((ref) async => _otroPerfil),
           eventosListProvider.overrideWith((ref) async => const <Evento>[]),
         ],
         child: MaterialApp.router(

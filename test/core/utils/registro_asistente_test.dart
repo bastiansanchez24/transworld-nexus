@@ -31,7 +31,10 @@ void main() {
   group('validarEmailRegistro', () {
     test('acepta un correo válido y lo trata en minúsculas', () {
       expect(validarEmailRegistro('  Ana.Diaz+tag@Empresa.CL '), isNull);
-      expect(formatearEmail('  Ana.Diaz+tag@Empresa.CL '), 'ana.diaz+tag@empresa.cl');
+      expect(
+        formatearEmail('  Ana.Diaz+tag@Empresa.CL '),
+        'ana.diaz+tag@empresa.cl',
+      );
     });
 
     test('rechaza formatos incompletos', () {
@@ -57,7 +60,10 @@ void main() {
         validarTelefono('812345678', kPaisTelefonoChile),
         'En Chile el número debe empezar con 9 o 2',
       );
-      expect(validarTelefono('91234567', kPaisTelefonoChile), 'Ingresa 9 dígitos');
+      expect(
+        validarTelefono('91234567', kPaisTelefonoChile),
+        'Ingresa 9 dígitos',
+      );
     });
 
     test('recorta el código de país si se pega completo', () {
@@ -69,7 +75,10 @@ void main() {
     });
 
     test('al formatear recorta dígitos extra según el máximo del país', () {
-      expect(formatearTelefonoNacional('9123456789', kPaisTelefonoChile), '9 1234 5678');
+      expect(
+        formatearTelefonoNacional('9123456789', kPaisTelefonoChile),
+        '9 1234 5678',
+      );
     });
   });
 

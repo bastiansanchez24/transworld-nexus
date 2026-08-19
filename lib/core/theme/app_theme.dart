@@ -23,9 +23,6 @@ class AppColors {
 
   // Neutros unificados con el rediseño.
   static const ink = TwColors.ink;
-  static const identityInk = ink;
-  static const identityAccent = TwColors.brand700;
-  static const identityChip = TwColors.blueTint;
   static const textSecondary = TwColors.secondary;
   static const textTertiary = TwColors.muted;
   static const background = TwColors.bg;
@@ -34,12 +31,7 @@ class AppColors {
   static const placeholder = TwColors.muted;
   static const chevronMuted = TwColors.chevron;
   static const divider = TwColors.border07;
-  static const dashedBorder = TwColors.chevron;
-  static const toggleOff = TwColors.chevron;
 
-  static const heroNavy = Color(0xFF0C3357);
-  static const heroNavyMid = Color(0xFF175E93);
-  static const live = TwColors.statusActive;
   static const tintNavy = TwColors.blueTint;
   static const tintLime = Color(0xFFF3FCE0);
 
@@ -52,9 +44,6 @@ class AppColors {
   static const dangerTint = TwColors.dangerTint;
   static const toastCheck = accent;
 
-  /// Alias de compatibilidad con pantallas legacy.
-  static const primaryDark = primaryDeep;
-  static const error = danger;
   static const surfaceMuted = tintNavy;
 
   static const headerGradient = LinearGradient(
@@ -63,21 +52,8 @@ class AppColors {
     end: Alignment.bottomRight,
   );
 
-  /// Card de próximo evento del home (150° #0C3357 → #175E93).
-  static const heroGradient = LinearGradient(
-    colors: [heroNavy, heroNavyMid],
-    begin: Alignment(-0.5, -1),
-    end: Alignment(0.5, 1),
-  );
-
-  // Sombras unificadas con las del rediseño ([TwShadows]).
   static const shadowRest = TwShadows.card;
   static const shadowLifted = TwShadows.card;
-  static const shadowFab = TwShadows.primary;
-  static const shadowHero = TwShadows.hero;
-
-  static const shadowHeroCard = TwShadows.hero;
-  static const shadowToast = TwShadows.toast;
 
   static const avatarPairs = <(Color, Color)>[
     (tintNavy, primary),
@@ -234,6 +210,10 @@ class AppSpacing {
   static const screenH = 20.0;
   static const screen = EdgeInsets.symmetric(horizontal: screenH);
   static const contentMax = 760.0;
+
+  /// Formularios en pantallas push: arrancan arriba, con un aire mínimo
+  /// bajo la cabecera — el mismo ritmo que crear/editar evento.
+  static const form = EdgeInsets.fromLTRB(screenH, 6, screenH, 32);
   static const field = SizedBox(height: 14);
   static const sectionGap = 22.0;
   static const cardGap = 10.0;

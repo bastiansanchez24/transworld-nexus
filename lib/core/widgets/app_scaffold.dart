@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +9,9 @@ import 'offline_banner.dart';
 import 'tw_components.dart';
 
 /// Plantilla push: header sticky con blur (HANDOFF §4.8).
+///
+/// El cuerpo se ancla arriba, no al centro: un formulario corto
+/// arranca igual que crear o editar evento.
 class AppScaffold extends StatelessWidget {
   const AppScaffold({
     super.key,
@@ -64,7 +65,8 @@ class AppScaffold extends StatelessWidget {
   }
 
   Widget _constrained(Widget child) {
-    return Center(
+    return Align(
+      alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxContentWidth),
         child: child,
@@ -125,8 +127,8 @@ class _PushHeader extends StatelessWidget {
     final top = MediaQuery.paddingOf(context).top;
 
     return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+      child: TwGlassFilter(
+        sigma: 12,
         child: Container(
           padding: EdgeInsets.fromLTRB(
             TwSpacing.screenH,
@@ -163,7 +165,9 @@ class _PushHeader extends StatelessWidget {
                   textAlign: TextAlign.center,
                   child: Semantics(
                     header: true,
-                    child: titleWidget ?? Text(title ?? '', textAlign: TextAlign.center),
+                    child:
+                        titleWidget ??
+                        Text(title ?? '', textAlign: TextAlign.center),
                   ),
                 ),
               ),

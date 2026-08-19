@@ -191,7 +191,7 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
               physics: const BouncingScrollPhysics(
                 parent: AlwaysScrollableScrollPhysics(),
               ),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              padding: AppSpacing.form,
               children: [
                 _PerfilHeader(
                   perfil: perfil,
@@ -263,86 +263,83 @@ class _PerfilHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StaggeredListItem(
-      index: 0,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.border),
-          boxShadow: AppColors.shadowRest,
-        ),
-        child: Row(
-          children: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                AvatarPerfil(
-                  nombre: perfil.nombreCompleto,
-                  fotoUrl: perfil.fotoUrl,
-                  size: 52,
-                  index: 0,
-                  mostrarLapiz: !subiendoFoto,
-                  onTap: subiendoFoto ? null : onCambiarFoto,
-                ),
-                if (subiendoFoto)
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.shadowRest,
+      ),
+      child: Row(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              AvatarPerfil(
+                nombre: perfil.nombreCompleto,
+                fotoUrl: perfil.fotoUrl,
+                size: 52,
+                index: 0,
+                mostrarLapiz: !subiendoFoto,
+                onTap: subiendoFoto ? null : onCambiarFoto,
+              ),
+              if (subiendoFoto)
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
                       ),
                     ),
                   ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  perfil.nombreCompleto,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                StatusChip(
+                  label: perfil.rol.label,
+                  variant: StatusChipVariant.navy,
+                ),
               ],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    perfil.nombreCompleto,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    email,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  StatusChip(
-                    label: perfil.rol.label,
-                    variant: StatusChipVariant.navy,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -405,15 +402,12 @@ class _KpiSection extends ConsumerWidget {
                   for (var col = 0; col < 2; col++) ...[
                     if (col > 0) const SizedBox(width: 12),
                     Expanded(
-                      child: StaggeredListItem(
-                        index: row * 2 + col + 1,
-                        child: StatCard(
-                          value: cards[row * 2 + col].$1,
-                          label: cards[row * 2 + col].$2,
-                          icon: cards[row * 2 + col].$3,
-                          tint: cards[row * 2 + col].$4,
-                          iconColor: cards[row * 2 + col].$5,
-                        ),
+                      child: StatCard(
+                        value: cards[row * 2 + col].$1,
+                        label: cards[row * 2 + col].$2,
+                        icon: cards[row * 2 + col].$3,
+                        tint: cards[row * 2 + col].$4,
+                        iconColor: cards[row * 2 + col].$5,
                       ),
                     ),
                   ],

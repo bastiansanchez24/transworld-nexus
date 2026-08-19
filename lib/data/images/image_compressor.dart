@@ -90,8 +90,7 @@ Uint8List _comprimirSync(_ArgsCompresion args) {
     }
   }
 
-  final ladoLargo =
-      imagen.width > imagen.height ? imagen.width : imagen.height;
+  final ladoLargo = imagen.width > imagen.height ? imagen.width : imagen.height;
   if (ladoLargo > args.ladoMaximo) {
     final esApaisada = imagen.width >= imagen.height;
     imagen = img.copyResize(

@@ -144,15 +144,9 @@ class TwGradients {
     colors: [TwColors.excel500, TwColors.excel700],
   );
 
-  /// Velo sobre la foto del hero de detalle (arriba → abajo, 82% → 97%).
+  /// Velo de las cards hero (home, menú de evento y menú de actividad).
+  /// Arriba 66% / abajo 94%: la portada se lee y el texto blanco también.
   static const heroScrim = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xD1081A30), Color(0xF7071426)],
-  );
-
-  /// Velo del hero del home (66% → 94%): la foto se ve algo más que en detalle.
-  static const homeScrim = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [Color(0xA808182C), Color(0xF0081628)],
@@ -629,9 +623,9 @@ String formatearFechaLarga(DateTime fecha) {
 /// `25 AGO` — píldora corta del hero del home.
 String formatearDiaMesCorto(DateTime fecha) {
   final dia = DateFormat('d', 'es').format(fecha);
-  final mes = DateFormat('MMM', 'es')
-      .format(fecha)
-      .toUpperCase()
-      .replaceAll('.', '');
+  final mes = DateFormat(
+    'MMM',
+    'es',
+  ).format(fecha).toUpperCase().replaceAll('.', '');
   return '$dia $mes';
 }

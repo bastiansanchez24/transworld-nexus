@@ -152,15 +152,12 @@ void main() {
         finalizado: (e) => e.finalizado,
       );
 
-      expect(
-        items.map((e) => e.id).toList(),
-        [
-          'fijado-finalizado',
-          'proximo-cercano',
-          'proximo-lejano',
-          'finalizado',
-        ],
-      );
+      expect(items.map((e) => e.id).toList(), [
+        'fijado-finalizado',
+        'proximo-cercano',
+        'proximo-lejano',
+        'finalizado',
+      ]);
     });
   });
 

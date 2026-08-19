@@ -59,10 +59,7 @@ class RegistradosRepository implements SyncExecutor {
     try {
       final result = await _client.rpc(
         SupabaseRpc.existeEmailRegistrado,
-        params: {
-          'p_evento_id': eventoId,
-          'p_email': normalizado,
-        },
+        params: {'p_evento_id': eventoId, 'p_email': normalizado},
       );
       return result == true;
     } catch (_) {

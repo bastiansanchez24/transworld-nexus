@@ -124,10 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ref.watch(authStateChangesProvider).valueOrNull?.session ??
         ref.read(authRepositoryProvider).currentSession;
     if (session != null && !_loading) {
-      return const Scaffold(
-        backgroundColor: TwColors.bg,
-        body: LoadingView(),
-      );
+      return const Scaffold(backgroundColor: TwColors.bg, body: LoadingView());
     }
 
     return BrowserThemeColor(
@@ -155,7 +152,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             children: [
                               const _LoginBrand(),
                               const SizedBox(height: 48),
-                              const Text('Inicia sesión', style: TwText.display),
+                              const Text(
+                                'Inicia sesión',
+                                style: TwText.display,
+                              ),
                               const SizedBox(height: 7),
                               const SizedBox(
                                 width: 280,
@@ -316,9 +316,7 @@ class _LoginBrand extends StatelessWidget {
           decoration: const BoxDecoration(
             color: TwColors.surface,
             borderRadius: TwRadii.button,
-            border: Border.fromBorderSide(
-              BorderSide(color: TwColors.border08),
-            ),
+            border: Border.fromBorderSide(BorderSide(color: TwColors.border08)),
             boxShadow: TwShadows.card,
           ),
           child: Padding(

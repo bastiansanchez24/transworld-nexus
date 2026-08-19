@@ -85,9 +85,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
             defaultTargetPlatform == TargetPlatform.iOS);
     if (esMovil) {
       await SharePlus.instance.share(
-        ShareParams(
-          text: '¡Regístrate al evento "$nombreEvento" aquí!\n$link',
-        ),
+        ShareParams(text: '¡Regístrate al evento "$nombreEvento" aquí!\n$link'),
       );
       return;
     }
@@ -154,9 +152,8 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
                         iconStyle: TwIconBoxStyle.brand,
                         title: 'Registrar asistente',
                         subtitle: 'Inscribir a alguien en el evento',
-                        onTap: () => context.push(
-                          RoutePaths.registrar(widget.eventoId),
-                        ),
+                        onTap: () =>
+                            context.push(RoutePaths.registrar(widget.eventoId)),
                       ),
                       const SizedBox(height: TwSpacing.tileGap),
                       TwActionTile(
@@ -215,7 +212,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
                           iconStyle: TwIconBoxStyle.excel,
                           excel: true,
                           badge: 'XLSX',
-                          title: 'Importar o Exportar',
+                          title: 'Importar o exportar',
                           subtitle: _subtituloExcel(resumen?.total),
                           onTap: () => context.push(
                             RoutePaths.exportar(widget.eventoId),

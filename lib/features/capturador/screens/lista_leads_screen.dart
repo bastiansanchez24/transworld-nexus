@@ -273,13 +273,10 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
                   itemCount: filtrados.length,
                   separatorBuilder: (_, _) =>
                       const SizedBox(height: AppSpacing.cardGap),
-                  itemBuilder: (context, index) => StaggeredListItem(
+                  itemBuilder: (context, index) => _LeadTile(
+                    eventoId: widget.eventoId,
+                    lead: filtrados[index],
                     index: index,
-                    child: _LeadTile(
-                      eventoId: widget.eventoId,
-                      lead: filtrados[index],
-                      index: index,
-                    ),
                   ),
                 ),
               ),
@@ -735,12 +732,7 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
               : fotoGuardada;
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.screenH,
-              AppSpacing.xl,
-              AppSpacing.screenH,
-              AppSpacing.xxxl,
-            ),
+            padding: AppSpacing.form,
             child: Form(
               key: _formKey,
               child: Column(

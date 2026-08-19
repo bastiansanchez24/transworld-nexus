@@ -94,14 +94,15 @@ void main() {
     expect(find.text('ACCIONES DEL EVENTO'), findsOneWidget);
   });
 
-  testWidgets('con actividad de captura se abre la existente, no se crea otra', (
-    tester,
-  ) async {
-    await montar(tester, perfil: admin, vinculado: eventoLead);
+  testWidgets(
+    'con actividad de captura se abre la existente, no se crea otra',
+    (tester) async {
+      await montar(tester, perfil: admin, vinculado: eventoLead);
 
-    expect(find.text('Ver actividad de captura'), findsOneWidget);
-    expect(find.text('Crear actividad de captura'), findsNothing);
-  });
+      expect(find.text('Ver actividad de captura'), findsOneWidget);
+      expect(find.text('Crear actividad de captura'), findsNothing);
+    },
+  );
 
   testWidgets('quien no crea contenido no ve el botón de creación', (
     tester,

@@ -7,7 +7,9 @@ final eventosListProvider = FutureProvider.autoDispose<List<Evento>>((ref) {
   return ref.watch(eventosRepositoryProvider).listarTodos();
 });
 
-final eventoByIdProvider =
-    FutureProvider.autoDispose.family<Evento, String>((ref, id) {
+final eventoByIdProvider = FutureProvider.autoDispose.family<Evento, String>((
+  ref,
+  id,
+) {
   return ref.watch(eventosRepositoryProvider).obtenerPorId(id);
 });

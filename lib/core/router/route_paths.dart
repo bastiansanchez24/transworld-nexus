@@ -23,7 +23,8 @@ class RoutePaths {
   static String accesoEvento(String id) => '/eventos/$id/acceso';
   static String usarEvento(String id) => '/eventos/$id/usar';
   static String registrar(String id) => '/eventos/$id/registrar';
-  static String registroPorCliente(String id) => '/eventos/$id/registro-cliente';
+  static String registroPorCliente(String id) =>
+      '/eventos/$id/registro-cliente';
   static String acreditarConfirmado(String id) => '/eventos/$id/acreditar';
   static String acreditarQr(String id) => '/eventos/$id/acreditar-qr';
   static String verRegistrados(String id) => '/eventos/$id/registrados';
@@ -48,6 +49,7 @@ class RoutePaths {
     if (desdeEvento == null || desdeEvento.isEmpty) return base;
     return '$base?desdeEvento=${Uri.encodeQueryComponent(desdeEvento)}';
   }
+
   static String verLeads(String id) => '/capturador/$id/leads';
   static String detalleLead(String eventoId, String leadId) =>
       '/capturador/$eventoId/leads/$leadId';
@@ -58,5 +60,6 @@ class RoutePaths {
   /// originales (ver Sección 17.5 de la auditoría): ahora vive dentro de
   /// la misma app, accesible también desde Flutter Web sin loguearse.
   static const registroForms = '/registro-forms';
-  static String registroPublico(String eventoId) => '$registroForms?id=$eventoId';
+  static String registroPublico(String eventoId) =>
+      '$registroForms?id=$eventoId';
 }

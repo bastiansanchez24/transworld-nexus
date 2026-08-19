@@ -3,7 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'pending_photo_store_stub.dart'
-    if (dart.library.io) 'pending_photo_store_io.dart' as plataforma;
+    if (dart.library.io) 'pending_photo_store_io.dart'
+    as plataforma;
 
 /// Prefijo que marca una foto que todavía vive en el disco del dispositivo y
 /// aún no se subió a Supabase Storage.
@@ -56,7 +57,9 @@ final pendingPhotoStoreProvider = Provider<PendingPhotoStore>((ref) {
 ///
 /// Riverpod evita releer el archivo en cada rebuild: sin esto, una lista de
 /// leads con fotos pendientes golpearía el disco en cada frame de scroll.
-final fotoPendienteBytesProvider =
-    FutureProvider.family<Uint8List?, String>((ref, marcador) {
+final fotoPendienteBytesProvider = FutureProvider.family<Uint8List?, String>((
+  ref,
+  marcador,
+) {
   return ref.watch(pendingPhotoStoreProvider).leer(marcador);
 });

@@ -7,10 +7,12 @@ import 'package:transworld_nexus/core/widgets/tw_components.dart';
 
 Color _fondoDelPill(WidgetTester tester) {
   final container = tester.widget<Container>(
-    find.descendant(
-      of: find.byType(TwOriginPill),
-      matching: find.byType(Container),
-    ).first,
+    find
+        .descendant(
+          of: find.byType(TwOriginPill),
+          matching: find.byType(Container),
+        )
+        .first,
   );
   return (container.decoration! as BoxDecoration).color!;
 }
@@ -18,7 +20,9 @@ Color _fondoDelPill(WidgetTester tester) {
 Future<void> _montar(WidgetTester tester, {required bool interno}) {
   return tester.pumpWidget(
     MaterialApp(
-      home: Scaffold(body: Center(child: TwOriginPill(interno: interno))),
+      home: Scaffold(
+        body: Center(child: TwOriginPill(interno: interno)),
+      ),
     ),
   );
 }

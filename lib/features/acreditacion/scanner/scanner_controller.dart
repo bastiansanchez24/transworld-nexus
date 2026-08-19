@@ -18,8 +18,8 @@ class ScannerController extends ChangeNotifier {
     CameraService? cameraService,
     QRScannerService? qrScannerService,
     this.onCodeDetected,
-  })  : _camera = cameraService ?? CameraService(),
-        _qr = qrScannerService ?? const QRScannerService();
+  }) : _camera = cameraService ?? CameraService(),
+       _qr = qrScannerService ?? const QRScannerService();
 
   final CameraService _camera;
   final QRScannerService _qr;

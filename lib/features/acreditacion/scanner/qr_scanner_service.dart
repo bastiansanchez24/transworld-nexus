@@ -4,10 +4,7 @@ import '../qr_codigo_parser.dart';
 
 /// Resultado tipado de un frame de escaneo.
 class QrScanDecode {
-  const QrScanDecode({
-    required this.registradoId,
-    this.rawText,
-  });
+  const QrScanDecode({required this.registradoId, this.rawText});
 
   /// UUID de `registrados.id`, o null si no se pudo parsear.
   final String? registradoId;

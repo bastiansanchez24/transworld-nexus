@@ -54,9 +54,10 @@ class _ScannerOverlayState extends State<ScannerOverlay>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     );
-    _inset = Tween<double>(begin: 0, end: 10).animate(
-      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-    );
+    _inset = Tween<double>(
+      begin: 0,
+      end: 10,
+    ).animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
     if (widget.animateCorners) {
       _pulse.repeat(reverse: true);
     }
@@ -108,9 +109,7 @@ class _ScannerOverlayState extends State<ScannerOverlay>
               ),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                child: ColoredBox(
-                  color: Colors.black.withValues(alpha: 0.38),
-                ),
+                child: ColoredBox(color: Colors.black.withValues(alpha: 0.38)),
               ),
             ),
             // Esquinas: solo este painter se repinta con el pulse.
@@ -192,10 +191,7 @@ class _ScannerOverlayState extends State<ScannerOverlay>
 
 /// Recorta todo excepto el rectángulo redondeado del área de escaneo.
 class _OutsideScanHoleClipper extends CustomClipper<Path> {
-  _OutsideScanHoleClipper({
-    required this.hole,
-    required this.radius,
-  });
+  _OutsideScanHoleClipper({required this.hole, required this.radius});
 
   final Rect hole;
   final double radius;
@@ -215,10 +211,7 @@ class _OutsideScanHoleClipper extends CustomClipper<Path> {
 }
 
 class _TopIconButton extends StatelessWidget {
-  const _TopIconButton({
-    required this.icon,
-    required this.onPressed,
-  });
+  const _TopIconButton({required this.icon, required this.onPressed});
 
   final IconData icon;
   final VoidCallback onPressed;
@@ -271,11 +264,7 @@ class _GlassPillButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  icon,
-                  color: Colors.white,
-                  size: 20,
-                ),
+                Icon(icon, color: Colors.white, size: 20),
                 const SizedBox(width: 10),
                 Text(
                   label,
@@ -312,9 +301,7 @@ class _MiniToggle extends StatelessWidget {
       height: 24,
       padding: const EdgeInsets.all(2.5),
       decoration: BoxDecoration(
-        color: active
-            ? AppColors.accent
-            : Colors.white.withValues(alpha: 0.22),
+        color: active ? AppColors.accent : Colors.white.withValues(alpha: 0.22),
         borderRadius: BorderRadius.circular(12),
       ),
       child: AnimatedAlign(
@@ -342,10 +329,7 @@ class _MiniToggle extends StatelessWidget {
 }
 
 class _FeedbackBanner extends StatelessWidget {
-  const _FeedbackBanner({
-    required this.message,
-    required this.isError,
-  });
+  const _FeedbackBanner({required this.message, required this.isError});
 
   final String message;
   final bool isError;
@@ -362,8 +346,9 @@ class _FeedbackBanner extends StatelessWidget {
             color: Colors.black.withValues(alpha: 0.45),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: (isError ? AppColors.danger : AppColors.accent)
-                  .withValues(alpha: 0.7),
+              color: (isError ? AppColors.danger : AppColors.accent).withValues(
+                alpha: 0.7,
+              ),
             ),
           ),
           child: Text(
@@ -384,10 +369,7 @@ class _FeedbackBanner extends StatelessWidget {
 
 /// Solo dibuja las cuatro esquinas (el blur/dim va en otra capa).
 class _ScannerCornersPainter extends CustomPainter {
-  _ScannerCornersPainter({
-    required this.scanWindow,
-    required this.cornerInset,
-  });
+  _ScannerCornersPainter({required this.scanWindow, required this.cornerInset});
 
   final Rect scanWindow;
   final double cornerInset;
@@ -420,10 +402,7 @@ class _ScannerCornersPainter extends CustomPainter {
       Path()
         ..moveTo(left, top + r + len)
         ..lineTo(left, top + r)
-        ..arcToPoint(
-          Offset(left + r, top),
-          radius: Radius.circular(r),
-        )
+        ..arcToPoint(Offset(left + r, top), radius: Radius.circular(r))
         ..lineTo(left + r + len, top),
       paint,
     );
@@ -433,10 +412,7 @@ class _ScannerCornersPainter extends CustomPainter {
       Path()
         ..moveTo(right - r - len, top)
         ..lineTo(right - r, top)
-        ..arcToPoint(
-          Offset(right, top + r),
-          radius: Radius.circular(r),
-        )
+        ..arcToPoint(Offset(right, top + r), radius: Radius.circular(r))
         ..lineTo(right, top + r + len),
       paint,
     );
@@ -446,10 +422,7 @@ class _ScannerCornersPainter extends CustomPainter {
       Path()
         ..moveTo(right, bottom - r - len)
         ..lineTo(right, bottom - r)
-        ..arcToPoint(
-          Offset(right - r, bottom),
-          radius: Radius.circular(r),
-        )
+        ..arcToPoint(Offset(right - r, bottom), radius: Radius.circular(r))
         ..lineTo(right - r - len, bottom),
       paint,
     );
@@ -459,10 +432,7 @@ class _ScannerCornersPainter extends CustomPainter {
       Path()
         ..moveTo(left + r + len, bottom)
         ..lineTo(left + r, bottom)
-        ..arcToPoint(
-          Offset(left, bottom - r),
-          radius: Radius.circular(r),
-        )
+        ..arcToPoint(Offset(left, bottom - r), radius: Radius.circular(r))
         ..lineTo(left, bottom - r - len),
       paint,
     );

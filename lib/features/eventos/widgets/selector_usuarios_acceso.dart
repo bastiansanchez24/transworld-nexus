@@ -123,58 +123,58 @@ class _SelectorUsuariosAccesoState extends State<SelectorUsuariosAcceso> {
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: ListView.separated(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: filtrados.length,
-                  separatorBuilder: (_, _) =>
-                      const Divider(height: 1, color: AppColors.divider),
-                  itemBuilder: (context, index) {
-                    final usuario = filtrados[index];
-                    final checked = widget.seleccionados.contains(usuario.id);
-                    final habilitado = _puedeMarcar(usuario);
-                    final bloqueadoExterno =
-                        usuario.isExterno &&
-                        !widget.permiteNuevosExternos &&
-                        !checked;
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: filtrados.length,
+                    separatorBuilder: (_, _) =>
+                        const Divider(height: 1, color: AppColors.divider),
+                    itemBuilder: (context, index) {
+                      final usuario = filtrados[index];
+                      final checked = widget.seleccionados.contains(usuario.id);
+                      final habilitado = _puedeMarcar(usuario);
+                      final bloqueadoExterno =
+                          usuario.isExterno &&
+                          !widget.permiteNuevosExternos &&
+                          !checked;
 
-                    return CheckboxListTile(
-                      dense: true,
-                      value: checked,
-                      onChanged: habilitado ? (_) => _toggle(usuario) : null,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      secondary: StatusChip(
-                        label: usuario.rol.label,
-                        variant: usuario.isExterno
-                            ? StatusChipVariant.warning
-                            : StatusChipVariant.neutral,
-                      ),
-                      title: Text(
-                        usuario.nombreCompleto,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: habilitado
-                              ? AppColors.ink
-                              : AppColors.textTertiary,
+                      return CheckboxListTile(
+                        dense: true,
+                        value: checked,
+                        onChanged: habilitado ? (_) => _toggle(usuario) : null,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        secondary: StatusChip(
+                          label: usuario.rol.label,
+                          variant: usuario.isExterno
+                              ? StatusChipVariant.warning
+                              : StatusChipVariant.neutral,
                         ),
-                      ),
-                      subtitle: bloqueadoExterno || !usuario.activo
-                          ? Text(
-                              bloqueadoExterno
-                                  ? 'Solo eventos activos'
-                                  : 'Inactivo',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
-                              ),
-                            )
-                          : null,
-                    );
-                  },
+                        title: Text(
+                          usuario.nombreCompleto,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: habilitado
+                                ? AppColors.ink
+                                : AppColors.textTertiary,
+                          ),
+                        ),
+                        subtitle: bloqueadoExterno || !usuario.activo
+                            ? Text(
+                                bloqueadoExterno
+                                    ? 'Solo eventos activos'
+                                    : 'Inactivo',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              )
+                            : null,
+                      );
+                    },
+                  ),
                 ),
-              ),
         ),
         if (widget.errorText != null) ...[
           const SizedBox(height: 6),

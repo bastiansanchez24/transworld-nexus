@@ -51,9 +51,7 @@ void aplicarFormatosRegistroAsistente({
   cargo.text = formatearCargo(cargo.text);
   telefono.text = formatearTelefonoNacional(telefono.text, pais);
   if (rut != null) {
-    rut.text = pais.iso == 'CL'
-        ? formatearRut(rut.text)
-        : rut.text.trim();
+    rut.text = pais.iso == 'CL' ? formatearRut(rut.text) : rut.text.trim();
   }
   if (patente != null) patente.text = formatearPatente(patente.text);
 }
@@ -156,8 +154,7 @@ class CamposRegistroAsistente extends StatelessWidget {
           AppSpacing.field,
           FormatoAlSalir(
             controller: rutController!,
-            formatear: (v) =>
-                pais.iso == 'CL' ? formatearRut(v) : v.trim(),
+            formatear: (v) => pais.iso == 'CL' ? formatearRut(v) : v.trim(),
             child: TextFormField(
               controller: rutController,
               enabled: enabled,
@@ -165,10 +162,7 @@ class CamposRegistroAsistente extends StatelessWidget {
               decoration: InputDecoration(
                 labelText: pais.iso == 'CL' ? 'RUT' : 'RUT / RUC',
               ),
-              validator: (v) => validarRut(
-                v,
-                esChile: pais.iso == 'CL',
-              ),
+              validator: (v) => validarRut(v, esChile: pais.iso == 'CL'),
             ),
           ),
           AppSpacing.field,
@@ -403,7 +397,10 @@ class _SelectorPaisSheetState extends State<_SelectorPaisSheet> {
                   final pais = filtrados[index];
                   final activo = pais.iso == widget.seleccionado.iso;
                   return ListTile(
-                    leading: Text(pais.bandera, style: const TextStyle(fontSize: 22)),
+                    leading: Text(
+                      pais.bandera,
+                      style: const TextStyle(fontSize: 22),
+                    ),
                     title: Text(pais.nombre),
                     trailing: Text(
                       pais.etiquetaCodigo,

@@ -65,7 +65,10 @@ void main() {
     );
 
     expect(evento.tieneImagen, isTrue);
-    expect(evento.toInsertMap()['imagen_url'], 'https://cdn.example/evento.jpg');
+    expect(
+      evento.toInsertMap()['imagen_url'],
+      'https://cdn.example/evento.jpg',
+    );
   });
 
   test('el alta manual viaja como externa y sin evento de origen', () {
@@ -73,10 +76,12 @@ void main() {
       id: '',
       nombre: 'Feria retail',
       fecha: DateTime(2026, 9, 12),
+      imagenUrl: 'https://cdn.example/feria.jpg',
     ).toInsertMap();
 
     expect(insert['tipo_evento_lead'], 'externo');
     expect(insert['evento_origen_id'], isNull);
+    expect(insert['imagen_url'], 'https://cdn.example/feria.jpg');
   });
 
   test('editar un interno no lo puede convertir en externo', () {
@@ -128,10 +133,23 @@ void main() {
       fecha: DateTime(2026, 9, 12),
       pais: 'Chile',
       tematica: 'Retail',
+      imagenUrl: 'https://cdn.example/feria.jpg',
     ).toUpdateMap();
 
     expect(update['nombre'], 'Feria retail');
     expect(update['pais'], 'Chile');
+    expect(update['imagen_url'], 'https://cdn.example/feria.jpg');
     expect(update.containsKey('tipo_evento_lead'), isFalse);
+  });
+
+  test('editar un interno no persiste la imagen desde el cliente', () {
+    final interno = EventoLead.internoDesdeEvento(
+      eventoOrigenId: 'evento-1',
+      nombre: 'Transworld Connect',
+      fecha: DateTime(2026, 9, 12),
+      imagenUrl: 'https://cdn.example/evento.jpg',
+    );
+
+    expect(interno.copyWith().toUpdateMap(), isEmpty);
   });
 }

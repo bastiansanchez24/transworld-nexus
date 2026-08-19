@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,8 +12,10 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/require_permission.dart';
+import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/evento_lead.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
+import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capturador_providers.dart';
 
@@ -50,6 +54,8 @@ class _CrearEditarEventoLeadFormState
   final _tematicaController = TextEditingController();
 
   DateTime _fecha = DateTime.now();
+  Uint8List? _imagenBytes;
+  String? _imagenUrlExistente;
   bool _guardando = false;
   bool _cargado = false;
   bool _heredada = false;
@@ -72,9 +78,29 @@ class _CrearEditarEventoLeadFormState
     _paisController.text = evento.pais ?? '';
     _tematicaController.text = evento.tematica ?? '';
     _fecha = evento.fecha;
+    _imagenUrlExistente = evento.imagenUrl;
     _heredada = evento.esInterno;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> _elegirImagen() async {
+    if (_soloLectura) return;
+    final bytes = await elegirImagenComprimida(
+      context,
+      recorteProporcion: kProporcionImagenEvento,
+      tituloRecorte: 'Recortar portada',
+    );
+    if (bytes == null || !mounted) return;
+    setState(() => _imagenBytes = bytes);
+  }
+
+  void _quitarImagen() {
+    if (_soloLectura) return;
+    setState(() {
+      _imagenBytes = null;
+      _imagenUrlExistente = null;
     });
   }
 
@@ -95,6 +121,13 @@ class _CrearEditarEventoLeadFormState
     setState(() => _guardando = true);
 
     try {
+      var imagenUrl = _imagenUrlExistente;
+      if (_imagenBytes != null) {
+        imagenUrl = await ref
+            .read(storageRepositoryProvider)
+            .subirImagenEvento(_imagenBytes!, 'jpg');
+      }
+
       final evento = EventoLead(
         id: widget.eventoId ?? '',
         nombre: _nombreController.text.trim(),
@@ -105,6 +138,7 @@ class _CrearEditarEventoLeadFormState
         tematica: _tematicaController.text.trim().isEmpty
             ? null
             : _tematicaController.text.trim(),
+        imagenUrl: imagenUrl,
       );
 
       final repo = ref.read(eventosLeadsRepositoryProvider);
@@ -130,7 +164,7 @@ class _CrearEditarEventoLeadFormState
       if (mounted) {
         showAppSnackBar(
           context,
-          'No se pudo guardar la actividad.',
+          e.toString().replaceFirst('Exception: ', ''),
           isError: true,
         );
       }
@@ -150,9 +184,7 @@ class _CrearEditarEventoLeadFormState
     if (!confirmado) return;
 
     try {
-      await ref
-          .read(eventosLeadsRepositoryProvider)
-          .eliminar(widget.eventoId!);
+      await ref.read(eventosLeadsRepositoryProvider).eliminar(widget.eventoId!);
       ref.invalidate(eventosLeadsListProvider);
       ref.invalidate(eventoLeadByIdProvider(widget.eventoId!));
       if (mounted) context.go(RoutePaths.capturador);
@@ -194,7 +226,7 @@ class _CrearEditarEventoLeadFormState
       body: eventoAsync != null && eventoAsync.isLoading && !_cargado
           ? const LoadingView()
           : SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+              padding: AppSpacing.form,
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -204,6 +236,24 @@ class _CrearEditarEventoLeadFormState
                       const _HerenciaBanner(),
                       const SizedBox(height: 16),
                     ],
+                    const _FieldLabel('Foto'),
+                    const SizedBox(height: 6),
+                    SelectorImagen(
+                      bytes: _imagenBytes,
+                      urlExistente: _imagenUrlExistente,
+                      enabled: !_guardando && !_soloLectura,
+                      aspectRatio: 16 / 9,
+                      anchoMaximo: kAnchoSelectorImagenEvento,
+                      etiquetaVacio: 'Agregar imagen de la actividad',
+                      onElegir: _elegirImagen,
+                      onQuitar:
+                          _soloLectura ||
+                              (_imagenBytes == null &&
+                                  _imagenUrlExistente == null)
+                          ? null
+                          : _quitarImagen,
+                    ),
+                    const SizedBox(height: 14),
                     const _FieldLabel('Nombre de la actividad'),
                     const SizedBox(height: 6),
                     TextFormField(
@@ -226,10 +276,13 @@ class _CrearEditarEventoLeadFormState
                         borderRadius: BorderRadius.circular(AppRadius.input),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 15, vertical: 13),
+                            horizontal: 15,
+                            vertical: 13,
+                          ),
                           decoration: BoxDecoration(
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.input),
+                            borderRadius: BorderRadius.circular(
+                              AppRadius.input,
+                            ),
                             border: Border.all(color: AppColors.border),
                           ),
                           child: Row(

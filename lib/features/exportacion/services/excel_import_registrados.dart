@@ -27,9 +27,8 @@ class ExcelImportRegistrados {
 
     final encabezados = filas.first.map(_textoDeCelda).toList();
 
-    int indiceDe(String nombre) => encabezados.indexWhere(
-      (h) => h.toLowerCase() == nombre.toLowerCase(),
-    );
+    int indiceDe(String nombre) =>
+        encabezados.indexWhere((h) => h.toLowerCase() == nombre.toLowerCase());
 
     final iNombre = indiceDe('Nombre y Apellido');
     final iEmail = indiceDe('Email');

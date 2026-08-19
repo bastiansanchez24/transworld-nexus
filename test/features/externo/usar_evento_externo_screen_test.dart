@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:transworld_nexus/core/constants/app_role.dart';
 import 'package:transworld_nexus/core/network/connectivity_service.dart';
+import 'package:transworld_nexus/core/theme/tw_tokens.dart';
 import 'package:transworld_nexus/core/widgets/evento_hero_banner.dart';
 import 'package:transworld_nexus/data/models/evento.dart';
 import 'package:transworld_nexus/data/models/perfil.dart';
@@ -130,6 +131,17 @@ void main() {
 
     expect(find.text('Evento de prueba'), findsWidgets);
     expect(find.byType(EventoHeroFoto), findsOneWidget);
+    expect(
+      tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .any(
+            (box) =>
+                box.decoration is BoxDecoration &&
+                (box.decoration as BoxDecoration).gradient ==
+                    TwGradients.heroScrim,
+          ),
+      isTrue,
+    );
     expect(tester.takeException(), isNull);
   });
 }

@@ -1,7 +1,8 @@
 import 'package:flutter/widgets.dart';
 
 import 'browser_theme_color_stub.dart'
-    if (dart.library.js_interop) 'browser_theme_color_web.dart' as impl;
+    if (dart.library.js_interop) 'browser_theme_color_web.dart'
+    as impl;
 
 /// Actualiza el `<meta name="theme-color">` del navegador.
 ///

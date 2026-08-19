@@ -67,13 +67,12 @@ class _ModalRecorteImagenState extends State<_ModalRecorteImagen> {
                 children: [
                   Pressable(
                     scale: 0.92,
-                    onTap: _recortando ? null : () => Navigator.of(context).pop(),
+                    onTap: _recortando
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     child: const Padding(
                       padding: EdgeInsets.all(8),
-                      child: Icon(
-                        Symbols.close_rounded,
-                        color: AppColors.ink,
-                      ),
+                      child: Icon(Symbols.close_rounded, color: AppColors.ink),
                     ),
                   ),
                   Expanded(

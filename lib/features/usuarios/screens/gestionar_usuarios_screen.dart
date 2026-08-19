@@ -238,10 +238,7 @@ class _GestionarUsuariosBodyState extends ConsumerState<_GestionarUsuariosBody>
                   separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final usuario = filtrados[index];
-                    return StaggeredListItem(
-                      index: index,
-                      child: _UsuarioRow(usuario: usuario, index: index),
-                    );
+                    return _UsuarioRow(usuario: usuario, index: index);
                   },
                 ),
               ),

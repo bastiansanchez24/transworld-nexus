@@ -101,67 +101,6 @@ class EmptyStateView extends StatelessWidget {
   }
 }
 
-class AppMenuTile extends StatelessWidget {
-  const AppMenuTile({
-    super.key,
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        onTap: onTap,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppColors.tintNavy,
-            borderRadius: BorderRadius.circular(AppRadius.tile),
-          ),
-          child: Icon(icon, color: AppColors.primary),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: subtitle != null
-            ? Text(
-                subtitle!,
-                style: const TextStyle(color: AppColors.textSecondary),
-              )
-            : null,
-        trailing: const Icon(
-          Icons.chevron_right_rounded,
-          color: AppColors.chevronMuted,
-        ),
-      ),
-    );
-  }
-}
-
-class ButtonProgress extends StatelessWidget {
-  const ButtonProgress({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 20,
-      width: 20,
-      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-    );
-  }
-}
-
 /// Presente solo bajo [MainShellScaffold], donde la bottom nav está a la vista.
 /// Las rutas push (Actualizaciones, Perfil, etc.) no lo heredan.
 class ShellNavScope extends InheritedWidget {

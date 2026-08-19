@@ -53,12 +53,7 @@ void main() {
   });
 
   testWidgets('con foto ofrece ver, cambiar y eliminar', (tester) async {
-    await montar(
-      tester,
-      bytes: _pngMinimo,
-      onElegir: () {},
-      onQuitar: () {},
-    );
+    await montar(tester, bytes: _pngMinimo, onElegir: () {}, onQuitar: () {});
 
     await tester.tap(find.byKey(const Key('lead_foto_avatar')));
     await tester.pumpAndSettle();
@@ -81,12 +76,7 @@ void main() {
   testWidgets('"Ver foto" abre el visor y se cierra al tocar el fondo', (
     tester,
   ) async {
-    await montar(
-      tester,
-      bytes: _pngMinimo,
-      onElegir: () {},
-      onQuitar: () {},
-    );
+    await montar(tester, bytes: _pngMinimo, onElegir: () {}, onQuitar: () {});
 
     await tester.tap(find.byKey(const Key('lead_foto_avatar')));
     await tester.pumpAndSettle();

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:transworld_nexus/core/constants/app_role.dart';
 import 'package:transworld_nexus/core/network/connectivity_service.dart';
+import 'package:transworld_nexus/core/theme/tw_tokens.dart';
 import 'package:transworld_nexus/core/widgets/evento_hero_banner.dart';
 import 'package:transworld_nexus/core/widgets/tw_components.dart';
 import 'package:transworld_nexus/data/models/evento_lead.dart';
@@ -86,103 +87,110 @@ void main() {
     },
   );
 
-  testWidgets(
-    'el hero de una actividad con foto monta la portada',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(390, 844);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetPhysicalSize);
+  testWidgets('el hero de una actividad con foto monta la portada', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-            connectivityStreamProvider.overrideWith((ref) => Stream.value(true)),
-            authStateChangesProvider.overrideWith(
-              (ref) => const Stream<AuthState>.empty(),
-            ),
-            currentPerfilProvider.overrideWith((ref) async => perfilUser),
-            eventoLeadByIdProvider.overrideWith(
-              (ref, id) async => EventoLead(
-                id: 'campana-1',
-                nombre: 'Campaña de prueba',
-                fecha: DateTime(2099, 8, 20),
-                pais: 'Chile',
-                imagenUrl: 'https://example.com/actividad.jpg',
-              ),
-            ),
-            leadsResumenLocalProvider.overrideWith(
-              (ref, id) => const LeadsResumen(total: 12, empresas: 5),
-            ),
-          ],
-          child: const MaterialApp(
-            locale: Locale('es'),
-            home: UsarEventoLeadScreen(eventoId: 'campana-1'),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          connectivityStreamProvider.overrideWith((ref) => Stream.value(true)),
+          authStateChangesProvider.overrideWith(
+            (ref) => const Stream<AuthState>.empty(),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byType(EventoHeroFoto), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'al recargar la campaña el menú de acciones sigue montado',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(390, 844);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetPhysicalSize);
-
-      var bloquearRecarga = false;
-      final recarga = Completer<EventoLead>();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-            connectivityStreamProvider.overrideWith(
-              (ref) => Stream.value(true),
+          currentPerfilProvider.overrideWith((ref) async => perfilUser),
+          eventoLeadByIdProvider.overrideWith(
+            (ref, id) async => EventoLead(
+              id: 'campana-1',
+              nombre: 'Campaña de prueba',
+              fecha: DateTime(2099, 8, 20),
+              pais: 'Chile',
+              imagenUrl: 'https://example.com/actividad.jpg',
             ),
-            authStateChangesProvider.overrideWith(
-              (ref) => const Stream<AuthState>.empty(),
-            ),
-            currentPerfilProvider.overrideWith((ref) async => perfilUser),
-            leadsResumenLocalProvider.overrideWith(
-              (ref, id) => const LeadsResumen(total: 12, empresas: 5),
-            ),
-            eventoLeadByIdProvider.overrideWith((ref, id) async {
-              if (bloquearRecarga) await recarga.future;
-              return evento;
-            }),
-          ],
-          child: const MaterialApp(
-            locale: Locale('es'),
-            home: UsarEventoLeadScreen(eventoId: 'campana-1'),
           ),
+          leadsResumenLocalProvider.overrideWith(
+            (ref, id) => const LeadsResumen(total: 12, empresas: 5),
+          ),
+        ],
+        child: const MaterialApp(
+          locale: Locale('es'),
+          home: UsarEventoLeadScreen(eventoId: 'campana-1'),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Ver leads'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(EventoHeroFoto), findsOneWidget);
+    expect(
+      tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .any(
+            (box) =>
+                box.decoration is BoxDecoration &&
+                (box.decoration as BoxDecoration).gradient ==
+                    TwGradients.heroScrim,
+          ),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
-      bloquearRecarga = true;
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(UsarEventoLeadScreen)),
-      );
-      container.invalidate(eventoLeadByIdProvider('campana-1'));
-      await tester.pump();
+  testWidgets('al recargar la campaña el menú de acciones sigue montado', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
 
-      expect(find.text('Ver leads'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+    var bloquearRecarga = false;
+    final recarga = Completer<EventoLead>();
 
-      recarga.complete(evento);
-      await tester.pumpAndSettle();
-      expect(find.text('Ver leads'), findsOneWidget);
-    },
-  );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          connectivityStreamProvider.overrideWith((ref) => Stream.value(true)),
+          authStateChangesProvider.overrideWith(
+            (ref) => const Stream<AuthState>.empty(),
+          ),
+          currentPerfilProvider.overrideWith((ref) async => perfilUser),
+          leadsResumenLocalProvider.overrideWith(
+            (ref, id) => const LeadsResumen(total: 12, empresas: 5),
+          ),
+          eventoLeadByIdProvider.overrideWith((ref, id) async {
+            if (bloquearRecarga) await recarga.future;
+            return evento;
+          }),
+        ],
+        child: const MaterialApp(
+          locale: Locale('es'),
+          home: UsarEventoLeadScreen(eventoId: 'campana-1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ver leads'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    bloquearRecarga = true;
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(UsarEventoLeadScreen)),
+    );
+    container.invalidate(eventoLeadByIdProvider('campana-1'));
+    await tester.pump();
+
+    expect(find.text('Ver leads'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    recarga.complete(evento);
+    await tester.pumpAndSettle();
+    expect(find.text('Ver leads'), findsOneWidget);
+  });
 }

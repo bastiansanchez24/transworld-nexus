@@ -121,7 +121,7 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
                           iconStyle: TwIconBoxStyle.excel,
                           excel: true,
                           badge: 'XLSX',
-                          title: 'Importar o Exportar',
+                          title: 'Importar o exportar',
                           subtitle: _subtituloExcel(resumen?.total),
                           onTap: () => context.push(
                             RoutePaths.exportarLeads(widget.eventoId),
@@ -139,11 +139,7 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
     );
   }
 
-  Widget _hero(
-    BuildContext context,
-    EventoLead evento,
-    LeadsResumen? resumen,
-  ) {
+  Widget _hero(BuildContext context, EventoLead evento, LeadsResumen? resumen) {
     final meta = [
       if (evento.pais != null && evento.pais!.isNotEmpty) evento.pais,
       if (evento.tematica != null && evento.tematica!.isNotEmpty)

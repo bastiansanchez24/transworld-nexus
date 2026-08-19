@@ -160,7 +160,8 @@ class Registrado {
     return Registrado(
       id: id,
       eventoId: eventoId,
-      nombreCompleto: texto('nombre_completo', nombreCompleto) ?? nombreCompleto,
+      nombreCompleto:
+          texto('nombre_completo', nombreCompleto) ?? nombreCompleto,
       email: texto('email', email) ?? email,
       acreditado: booleano('acreditado', acreditado),
       rut: texto('rut', rut),

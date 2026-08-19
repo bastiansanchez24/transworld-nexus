@@ -8,11 +8,11 @@ import 'package:transworld_nexus/data/offline/pending_photo_store.dart';
 import 'package:transworld_nexus/features/capturador/widgets/avatar_lead.dart';
 
 Lead _lead({List<String> fotos = const []}) => Lead(
-      id: 'lead-1',
-      eventoId: 'evento-1',
-      nombreCompleto: 'María González',
-      fotosUrls: fotos,
-    );
+  id: 'lead-1',
+  eventoId: 'evento-1',
+  nombreCompleto: 'María González',
+  fotosUrls: fotos,
+);
 
 Future<void> _montar(
   WidgetTester tester,
@@ -23,7 +23,9 @@ Future<void> _montar(
     ProviderScope(
       overrides: overrides,
       child: MaterialApp(
-        home: Scaffold(body: Center(child: AvatarLead(lead: lead))),
+        home: Scaffold(
+          body: Center(child: AvatarLead(lead: lead)),
+        ),
       ),
     ),
   );
@@ -37,8 +39,9 @@ void main() {
     expect(find.text('MG'), findsOneWidget);
   });
 
-  testWidgets('con una foto pendiente en disco la pinta en círculo',
-      (tester) async {
+  testWidgets('con una foto pendiente en disco la pinta en círculo', (
+    tester,
+  ) async {
     final bytes = img.encodeJpg(img.Image(width: 8, height: 8));
     const marcador = '$fotoLocalPrefix/tmp/leads_pendientes/a.jpg';
 
@@ -58,8 +61,9 @@ void main() {
 
   // El archivo puede haberse perdido (datos limpiados, o el sistema recuperó
   // espacio): la lista tiene que seguir siendo legible.
-  testWidgets('si la foto pendiente ya no está, vuelve a las iniciales',
-      (tester) async {
+  testWidgets('si la foto pendiente ya no está, vuelve a las iniciales', (
+    tester,
+  ) async {
     const marcador = '$fotoLocalPrefix/tmp/leads_pendientes/b.jpg';
 
     await _montar(

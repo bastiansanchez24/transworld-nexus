@@ -13,11 +13,7 @@ import 'scanner_overlay.dart';
 /// El [MobileScanner] no se reconstruye en cada cambio de estado del
 /// controlador; solo el overlay escucha [ScannerController].
 class ScannerView extends StatelessWidget {
-  const ScannerView({
-    super.key,
-    required this.controller,
-    this.onClose,
-  });
+  const ScannerView({super.key, required this.controller, this.onClose});
 
   final ScannerController controller;
 
@@ -51,10 +47,7 @@ class ScannerView extends StatelessWidget {
           );
         }
 
-        return _ScannerCameraLayer(
-          controller: controller,
-          onClose: onClose,
-        );
+        return _ScannerCameraLayer(controller: controller, onClose: onClose);
       },
     );
   }
@@ -62,10 +55,7 @@ class ScannerView extends StatelessWidget {
 
 /// Capa de cámara estable: el preview no se recrea al togglear flash/modo.
 class _ScannerCameraLayer extends StatefulWidget {
-  const _ScannerCameraLayer({
-    required this.controller,
-    this.onClose,
-  });
+  const _ScannerCameraLayer({required this.controller, this.onClose});
 
   final ScannerController controller;
   final VoidCallback? onClose;
@@ -124,7 +114,8 @@ class _ScannerCameraLayerState extends State<_ScannerCameraLayer> {
                 showTorch: !kIsWeb,
                 feedbackMessage: widget.controller.feedbackMessage,
                 feedbackIsError: widget.controller.feedbackIsError,
-                onClose: widget.onClose ??
+                onClose:
+                    widget.onClose ??
                     () {
                       if (context.canPop()) context.pop();
                     },
@@ -216,10 +207,7 @@ class ScannerPermissionDeniedView extends StatelessWidget {
                   },
                   child: const Text(
                     'Abrir Configuración',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 17,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
                   ),
                 ),
               ),

@@ -1,9 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/offline/pending_photo_store.dart';
@@ -53,12 +53,12 @@ class AvatarLead extends ConsumerWidget {
   }
 
   Widget _imagenRemota(String url) => _circulo(
-    CachedNetworkImage(
-      imageUrl: url,
+    AppNetworkImage(
+      url: url,
       fit: BoxFit.cover,
       memCacheWidth: (size * 3).round(),
-      placeholder: (_, _) => Container(color: AppColors.tintNavy),
-      errorWidget: (_, _, _) => _iniciales(),
+      placeholder: Container(color: AppColors.tintNavy),
+      errorWidget: _iniciales(),
     ),
   );
 

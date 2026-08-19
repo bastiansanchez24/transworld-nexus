@@ -76,13 +76,19 @@ class _RegistroPorClienteScreenState
 
   Future<void> _cargarExcel() async {
     if (!ref.read(isOnlineProvider)) {
-      showAppSnackBar(context, 'La carga de Excel requiere conexión a internet.', isError: true);
+      showAppSnackBar(
+        context,
+        'La carga de Excel requiere conexión a internet.',
+        isError: true,
+      );
       return;
     }
 
-    final archivo = await openFile(acceptedTypeGroups: const [
-      XTypeGroup(label: 'Excel', extensions: ['xlsx'])
-    ]);
+    final archivo = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Excel', extensions: ['xlsx']),
+      ],
+    );
     if (archivo == null) return;
 
     setState(() => _importando = true);
@@ -108,7 +114,11 @@ class _RegistroPorClienteScreenState
       }
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(context, 'No se pudo procesar el Excel: $e', isError: true);
+        showAppSnackBar(
+          context,
+          'No se pudo procesar el Excel: $e',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _importando = false);
@@ -122,114 +132,110 @@ class _RegistroPorClienteScreenState
     return AppScaffold(
       title: 'Registro por cliente',
       body: eventoAsync.when(
-              loading: () => const LoadingView(),
-              error: (e, _) => const ErrorView(message: 'No se pudo cargar el evento.'),
-              data: (evento) => ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.screenH,
-                  AppSpacing.xl,
-                  AppSpacing.screenH,
-                  AppSpacing.xxxl,
-                ),
+        loading: () => const LoadingView(),
+        error: (e, _) =>
+            const ErrorView(message: 'No se pudo cargar el evento.'),
+        data: (evento) => ListView(
+          padding: AppSpacing.form,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.border),
+                boxShadow: AppColors.shadowRest,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: AppColors.shadowRest,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SectionLabel('Enlace público'),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Enlace de autoregistro',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        SelectableText(
-                          _link,
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _ActionChipButton(
-                              icon: Symbols.share_rounded,
-                              label: 'Compartir',
-                              filled: true,
-                              onTap: () => _compartir(evento.nombre),
-                            ),
-                            _ActionChipButton(
-                              icon: Symbols.content_copy_rounded,
-                              label: 'Copiar',
-                              onTap: _copiar,
-                            ),
-                            _ActionChipButton(
-                              icon: Symbols.open_in_new_rounded,
-                              label: 'Abrir',
-                              onTap: _abrir,
-                            ),
-                          ],
-                        ),
-                      ],
+                  const SectionLabel('Enlace público'),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Enlace de autoregistro',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    _link,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.cardGap + 6),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: AppColors.shadowRest,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SectionLabel('Carga masiva'),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Carga masiva por Excel',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          ExcelImportRegistrados.descripcionColumnas,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        PrimaryGradientButton(
-                          label: _importando
-                              ? 'Procesando...'
-                              : 'Elegir archivo .xlsx',
-                          loading: _importando,
-                          onPressed: _importando ? null : _cargarExcel,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.cardGap + 6),
-                  NexusActionRow(
-                    icon: Symbols.person_add_rounded,
-                    title: 'Registrar manualmente',
-                    subtitle: 'Formulario individual de asistente',
-                    onTap: () => context.push(RoutePaths.registrar(widget.eventoId)),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _ActionChipButton(
+                        icon: Symbols.share_rounded,
+                        label: 'Compartir',
+                        filled: true,
+                        onTap: () => _compartir(evento.nombre),
+                      ),
+                      _ActionChipButton(
+                        icon: Symbols.content_copy_rounded,
+                        label: 'Copiar',
+                        onTap: _copiar,
+                      ),
+                      _ActionChipButton(
+                        icon: Symbols.open_in_new_rounded,
+                        label: 'Abrir',
+                        onTap: _abrir,
+                      ),
+                    ],
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: AppSpacing.cardGap + 6),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.border),
+                boxShadow: AppColors.shadowRest,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionLabel('Carga masiva'),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Carga masiva por Excel',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    ExcelImportRegistrados.descripcionColumnas,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  PrimaryGradientButton(
+                    label: _importando
+                        ? 'Procesando...'
+                        : 'Elegir archivo .xlsx',
+                    loading: _importando,
+                    onPressed: _importando ? null : _cargarExcel,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.cardGap + 6),
+            NexusActionRow(
+              icon: Symbols.person_add_rounded,
+              title: 'Registrar manualmente',
+              subtitle: 'Formulario individual de asistente',
+              onTap: () => context.push(RoutePaths.registrar(widget.eventoId)),
+            ),
+          ],
+        ),
       ),
     );
   }

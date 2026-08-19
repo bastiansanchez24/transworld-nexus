@@ -65,7 +65,10 @@ void main() {
         ],
       );
 
-      expect(release.resolveNexusWindowsZip()?.name, 'windows-NEXUS-v1.4.0.zip');
+      expect(
+        release.resolveNexusWindowsZip()?.name,
+        'windows-NEXUS-v1.4.0.zip',
+      );
     });
 
     test('elige el zip más grande si no hay coincidencia exacta', () {

@@ -70,25 +70,31 @@ void main() {
   Lead lead(String id, {String? empresa}) =>
       Lead(id: id, eventoId: eventoId, nombreCompleto: id, empresa: empresa);
 
-  test('el resumen del servidor manda, aunque el rol solo vea sus leads', () async {
-    final container = await contenedor(
-      perfil: perfilUser,
-      remoto: const LeadsResumen(total: 12, empresas: 5),
-      enCache: [lead('propio')],
-    );
+  test(
+    'el resumen del servidor manda, aunque el rol solo vea sus leads',
+    () async {
+      final container = await contenedor(
+        perfil: perfilUser,
+        remoto: const LeadsResumen(total: 12, empresas: 5),
+        enCache: [lead('propio')],
+      );
 
-    final resumen = container.read(leadsResumenLocalProvider(eventoId));
+      final resumen = container.read(leadsResumenLocalProvider(eventoId));
 
-    expect(resumen?.total, 12);
-    expect(resumen?.empresas, 5);
-  });
+      expect(resumen?.total, 12);
+      expect(resumen?.empresas, 5);
+    },
+  );
 
   test(
     'sin resumen del servidor no se pasa el conteo propio como total de la campaña',
     () async {
       final container = await contenedor(
         perfil: perfilUser,
-        enCache: [lead('propio-1'), lead('propio-2', empresa: 'Acme')],
+        enCache: [
+          lead('propio-1'),
+          lead('propio-2', empresa: 'Acme'),
+        ],
       );
 
       // Null pinta "—" en el hub: mejor que un 0 o un total recortado.
@@ -99,7 +105,10 @@ void main() {
   test('quien ve todos los leads sí puede contar desde la caché', () async {
     final container = await contenedor(
       perfil: perfilAdmin,
-      enCache: [lead('a', empresa: 'Acme'), lead('b')],
+      enCache: [
+        lead('a', empresa: 'Acme'),
+        lead('b'),
+      ],
     );
 
     final resumen = container.read(leadsResumenLocalProvider(eventoId));

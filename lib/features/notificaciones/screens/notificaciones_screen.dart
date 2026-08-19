@@ -171,8 +171,7 @@ class _NotificacionesScreenState extends ConsumerState<NotificacionesScreen> {
           if (lista.isEmpty) {
             return const EmptyStateView(
               icon: Symbols.notifications_rounded,
-              message:
-                  'Sin notificaciones',
+              message: 'Sin notificaciones',
             );
           }
 

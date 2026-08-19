@@ -12,13 +12,14 @@ import 'web_camera_tracks.dart';
 /// Acceso a cámara y linterna. Sin lógica de UI ni de parseo QR.
 class CameraService {
   CameraService({MobileScannerController? controller})
-      : _controller = controller ??
-            MobileScannerController(
-              formats: [BarcodeFormat.qrCode],
-              detectionSpeed: DetectionSpeed.normal,
-              detectionTimeoutMs: 500,
-              autoStart: false,
-            );
+    : _controller =
+          controller ??
+          MobileScannerController(
+            formats: [BarcodeFormat.qrCode],
+            detectionSpeed: DetectionSpeed.normal,
+            detectionTimeoutMs: 500,
+            autoStart: false,
+          );
 
   final MobileScannerController _controller;
 
@@ -105,7 +106,8 @@ class CameraService {
       if (error.errorCode == MobileScannerErrorCode.permissionDenied) {
         return;
       }
-      if (error.errorCode == MobileScannerErrorCode.controllerAlreadyInitialized ||
+      if (error.errorCode ==
+              MobileScannerErrorCode.controllerAlreadyInitialized ||
           error.errorCode == MobileScannerErrorCode.controllerInitializing) {
         return;
       }

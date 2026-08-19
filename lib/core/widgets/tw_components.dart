@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -10,6 +12,23 @@ import '../theme/tw_tokens.dart';
 /// * nada de widgets Material por defecto (`Card`, `ListTile`, `AppBar`…);
 /// * sin ripple: los taps van por [GestureDetector];
 /// * 1 px del mock = 1 dp, sin redondear a múltiplos de 8.
+
+/// Vidrio de cabeceras y navbar: el mismo [BackdropFilter] en todas las
+/// plataformas (web, Windows, Android, iOS).
+class TwGlassFilter extends StatelessWidget {
+  const TwGlassFilter({super.key, required this.child, this.sigma = 18});
+
+  final Widget child;
+  final double sigma;
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+      child: child,
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // §3 · Átomos
@@ -116,7 +135,15 @@ class TwIconButton extends StatelessWidget {
   }
 }
 
-enum TwIconBoxStyle { brand, blueTint, greenTint, purpleTint, amberTint, excel, support }
+enum TwIconBoxStyle {
+  brand,
+  blueTint,
+  greenTint,
+  purpleTint,
+  amberTint,
+  excel,
+  support,
+}
 
 /// Caja de icono de un action tile / tarjeta de soporte.
 class TwIconBox extends StatelessWidget {
@@ -855,10 +882,7 @@ class TwKpiCard extends StatelessWidget {
             width: 38,
             height: 38,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: tint,
-              borderRadius: TwRadii.field,
-            ),
+            decoration: BoxDecoration(color: tint, borderRadius: TwRadii.field),
             child: Icon(icon, size: 20, color: iconColor),
           ),
           const SizedBox(height: 14),
@@ -932,10 +956,7 @@ class TwActionTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (badge != null) ...[
-              const SizedBox(width: 13),
-              TwBadge(badge!),
-            ],
+            if (badge != null) ...[const SizedBox(width: 13), TwBadge(badge!)],
             const SizedBox(width: 13),
             Icon(
               Symbols.chevron_right_rounded,
@@ -991,8 +1012,6 @@ class TwHeroCard extends StatelessWidget {
       child: Stack(
         children: [
           if (photo != null) Positioned.fill(child: photo!),
-          // Sin foto el velo igual se aplica: el gradiente base ya es oscuro y
-          // el resultado es el mismo tono.
           const Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(gradient: TwGradients.heroScrim),

@@ -387,7 +387,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
               : null;
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+            padding: AppSpacing.form,
             child: Form(
               key: _formKey,
               child: Column(

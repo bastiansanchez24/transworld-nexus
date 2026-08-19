@@ -42,20 +42,18 @@ class HomeFeaturedItem {
     HomeFeaturedKind.campanaFijada => 'ACTIVIDAD FIJADA',
   };
 
-  /// Primario: capturar en una actividad fijada; abrir el evento en el resto.
-  String get ctaLabel =>
-      esActividadCaptura ? 'Capturar lead' : 'Ver evento';
+  /// Primario (blanco): hub de la actividad fijada; abrir el evento en el resto.
+  String get ctaLabel => esActividadCaptura ? 'Ver actividad' : 'Ver evento';
 
   String get ctaRoutePath => esActividadCaptura
-      ? RoutePaths.capturarLead(id)
+      ? RoutePaths.usarEventoLead(id)
       : RoutePaths.usarEvento(id);
 
-  /// Hub de la actividad (ghost). Null en eventos de registro.
-  String? get secondaryCtaLabel =>
-      esActividadCaptura ? 'Ver actividad' : null;
+  /// Capturar lead (ghost). Null en eventos de registro.
+  String? get secondaryCtaLabel => esActividadCaptura ? 'Capturar lead' : null;
 
   String? get secondaryRoutePath =>
-      esActividadCaptura ? RoutePaths.usarEventoLead(id) : null;
+      esActividadCaptura ? RoutePaths.capturarLead(id) : null;
 
   bool get puedeEscanearQr => !esActividadCaptura;
 

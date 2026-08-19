@@ -155,7 +155,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
     return AppScaffold(
       title: 'Nuevo usuario',
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+        padding: AppSpacing.form,
         child: Form(
           key: _formKey,
           child: Column(

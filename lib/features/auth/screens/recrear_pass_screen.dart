@@ -49,8 +49,11 @@ class _RecrearPassScreenState extends ConsumerState<RecrearPassScreen> {
       }
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(context, 'No se pudo actualizar la contraseña.',
-            isError: true);
+        showAppSnackBar(
+          context,
+          'No se pudo actualizar la contraseña.',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -61,50 +64,46 @@ class _RecrearPassScreenState extends ConsumerState<RecrearPassScreen> {
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Nueva contraseña',
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Por seguridad, define una nueva contraseña.',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Nueva contraseña',
-                      helperText: kPasswordHelperText,
-                      helperMaxLines: 3,
-                    ),
-                    validator: validarContrasenaFuerte,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _confirmController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                        labelText: 'Confirmar contraseña'),
-                    validator: (value) => value != _passwordController.text
-                        ? 'Las contraseñas no coinciden'
-                        : null,
-                  ),
-                  const SizedBox(height: 24),
-                  PrimaryGradientButton(
-                    label: 'Guardar',
-                    loading: _loading,
-                    onPressed: _loading ? null : _guardar,
-                  ),
-                ],
+      body: SingleChildScrollView(
+        padding: AppSpacing.form,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Por seguridad, define una nueva contraseña.',
+                style: TextStyle(color: AppColors.textSecondary),
               ),
-            ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Nueva contraseña',
+                  helperText: kPasswordHelperText,
+                  helperMaxLines: 3,
+                ),
+                validator: validarContrasenaFuerte,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _confirmController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Confirmar contraseña',
+                ),
+                validator: (value) => value != _passwordController.text
+                    ? 'Las contraseñas no coinciden'
+                    : null,
+              ),
+              const SizedBox(height: 24),
+              PrimaryGradientButton(
+                label: 'Guardar',
+                loading: _loading,
+                onPressed: _loading ? null : _guardar,
+              ),
+            ],
           ),
         ),
       ),

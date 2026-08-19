@@ -5,12 +5,7 @@ import 'package:transworld_nexus/data/models/perfil.dart';
 import 'package:transworld_nexus/features/eventos/widgets/selector_usuarios_acceso.dart';
 
 Perfil _perfil(String id, String nombre, AppRole rol, {bool activo = true}) {
-  return Perfil(
-    id: id,
-    nombreCompleto: nombre,
-    rol: rol,
-    activo: activo,
-  );
+  return Perfil(id: id, nombreCompleto: nombre, rol: rol, activo: activo);
 }
 
 void main() {

@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/pressable.dart';
 
 enum _AccionFoto { ver, cambiar, eliminar }
@@ -45,7 +45,10 @@ class FotoLeadAvatar extends StatelessWidget {
       return;
     }
 
-    final accion = await _preguntarAccion(context, puedeEliminar: onQuitar != null);
+    final accion = await _preguntarAccion(
+      context,
+      puedeEliminar: onQuitar != null,
+    );
     if (accion == null) return;
 
     switch (accion) {
@@ -87,7 +90,10 @@ class FotoLeadAvatar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.55), width: 2),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.55),
+          width: 2,
+        ),
       ),
       child: ClipOval(child: hijo),
     );
@@ -98,7 +104,10 @@ class FotoLeadAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.white.withValues(alpha: 0.12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.45), width: 1.5),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.45),
+          width: 1.5,
+        ),
       ),
       alignment: Alignment.center,
       child: Icon(
@@ -118,12 +127,12 @@ class FotoLeadAvatar extends StatelessWidget {
         cacheWidth: (size * 3).round(),
       );
     }
-    return CachedNetworkImage(
-      imageUrl: urlExistente!,
+    return AppNetworkImage(
+      url: urlExistente!,
       fit: BoxFit.cover,
       memCacheWidth: (size * 3).round(),
-      placeholder: (_, _) => Container(color: AppColors.primaryLight),
-      errorWidget: (_, _, _) => Container(
+      placeholder: Container(color: AppColors.primaryLight),
+      errorWidget: Container(
         color: AppColors.primaryLight,
         alignment: Alignment.center,
         child: const Icon(
@@ -215,13 +224,14 @@ class _VisorFoto extends StatelessWidget {
     final memoria = bytes;
     final Widget imagen = memoria != null
         ? Image.memory(memoria, fit: BoxFit.contain)
-        : CachedNetworkImage(
-            imageUrl: urlExistente ?? '',
+        : AppNetworkImage(
+            url: urlExistente ?? '',
             fit: BoxFit.contain,
-            placeholder: (_, _) => const Center(
+            expandir: false,
+            placeholder: const Center(
               child: CircularProgressIndicator(color: Colors.white),
             ),
-            errorWidget: (_, _, _) => const Icon(
+            errorWidget: const Icon(
               Symbols.broken_image_rounded,
               color: Colors.white,
               size: 48,

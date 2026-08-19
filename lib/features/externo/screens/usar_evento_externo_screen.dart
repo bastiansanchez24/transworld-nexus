@@ -335,9 +335,7 @@ class _EventoExternoHero extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     TwStatusPill(
-                      evento.yaOcurrio
-                          ? TwStatus.finalizado
-                          : TwStatus.activo,
+                      evento.yaOcurrio ? TwStatus.finalizado : TwStatus.activo,
                     ),
                   ],
                 ),
@@ -439,11 +437,7 @@ class _ExternoStatsCards extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Icon(
-                Symbols.info_rounded,
-                size: 15,
-                color: TwColors.muted,
-              ),
+              const Icon(Symbols.info_rounded, size: 15, color: TwColors.muted),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(

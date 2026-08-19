@@ -53,60 +53,57 @@ class _RecuperarPasswordScreenState
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Recuperar contraseña',
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: _enviado
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.mark_email_read_outlined,
-                          size: 56, color: AppColors.success),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Si el correo existe, te enviamos una nueva '
-                        'contraseña de acceso.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                    ],
-                  )
-                : Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text(
-                          'Ingresa tu correo y te enviaremos una nueva '
-                          'contraseña autogenerada.',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
-                            labelText: 'Correo electrónico',
-                            prefixIcon: Icon(Icons.email_outlined),
-                          ),
-                          validator: (value) =>
-                              (value == null || !value.contains('@'))
-                                  ? 'Correo inválido'
-                                  : null,
-                        ),
-                        const SizedBox(height: 24),
-                        PrimaryGradientButton(
-                          label: 'Enviar nueva contraseña',
-                          loading: _loading,
-                          onPressed: _loading ? null : _enviar,
-                        ),
-                      ],
-                    ),
+      body: SingleChildScrollView(
+        padding: AppSpacing.form,
+        child: _enviado
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(
+                    Icons.mark_email_read_outlined,
+                    size: 56,
+                    color: AppColors.success,
                   ),
-          ),
-        ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Si el correo existe, te enviamos una nueva '
+                    'contraseña de acceso.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ],
+              )
+            : Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Ingresa tu correo y te enviaremos una nueva '
+                      'contraseña autogenerada.',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Correo electrónico',
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                      validator: (value) =>
+                          (value == null || !value.contains('@'))
+                          ? 'Correo inválido'
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+                    PrimaryGradientButton(
+                      label: 'Enviar nueva contraseña',
+                      loading: _loading,
+                      onPressed: _loading ? null : _enviar,
+                    ),
+                  ],
+                ),
+              ),
       ),
     );
   }

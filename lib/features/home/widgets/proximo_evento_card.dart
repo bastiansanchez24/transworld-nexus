@@ -327,7 +327,7 @@ class _FeaturedSlide extends StatelessWidget {
           // Velo sobre foto o degradado: el texto blanco y las métricas leen.
           const Positioned.fill(
             child: DecoratedBox(
-              decoration: BoxDecoration(gradient: TwGradients.homeScrim),
+              decoration: BoxDecoration(gradient: TwGradients.heroScrim),
             ),
           ),
           Padding(
@@ -423,8 +423,9 @@ class _FeaturedSlide extends StatelessWidget {
                 ] else if (item.secondaryRoutePath != null) ...[
                   const SizedBox(height: 10),
                   _HeroCta(
-                    key: Key('proximo_evento_ver_actividad_${item.id}'),
+                    key: Key('proximo_evento_capturar_lead_${item.id}'),
                     label: item.secondaryCtaLabel!,
+                    icon: Symbols.person_add_rounded,
                     filled: false,
                     onTap: () => context.push(item.secondaryRoutePath!),
                   ),
@@ -532,9 +533,7 @@ class _HeroCta extends StatelessWidget {
         decoration: BoxDecoration(
           color: filled ? TwColors.surface : TwColors.whiteA14,
           borderRadius: TwRadii.button,
-          border: filled
-              ? null
-              : Border.all(color: TwColors.whiteA22),
+          border: filled ? null : Border.all(color: TwColors.whiteA22),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16),
         alignment: Alignment.center,
@@ -547,10 +546,7 @@ class _HeroCta extends StatelessWidget {
                 Icon(icon, size: 20, color: color),
                 const SizedBox(width: 8),
               ],
-              Text(
-                label,
-                style: filled ? TwText.heroCta : TwText.heroCtaGhost,
-              ),
+              Text(label, style: filled ? TwText.heroCta : TwText.heroCtaGhost),
             ],
           ),
         ),

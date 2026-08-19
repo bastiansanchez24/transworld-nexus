@@ -123,8 +123,14 @@ void main() {
   });
 
   test('isEventAccessManagementRoute reconoce solo /eventos/:id/acceso', () {
-    expect(isEventAccessManagementRoute(RoutePaths.accesoEvento(eventId)), isTrue);
-    expect(isEventAccessManagementRoute(RoutePaths.editarEvento(eventId)), isFalse);
+    expect(
+      isEventAccessManagementRoute(RoutePaths.accesoEvento(eventId)),
+      isTrue,
+    );
+    expect(
+      isEventAccessManagementRoute(RoutePaths.editarEvento(eventId)),
+      isFalse,
+    );
     expect(isEventAccessManagementRoute(RoutePaths.eventos), isFalse);
     expect(isEventAccessManagementRoute('/eventos/crear/acceso'), isFalse);
   });

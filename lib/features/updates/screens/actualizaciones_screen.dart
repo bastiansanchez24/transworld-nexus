@@ -19,7 +19,8 @@ import '../services/update_service.dart';
 import '../widgets/update_dialog.dart';
 
 IconData get _platformVersionIcon {
-  final desktop = defaultTargetPlatform == TargetPlatform.windows ||
+  final desktop =
+      defaultTargetPlatform == TargetPlatform.windows ||
       defaultTargetPlatform == TargetPlatform.macOS ||
       defaultTargetPlatform == TargetPlatform.linux;
   if (kIsWeb || desktop) {
@@ -123,8 +124,9 @@ class _ActualizacionesBodyState extends ConsumerState<_ActualizacionesBody> {
         final notes = current.notesForDisplay;
         setState(() {
           _releaseNotes = notes.isEmpty ? null : notes;
-          _notesError =
-              notes.isEmpty ? 'Este release no incluye descripción.' : null;
+          _notesError = notes.isEmpty
+              ? 'Este release no incluye descripción.'
+              : null;
           _loadingNotes = false;
           _previousReleases = previous;
           _loadingHistory = false;
@@ -139,8 +141,9 @@ class _ActualizacionesBodyState extends ConsumerState<_ActualizacionesBody> {
           final notes = byTag.notesForDisplay;
           setState(() {
             _releaseNotes = notes.isEmpty ? null : notes;
-            _notesError =
-                notes.isEmpty ? 'Este release no incluye descripción.' : null;
+            _notesError = notes.isEmpty
+                ? 'Este release no incluye descripción.'
+                : null;
             _loadingNotes = false;
             _previousReleases = previous;
             _loadingHistory = false;
@@ -227,62 +230,47 @@ class _ActualizacionesBodyState extends ConsumerState<_ActualizacionesBody> {
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
           ),
-          padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+          padding: AppSpacing.form,
           children: [
-            StaggeredListItem(
-              index: 0,
-              child: _CurrentVersionCard(
-                loadingVersion: _loadingVersion,
-                loadingNotes: _loadingNotes,
-                versionLabel: versionLabel,
-                releaseNotes: _releaseNotes,
-                notesError: _notesError,
-                checking: checking,
-                onBuscar: _buscar,
-              ),
+            _CurrentVersionCard(
+              loadingVersion: _loadingVersion,
+              loadingNotes: _loadingNotes,
+              versionLabel: versionLabel,
+              releaseNotes: _releaseNotes,
+              notesError: _notesError,
+              checking: checking,
+              onBuscar: _buscar,
             ),
             const SizedBox(height: AppSpacing.sectionGap),
-            const StaggeredListItem(
-              index: 1,
-              child: SectionLabel('Historial de versiones'),
-            ),
+            const SectionLabel('Historial de versiones'),
             const SizedBox(height: 12),
             if (_loadingHistory)
-              const StaggeredListItem(
-                index: 2,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
               )
             else if (_historyError != null)
-              StaggeredListItem(
-                index: 2,
-                child: Text(
-                  _historyError!,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                    height: 1.4,
-                  ),
+              Text(
+                _historyError!,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
                 ),
               )
             else if (_previousReleases.isEmpty)
-              const StaggeredListItem(
-                index: 2,
-                child: Text(
-                  'No hay versiones anteriores publicadas.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                    height: 1.4,
-                  ),
+              const Text(
+                'No hay versiones anteriores publicadas.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
                 ),
               )
             else
@@ -293,22 +281,18 @@ class _ActualizacionesBodyState extends ConsumerState<_ActualizacionesBody> {
                   padding: EdgeInsets.only(
                     bottom: index == _previousReleases.length - 1 ? 0 : 10,
                   ),
-                  child: StaggeredListItem(
-                    index: 2 + index,
-                    child: _VersionHistoryTile(
-                      versionLabel: _versionLabel(release.tagName),
-                      releaseName: release.name.trim().isEmpty
-                          ? null
-                          : release.name.trim(),
-                      notes: release.notesForDisplay,
-                      expanded: expanded,
-                      onToggle: () {
-                        setState(() {
-                          _expandedTag =
-                              expanded ? null : release.tagName;
-                        });
-                      },
-                    ),
+                  child: _VersionHistoryTile(
+                    versionLabel: _versionLabel(release.tagName),
+                    releaseName: release.name.trim().isEmpty
+                        ? null
+                        : release.name.trim(),
+                    notes: release.notesForDisplay,
+                    expanded: expanded,
+                    onToggle: () {
+                      setState(() {
+                        _expandedTag = expanded ? null : release.tagName;
+                      });
+                    },
                   ),
                 );
               }),
@@ -353,10 +337,7 @@ class _CurrentVersionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                _platformVersionIcon,
-                color: AppColors.primary,
-              ),
+              Icon(_platformVersionIcon, color: AppColors.primary),
               const SizedBox(width: 10),
               const Expanded(
                 child: Text(
@@ -448,9 +429,7 @@ class _CurrentVersionCard extends StatelessWidget {
                       ),
                     )
                   : const Icon(Symbols.search_rounded, size: 20),
-              label: Text(
-                checking ? 'Buscando…' : 'Buscar actualizaciones',
-              ),
+              label: Text(checking ? 'Buscando…' : 'Buscar actualizaciones'),
             ),
           ],
         ],

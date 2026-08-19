@@ -60,14 +60,11 @@ class NotificacionesRepository {
     final userId = _userId;
     if (userId == null) return;
 
-    await _client.from(SupabaseTables.notificacionesLeidas).upsert(
-      {
-        'usuario_id': userId,
-        'notificacion_id': notificacionId,
-        'leida_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      onConflict: 'usuario_id,notificacion_id',
-    );
+    await _client.from(SupabaseTables.notificacionesLeidas).upsert({
+      'usuario_id': userId,
+      'notificacion_id': notificacionId,
+      'leida_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'usuario_id,notificacion_id');
   }
 
   Future<void> marcarTodasLeidas(List<String> notificacionIds) async {
@@ -75,18 +72,20 @@ class NotificacionesRepository {
     if (userId == null || notificacionIds.isEmpty) return;
 
     final ahora = DateTime.now().toUtc().toIso8601String();
-    await _client.from(SupabaseTables.notificacionesLeidas).upsert(
-      notificacionIds
-          .map(
-            (id) => {
-              'usuario_id': userId,
-              'notificacion_id': id,
-              'leida_at': ahora,
-            },
-          )
-          .toList(),
-      onConflict: 'usuario_id,notificacion_id',
-    );
+    await _client
+        .from(SupabaseTables.notificacionesLeidas)
+        .upsert(
+          notificacionIds
+              .map(
+                (id) => {
+                  'usuario_id': userId,
+                  'notificacion_id': id,
+                  'leida_at': ahora,
+                },
+              )
+              .toList(),
+          onConflict: 'usuario_id,notificacion_id',
+        );
   }
 
   /// Oculta notificaciones del inbox del usuario actual sin borrarlas globalmente.
@@ -95,18 +94,20 @@ class NotificacionesRepository {
     if (userId == null || notificacionIds.isEmpty) return;
 
     final ahora = DateTime.now().toUtc().toIso8601String();
-    await _client.from(SupabaseTables.notificacionesOcultas).upsert(
-      notificacionIds
-          .map(
-            (id) => {
-              'usuario_id': userId,
-              'notificacion_id': id,
-              'oculta_at': ahora,
-            },
-          )
-          .toList(),
-      onConflict: 'usuario_id,notificacion_id',
-    );
+    await _client
+        .from(SupabaseTables.notificacionesOcultas)
+        .upsert(
+          notificacionIds
+              .map(
+                (id) => {
+                  'usuario_id': userId,
+                  'notificacion_id': id,
+                  'oculta_at': ahora,
+                },
+              )
+              .toList(),
+          onConflict: 'usuario_id,notificacion_id',
+        );
   }
 
   /// Oculta todas las notificaciones existentes para el usuario autenticado.
@@ -121,22 +122,16 @@ class NotificacionesRepository {
     final userId = _userId;
     if (userId == null) return;
 
-    await _client.from(SupabaseTables.deviceTokens).upsert(
-      {
-        'usuario_id': userId,
-        'token': token,
-        'plataforma': plataforma,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      onConflict: 'token',
-    );
+    await _client.from(SupabaseTables.deviceTokens).upsert({
+      'usuario_id': userId,
+      'token': token,
+      'plataforma': plataforma,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'token');
   }
 
   Future<void> eliminarDeviceToken(String token) async {
-    await _client
-        .from(SupabaseTables.deviceTokens)
-        .delete()
-        .eq('token', token);
+    await _client.from(SupabaseTables.deviceTokens).delete().eq('token', token);
   }
 
   Future<void> eliminarTokensDelUsuario() async {

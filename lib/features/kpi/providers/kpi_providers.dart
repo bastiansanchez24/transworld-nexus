@@ -18,32 +18,34 @@ class KpiData {
   final List<MapEntry<String, int>> topEmpresas;
 }
 
-final kpiDataPorEventoProvider =
-    FutureProvider.autoDispose.family<KpiData, String>((ref, eventoId) async {
-  final registrados =
-      await ref.watch(registradosPorEventoProvider(eventoId).future);
+final kpiDataPorEventoProvider = FutureProvider.autoDispose
+    .family<KpiData, String>((ref, eventoId) async {
+      final registrados = await ref.watch(
+        registradosPorEventoProvider(eventoId).future,
+      );
 
-  final total = registrados.length;
-  final acreditados = registrados.where((r) => r.acreditado).length;
-  final pendientesDeSync =
-      registrados.where((r) => r.pendienteDeSincronizar).length;
-  final porcentaje = total == 0 ? 0.0 : acreditados / total;
+      final total = registrados.length;
+      final acreditados = registrados.where((r) => r.acreditado).length;
+      final pendientesDeSync = registrados
+          .where((r) => r.pendienteDeSincronizar)
+          .length;
+      final porcentaje = total == 0 ? 0.0 : acreditados / total;
 
-  final porEmpresa = <String, int>{};
-  for (final r in registrados) {
-    final empresa = (r.empresa ?? '').trim();
-    if (empresa.isEmpty) continue;
-    porEmpresa[empresa] = (porEmpresa[empresa] ?? 0) + 1;
-  }
-  
-  final topEmpresas = porEmpresa.entries.toList()
-    ..sort((a, b) => b.value.compareTo(a.value));
+      final porEmpresa = <String, int>{};
+      for (final r in registrados) {
+        final empresa = (r.empresa ?? '').trim();
+        if (empresa.isEmpty) continue;
+        porEmpresa[empresa] = (porEmpresa[empresa] ?? 0) + 1;
+      }
 
-  return KpiData(
-    total: total,
-    acreditados: acreditados,
-    pendientesDeSync: pendientesDeSync,
-    porcentaje: porcentaje,
-    topEmpresas: topEmpresas,
-  );
-});
+      final topEmpresas = porEmpresa.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      return KpiData(
+        total: total,
+        acreditados: acreditados,
+        pendientesDeSync: pendientesDeSync,
+        porcentaje: porcentaje,
+        topEmpresas: topEmpresas,
+      );
+    });

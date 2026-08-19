@@ -81,13 +81,7 @@ Future<EntregaExportacion> entregarExportacion({
 
   await SharePlus.instance.share(
     ShareParams(
-      files: [
-        XFile.fromData(
-          bytes,
-          name: nombreArchivo,
-          mimeType: mimeType,
-        ),
-      ],
+      files: [XFile.fromData(bytes, name: nombreArchivo, mimeType: mimeType)],
       fileNameOverrides: [nombreArchivo],
     ),
   );

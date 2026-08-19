@@ -100,14 +100,9 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
       allowed: (perfil) => perfil.canExportData,
       deniedMessage: 'Tu rol no permite exportar datos de leads.',
       builder: (_) => AppScaffold(
-        title: 'Importar o Exportar',
+        title: 'Importar o exportar',
         body: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.screenH,
-            AppSpacing.xl,
-            AppSpacing.screenH,
-            AppSpacing.xxxl,
-          ),
+          padding: AppSpacing.form,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -225,8 +223,8 @@ class _TwDetailBar extends StatelessWidget {
             Positioned.fill(
               child: IgnorePointer(
                 child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: TwGlassFilter(
+                    sigma: 18,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: TwColors.bg.withValues(alpha: 0.72 * t),

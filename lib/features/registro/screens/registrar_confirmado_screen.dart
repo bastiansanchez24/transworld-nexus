@@ -96,7 +96,9 @@ class _RegistrarConfirmadoScreenState
       if (!isOnline) {
         final cola = ref.read(syncQueueServiceProvider);
         if (existeEmailPendienteODuplicado(cola, widget.eventoId, email)) {
-          throw Exception('Ese correo ya está en la cola local de este evento.');
+          throw Exception(
+            'Ese correo ya está en la cola local de este evento.',
+          );
         }
       } else {
         final yaExiste = await ref
@@ -114,8 +116,9 @@ class _RegistrarConfirmadoScreenState
         email: email,
         acreditado: _acreditarAhora,
         rut: requiereCertificacion ? formatearRut(_rutController.text) : null,
-        patente:
-            requiereCertificacion ? formatearPatente(_patenteController.text) : null,
+        patente: requiereCertificacion
+            ? formatearPatente(_patenteController.text)
+            : null,
         empresa: formatearEmpresa(_empresaController.text),
         cargo: formatearCargo(_cargoController.text),
         telefono: telefonoInternacional(_telefonoController.text, _pais),
@@ -133,7 +136,9 @@ class _RegistrarConfirmadoScreenState
           debugPrint('enviar-qr tras registro manual falló: $e');
         }
       } else {
-        await ref.read(syncQueueServiceProvider.notifier).enqueueInsert(
+        await ref
+            .read(syncQueueServiceProvider.notifier)
+            .enqueueInsert(
               table: SupabaseTables.registrados,
               payload: registrado.toInsertMap(),
             );
@@ -145,8 +150,8 @@ class _RegistrarConfirmadoScreenState
         final mensaje = !isOnline
             ? 'Guardado en modo local. Se subirá solo. El QR se podrá enviar al sincronizar.'
             : correoEnviado
-                ? 'Registrado con éxito. QR enviado a $email.'
-                : 'Registrado con éxito, pero no se pudo enviar el QR por email.';
+            ? 'Registrado con éxito. QR enviado a $email.'
+            : 'Registrado con éxito, pero no se pudo enviar el QR por email.';
         showAppSnackBar(context, mensaje, isError: isOnline && !correoEnviado);
         _formKey.currentState!.reset();
         _nombreController.clear();
@@ -164,7 +169,11 @@ class _RegistrarConfirmadoScreenState
       }
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(context, e.toString().replaceFirst('Exception: ', ''), isError: true);
+        showAppSnackBar(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -178,63 +187,59 @@ class _RegistrarConfirmadoScreenState
     return AppScaffold(
       title: 'Registrar asistente',
       body: eventoAsync.when(
-              loading: () => const LoadingView(),
-              error: (e, _) => const ErrorView(message: 'No se pudo cargar el evento.'),
-              data: (evento) {
-                final requiereCertificacion = evento.certificacionCapacitacion;
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.screenH,
-                    AppSpacing.xl,
-                    AppSpacing.screenH,
-                    AppSpacing.xxxl,
+        loading: () => const LoadingView(),
+        error: (e, _) =>
+            const ErrorView(message: 'No se pudo cargar el evento.'),
+        data: (evento) {
+          final requiereCertificacion = evento.certificacionCapacitacion;
+          return SingleChildScrollView(
+            padding: AppSpacing.form,
+            child: Form(
+              key: _formKey,
+              autovalidateMode: _autovalidar
+                  ? AutovalidateMode.onUserInteraction
+                  : AutovalidateMode.disabled,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CamposRegistroAsistente(
+                    nombreController: _nombreController,
+                    emailController: _emailController,
+                    empresaController: _empresaController,
+                    cargoController: _cargoController,
+                    telefonoController: _telefonoController,
+                    pais: _pais,
+                    onPaisChanged: (pais) => setState(() => _pais = pais),
+                    enabled: !_guardando,
+                    mostrarCertificacion: requiereCertificacion,
+                    rutController: _rutController,
+                    patenteController: _patenteController,
                   ),
-                  child: Form(
-                    key: _formKey,
-                    autovalidateMode: _autovalidar
-                        ? AutovalidateMode.onUserInteraction
-                        : AutovalidateMode.disabled,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        CamposRegistroAsistente(
-                          nombreController: _nombreController,
-                          emailController: _emailController,
-                          empresaController: _empresaController,
-                          cargoController: _cargoController,
-                          telefonoController: _telefonoController,
-                          pais: _pais,
-                          onPaisChanged: (pais) => setState(() => _pais = pais),
-                          enabled: !_guardando,
-                          mostrarCertificacion: requiereCertificacion,
-                          rutController: _rutController,
-                          patenteController: _patenteController,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        _ToggleRow(
-                          title: 'Acreditar de inmediato',
-                          subtitle: 'Marca al asistente como acreditado al guardar',
-                          value: _acreditarAhora,
-                          onChanged: _guardando
-                              ? (_) {}
-                              : (v) => setState(() => _acreditarAhora = v),
-                        ),
-                        const SizedBox(height: AppSpacing.xl),
-                        PrimaryGradientButton(
-                          label: 'Guardar registro',
-                          loading: _guardando,
-                          onPressed: _guardando
-                              ? null
-                              : () => _guardar(
-                                    requiereCertificacion: requiereCertificacion,
-                                    nombreEvento: evento.nombre,
-                                  ),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _ToggleRow(
+                    title: 'Acreditar de inmediato',
+                    subtitle: 'Marca al asistente como acreditado al guardar',
+                    value: _acreditarAhora,
+                    onChanged: _guardando
+                        ? (_) {}
+                        : (v) => setState(() => _acreditarAhora = v),
                   ),
-                );
-              },
+                  const SizedBox(height: AppSpacing.xl),
+                  PrimaryGradientButton(
+                    label: 'Guardar registro',
+                    loading: _guardando,
+                    onPressed: _guardando
+                        ? null
+                        : () => _guardar(
+                            requiereCertificacion: requiereCertificacion,
+                            nombreEvento: evento.nombre,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

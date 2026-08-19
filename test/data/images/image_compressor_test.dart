@@ -31,7 +31,9 @@ void main() {
     test('respeta la orientación vertical', () async {
       final original = img.encodePng(_fotoDePrueba(2000, 3000));
 
-      final decodificada = img.decodeImage(await comprimirParaSubida(original))!;
+      final decodificada = img.decodeImage(
+        await comprimirParaSubida(original),
+      )!;
 
       expect(decodificada.height, kLadoMaximoSubida);
       expect(decodificada.width, 683);
@@ -40,8 +42,9 @@ void main() {
     test('no agranda una imagen que ya es chica', () async {
       final original = img.encodePng(_fotoDePrueba(320, 240));
 
-      final decodificada = await comprimirParaSubida(original)
-          .then((bytes) => img.decodeImage(bytes)!);
+      final decodificada = await comprimirParaSubida(
+        original,
+      ).then((bytes) => img.decodeImage(bytes)!);
 
       expect(decodificada.width, 320);
       expect(decodificada.height, 240);
@@ -83,24 +86,27 @@ void main() {
       expect(decodificada.width, 1000);
     });
 
-    test('recorta a cuadrado una foto vertical y la escala al máximo',
-        () async {
-      final original = img.encodePng(_fotoDePrueba(1500, 3000));
+    test(
+      'recorta a cuadrado una foto vertical y la escala al máximo',
+      () async {
+        final original = img.encodePng(_fotoDePrueba(1500, 3000));
 
-      final decodificada = await comprimirParaSubida(
-        original,
-        recorteProporcion: 1,
-      ).then((bytes) => img.decodeImage(bytes)!);
+        final decodificada = await comprimirParaSubida(
+          original,
+          recorteProporcion: 1,
+        ).then((bytes) => img.decodeImage(bytes)!);
 
-      expect(decodificada.width, kLadoMaximoSubida);
-      expect(decodificada.height, kLadoMaximoSubida);
-    });
+        expect(decodificada.width, kLadoMaximoSubida);
+        expect(decodificada.height, kLadoMaximoSubida);
+      },
+    );
 
     test('sin recorte conserva la proporción original', () async {
       final original = img.encodePng(_fotoDePrueba(2000, 1000));
 
-      final decodificada = await comprimirParaSubida(original)
-          .then((bytes) => img.decodeImage(bytes)!);
+      final decodificada = await comprimirParaSubida(
+        original,
+      ).then((bytes) => img.decodeImage(bytes)!);
 
       expect(decodificada.width / decodificada.height, closeTo(2, 0.01));
     });
@@ -119,8 +125,9 @@ void main() {
 
     test('falla con un mensaje claro si no es una imagen', () async {
       expect(
-        () => comprimirParaSubida(img.encodePng(_fotoDePrueba(2, 2))
-            .sublist(0, 4)),
+        () => comprimirParaSubida(
+          img.encodePng(_fotoDePrueba(2, 2)).sublist(0, 4),
+        ),
         throwsA(isA<FormatException>()),
       );
     });

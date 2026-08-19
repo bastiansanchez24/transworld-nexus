@@ -15,7 +15,9 @@ Uint8List _jpegDePrueba() {
 
 Future<void> _montar(WidgetTester tester, Widget selector) async {
   await tester.pumpWidget(
-    MaterialApp(home: Scaffold(body: Center(child: selector))),
+    MaterialApp(
+      home: Scaffold(body: Center(child: selector)),
+    ),
   );
 }
 
@@ -43,8 +45,9 @@ void main() {
     expect(find.byIcon(Symbols.close_rounded), findsNothing);
   });
 
-  testWidgets('con bytes muestra la imagen y el botón de quitar',
-      (tester) async {
+  testWidgets('con bytes muestra la imagen y el botón de quitar', (
+    tester,
+  ) async {
     var quitados = 0;
     await _montar(
       tester,
@@ -94,8 +97,9 @@ void main() {
     expect(caja, const Size(kAnchoSelectorFotoLead, kAnchoSelectorFotoLead));
   });
 
-  testWidgets('la imagen del evento es 16:9 y más ancha que la del lead',
-      (tester) async {
+  testWidgets('la imagen del evento es 16:9 y más ancha que la del lead', (
+    tester,
+  ) async {
     await _montarEnFormulario(
       tester,
       SelectorImagen(
@@ -135,8 +139,9 @@ void main() {
     );
   });
 
-  testWidgets('el recuadro vacío también respeta proporción y ancho',
-      (tester) async {
+  testWidgets('el recuadro vacío también respeta proporción y ancho', (
+    tester,
+  ) async {
     await _montarEnFormulario(
       tester,
       SelectorImagen(
@@ -150,8 +155,9 @@ void main() {
     expect(caja, const Size(kAnchoSelectorFotoLead, kAnchoSelectorFotoLead));
   });
 
-  testWidgets('muestra el aviso de foto pendiente bajo la imagen',
-      (tester) async {
+  testWidgets('muestra el aviso de foto pendiente bajo la imagen', (
+    tester,
+  ) async {
     await _montar(
       tester,
       SelectorImagen(

@@ -40,9 +40,7 @@ class ExcelExportLeadsService {
     excel.rename(nombreHojaOriginal, tituloHoja);
     final sheet = excel[tituloHoja];
 
-    sheet.appendRow([
-      for (final h in _cabeceras) xls.TextCellValue(h),
-    ]);
+    sheet.appendRow([for (final h in _cabeceras) xls.TextCellValue(h)]);
 
     final formatoFecha = DateFormat('dd/MM/yyyy HH:mm');
     for (final lead in leads) {

@@ -20,8 +20,9 @@ class MiPerfilStats {
   final int eventosCreados;
 }
 
-final miPerfilStatsProvider =
-    FutureProvider.autoDispose<MiPerfilStats>((ref) async {
+final miPerfilStatsProvider = FutureProvider.autoDispose<MiPerfilStats>((
+  ref,
+) async {
   final perfil = await ref.watch(currentPerfilProvider.future);
   if (perfil == null) {
     return const MiPerfilStats(

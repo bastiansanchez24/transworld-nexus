@@ -346,27 +346,24 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen>
                   itemBuilder: (context, index) {
                     final evento = filtrados[index];
                     final fijado = fijados.contains(evento.id);
-                    return StaggeredListItem(
-                      index: index,
-                      child: EventRow(
-                        date: evento.fecha,
-                        title: evento.nombre,
-                        place: evento.lugar ?? evento.pais ?? '',
-                        finalizado: evento.yaOcurrio,
-                        fijado: fijado,
-                        onTap: () =>
-                            context.push(RoutePaths.usarEvento(evento.id)),
-                        onLongPress: () => _mostrarMenuEvento(evento, fijados),
-                        actions: esAdmin
-                            ? [
-                                EventoAccesoButton(
-                                  onTap: () => context.push(
-                                    RoutePaths.accesoEvento(evento.id),
-                                  ),
+                    return EventRow(
+                      date: evento.fecha,
+                      title: evento.nombre,
+                      place: evento.lugar ?? evento.pais ?? '',
+                      finalizado: evento.yaOcurrio,
+                      fijado: fijado,
+                      onTap: () =>
+                          context.push(RoutePaths.usarEvento(evento.id)),
+                      onLongPress: () => _mostrarMenuEvento(evento, fijados),
+                      actions: esAdmin
+                          ? [
+                              EventoAccesoButton(
+                                onTap: () => context.push(
+                                  RoutePaths.accesoEvento(evento.id),
                                 ),
-                              ]
-                            : null,
-                      ),
+                              ),
+                            ]
+                          : null,
                     );
                   },
                 ),

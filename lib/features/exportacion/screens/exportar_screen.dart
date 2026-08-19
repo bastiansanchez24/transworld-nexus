@@ -148,14 +148,9 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
       allowed: (perfil) => perfil.canExportData,
       deniedMessage: 'Tu rol no permite exportar datos del evento.',
       builder: (_) => AppScaffold(
-        title: 'Importar o Exportar',
+        title: 'Importar o exportar',
         body: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.screenH,
-            AppSpacing.xl,
-            AppSpacing.screenH,
-            AppSpacing.xxxl,
-          ),
+          padding: AppSpacing.form,
           children: [
             Container(
               padding: const EdgeInsets.all(16),

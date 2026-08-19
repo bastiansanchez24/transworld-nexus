@@ -9,11 +9,7 @@ import '../services/update_service.dart';
 
 /// Barra de progreso + porcentaje para la descarga OTA.
 class UpdateProgressView extends StatelessWidget {
-  const UpdateProgressView({
-    super.key,
-    required this.progress,
-    this.label,
-  });
+  const UpdateProgressView({super.key, required this.progress, this.label});
 
   final double progress;
   final String? label;
@@ -170,8 +166,8 @@ class UpdateDialog extends StatelessWidget {
                 label: verifying
                     ? 'Verificando integridad…'
                     : installing
-                        ? installingLabel
-                        : null,
+                    ? installingLabel
+                    : null,
               ),
             ],
             if (failed && state.needsInstallPermission) ...[
@@ -181,7 +177,9 @@ class UpdateDialog extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.tintNavy,
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,25 +235,16 @@ class UpdateDialog extends StatelessWidget {
             child: const Text('Cancelar'),
           ),
         if (!busy && !forced)
-          TextButton(
-            onPressed: onLater,
-            child: const Text('Más tarde'),
-          ),
+          TextButton(onPressed: onLater, child: const Text('Más tarde')),
         if (failed && state.needsInstallPermission)
           OutlinedButton(
             onPressed: onOpenSettings,
             child: const Text('Configuración'),
           ),
         if (failed)
-          FilledButton(
-            onPressed: onRetry,
-            child: const Text('Reintentar'),
-          )
+          FilledButton(onPressed: onRetry, child: const Text('Reintentar'))
         else if (!busy)
-          FilledButton(
-            onPressed: onUpdate,
-            child: const Text('Actualizar'),
-          ),
+          FilledButton(onPressed: onUpdate, child: const Text('Actualizar')),
       ],
     );
   }
@@ -288,7 +277,9 @@ Future<void> showAppUpdateDialog(BuildContext context, WidgetRef ref) async {
             child: UpdateDialog(
               state: state,
               onUpdate: () {
-                ref.read(updateControllerProvider.notifier).downloadAndInstall();
+                ref
+                    .read(updateControllerProvider.notifier)
+                    .downloadAndInstall();
               },
               onLater: () => Navigator.of(dialogContext).pop(),
               onCancelDownload: () {
@@ -335,11 +326,7 @@ Future<void> showAppUpdateDialog(BuildContext context, WidgetRef ref) async {
 }
 
 class _MetaChip extends StatelessWidget {
-  const _MetaChip({
-    required this.label,
-    required this.color,
-    required this.bg,
-  });
+  const _MetaChip({required this.label, required this.color, required this.bg});
 
   final String label;
   final Color color;

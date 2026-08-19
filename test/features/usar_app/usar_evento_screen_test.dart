@@ -38,66 +38,63 @@ void main() {
     preferences = await SharedPreferences.getInstance();
   });
 
-  testWidgets(
-    'al recargar el evento el menú de acciones sigue montado',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(390, 844);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetPhysicalSize);
+  testWidgets('al recargar el evento el menú de acciones sigue montado', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
 
-      var bloquearRecarga = false;
-      final recarga = Completer<Evento>();
+    var bloquearRecarga = false;
+    final recarga = Completer<Evento>();
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-            connectivityStreamProvider.overrideWith(
-              (ref) => Stream.value(true),
-            ),
-            authStateChangesProvider.overrideWith(
-              (ref) => const Stream<AuthState>.empty(),
-            ),
-            currentPerfilProvider.overrideWith((ref) async => perfil),
-            registradosPorEventoProvider.overrideWith((ref, id) async => []),
-            registradosResumenProvider.overrideWith(
-              (ref, id) => const RegistradosResumen(
-                total: 0,
-                acreditados: 0,
-                pendientes: 0,
-              ),
-            ),
-            eventoByIdProvider.overrideWith((ref, id) async {
-              if (bloquearRecarga) await recarga.future;
-              return evento;
-            }),
-          ],
-          child: const MaterialApp(
-            locale: Locale('es'),
-            home: UsarEventoScreen(eventoId: 'evento-1'),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          connectivityStreamProvider.overrideWith((ref) => Stream.value(true)),
+          authStateChangesProvider.overrideWith(
+            (ref) => const Stream<AuthState>.empty(),
           ),
+          currentPerfilProvider.overrideWith((ref) async => perfil),
+          registradosPorEventoProvider.overrideWith((ref, id) async => []),
+          registradosResumenProvider.overrideWith(
+            (ref, id) => const RegistradosResumen(
+              total: 0,
+              acreditados: 0,
+              pendientes: 0,
+            ),
+          ),
+          eventoByIdProvider.overrideWith((ref, id) async {
+            if (bloquearRecarga) await recarga.future;
+            return evento;
+          }),
+        ],
+        child: const MaterialApp(
+          locale: Locale('es'),
+          home: UsarEventoScreen(eventoId: 'evento-1'),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Lista de asistentes registrados'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Lista de asistentes registrados'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      bloquearRecarga = true;
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(UsarEventoScreen)),
-      );
-      container.invalidate(eventoByIdProvider('evento-1'));
-      await tester.pump();
+    bloquearRecarga = true;
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(UsarEventoScreen)),
+    );
+    container.invalidate(eventoByIdProvider('evento-1'));
+    await tester.pump();
 
-      expect(find.text('Lista de asistentes registrados'), findsOneWidget);
-      expect(find.byType(LoadingView), findsNothing);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Lista de asistentes registrados'), findsOneWidget);
+    expect(find.byType(LoadingView), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      recarga.complete(evento);
-      await tester.pumpAndSettle();
-      expect(find.text('Lista de asistentes registrados'), findsOneWidget);
-    },
-  );
+    recarga.complete(evento);
+    await tester.pumpAndSettle();
+    expect(find.text('Lista de asistentes registrados'), findsOneWidget);
+  });
 }

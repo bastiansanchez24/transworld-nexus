@@ -532,7 +532,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
         error: (_, _) => const Text('Capturar lead'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+        padding: AppSpacing.form,
         child: Form(
           key: _formKey,
           child: Column(

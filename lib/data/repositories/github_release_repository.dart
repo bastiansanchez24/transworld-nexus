@@ -11,24 +11,22 @@ abstract class UpdateSource {
 
 /// Cliente de la API pública de GitHub Releases.
 class GitHubReleaseRepository implements UpdateSource {
-  GitHubReleaseRepository({
-    Dio? dio,
-    String? owner,
-    String? repo,
-  })  : _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 15),
-                receiveTimeout: const Duration(seconds: 20),
-                headers: const {
-                  'Accept': 'application/vnd.github+json',
-                  'X-GitHub-Api-Version': '2022-11-28',
-                  'User-Agent': 'Nexus-OTA',
-                },
-              ),
+  GitHubReleaseRepository({Dio? dio, String? owner, String? repo})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 20),
+              headers: const {
+                'Accept': 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+                'User-Agent': 'Nexus-OTA',
+              },
             ),
-        _owner = owner ?? Env.githubOwner,
-        _repo = repo ?? Env.githubRepo;
+          ),
+      _owner = owner ?? Env.githubOwner,
+      _repo = repo ?? Env.githubRepo;
 
   final Dio _dio;
   final String _owner;
@@ -45,7 +43,10 @@ class GitHubReleaseRepository implements UpdateSource {
 
   @override
   Future<GitHubRelease> fetchLatest() async {
-    return _getRelease(_latestUrl, notFoundMessage: 'No hay Releases publicados en este repositorio.');
+    return _getRelease(
+      _latestUrl,
+      notFoundMessage: 'No hay Releases publicados en este repositorio.',
+    );
   }
 
   /// Lista releases publicados (más recientes primero).
@@ -59,9 +60,7 @@ class GitHubReleaseRepository implements UpdateSource {
     try {
       final response = await _dio.get<List<dynamic>>(
         _releasesUrl,
-        queryParameters: {
-          'per_page': perPage.clamp(1, 100),
-        },
+        queryParameters: {'per_page': perPage.clamp(1, 100)},
       );
       final data = response.data;
       if (data == null) {
@@ -73,9 +72,7 @@ class GitHubReleaseRepository implements UpdateSource {
         if (item is Map<String, dynamic>) {
           releases.add(GitHubRelease.fromJson(item));
         } else if (item is Map) {
-          releases.add(
-            GitHubRelease.fromJson(Map<String, dynamic>.from(item)),
-          );
+          releases.add(GitHubRelease.fromJson(Map<String, dynamic>.from(item)));
         }
       }
 
@@ -171,10 +168,7 @@ class GitHubReleaseRepository implements UpdateSource {
         );
       }
       if (status == 404) {
-        throw GitHubReleaseException(
-          notFoundMessage,
-          statusCode: 404,
-        );
+        throw GitHubReleaseException(notFoundMessage, statusCode: 404);
       }
       throw GitHubReleaseException(
         'No se pudo consultar GitHub Releases: ${e.message ?? e.type.name}',
@@ -201,7 +195,9 @@ class GitHubReleaseException implements Exception {
   String toString() => message;
 }
 
-final githubReleaseRepositoryProvider = Provider<GitHubReleaseRepository>((ref) {
+final githubReleaseRepositoryProvider = Provider<GitHubReleaseRepository>((
+  ref,
+) {
   return GitHubReleaseRepository();
 });
 

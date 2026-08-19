@@ -4,11 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// Resultado de intentar aplicar una actualización Windows.
-enum WindowsInstallOutcome {
-  launched,
-  unsupportedPlatform,
-  failed,
-}
+enum WindowsInstallOutcome { launched, unsupportedPlatform, failed }
 
 class WindowsInstallResult {
   const WindowsInstallResult(this.outcome, {this.message});
@@ -74,16 +70,14 @@ class WindowsInstaller {
     try {
       // BOM obligatorio: Windows PowerShell 5.1 decodifica los archivos sin
       // BOM como ANSI y corrompería los acentos del script.
-      await File(scriptPath).writeAsString(
-        '\u{FEFF}$_updaterScript',
-        flush: true,
-      );
+      await File(
+        scriptPath,
+      ).writeAsString('\u{FEFF}$_updaterScript', flush: true);
       // Shell.Application delega el arranque a Explorer, fuera del Job Object
       // de Flutter. Así el updater sobrevive al `exit(0)` de Nexus sin admin.
-      await File(launcherPath).writeAsString(
-        '\u{FEFF}$_shellLauncherScript',
-        flush: true,
-      );
+      await File(
+        launcherPath,
+      ).writeAsString('\u{FEFF}$_shellLauncherScript', flush: true);
     } catch (e) {
       return WindowsInstallResult(
         WindowsInstallOutcome.failed,
@@ -92,35 +86,31 @@ class WindowsInstaller {
     }
 
     try {
-      final launch = await Process.run(
+      final launch = await Process.run(_powershellExecutable, [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        launcherPath,
+        '-PowerShellPath',
         _powershellExecutable,
-        [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-File',
-          launcherPath,
-          '-PowerShellPath',
-          _powershellExecutable,
-          '-UpdaterScript',
-          scriptPath,
-          '-ZipPath',
-          zipFile.path,
-          '-InstallDir',
-          installDir,
-          '-ExeName',
-          exeName,
-          '-ParentPid',
-          '$pid',
-          '-ReadyPath',
-          readyPath,
-          if (remoteVersion != null && remoteVersion.isNotEmpty) ...[
-            '-RemoteVersion',
-            remoteVersion,
-          ],
+        '-UpdaterScript',
+        scriptPath,
+        '-ZipPath',
+        zipFile.path,
+        '-InstallDir',
+        installDir,
+        '-ExeName',
+        exeName,
+        '-ParentPid',
+        '$pid',
+        '-ReadyPath',
+        readyPath,
+        if (remoteVersion != null && remoteVersion.isNotEmpty) ...[
+          '-RemoteVersion',
+          remoteVersion,
         ],
-        workingDirectory: tempDir.path,
-      );
+      ], workingDirectory: tempDir.path);
 
       try {
         await File(launcherPath).delete();
@@ -129,7 +119,8 @@ class WindowsInstaller {
       if (launch.exitCode != 0) {
         return WindowsInstallResult(
           WindowsInstallOutcome.failed,
-          message: 'Windows no pudo crear el proceso actualizador: '
+          message:
+              'Windows no pudo crear el proceso actualizador: '
               '${launch.stderr.toString().trim()}',
         );
       }
@@ -143,7 +134,8 @@ class WindowsInstaller {
       if (!await ready.exists()) {
         return const WindowsInstallResult(
           WindowsInstallOutcome.failed,
-          message: 'El actualizador de Windows no alcanzó a iniciar. '
+          message:
+              'El actualizador de Windows no alcanzó a iniciar. '
               'RegisPro permanecerá abierto; vuelve a intentarlo.',
         );
       }

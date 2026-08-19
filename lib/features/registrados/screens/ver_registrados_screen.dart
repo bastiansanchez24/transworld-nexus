@@ -233,13 +233,10 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
                   itemCount: filtrados.length,
                   separatorBuilder: (_, _) =>
                       const SizedBox(height: AppSpacing.cardGap),
-                  itemBuilder: (context, index) => StaggeredListItem(
+                  itemBuilder: (context, index) => _RegistradoTile(
+                    registrado: filtrados[index],
+                    eventoId: widget.eventoId,
                     index: index,
-                    child: _RegistradoTile(
-                      registrado: filtrados[index],
-                      eventoId: widget.eventoId,
-                      index: index,
-                    ),
                   ),
                 ),
               ),
@@ -284,9 +281,8 @@ class _RegistradoTile extends ConsumerWidget {
     // Siempre se puede abrir: la pantalla de edición lee de esta misma lista
     // y sabe encolar los cambios de una fila que aún no llegó al servidor.
     return Pressable(
-      onTap: () => context.push(
-        RoutePaths.editarRegistrado(eventoId, registrado.id),
-      ),
+      onTap: () =>
+          context.push(RoutePaths.editarRegistrado(eventoId, registrado.id)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(

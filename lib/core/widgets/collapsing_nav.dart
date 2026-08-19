@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -157,8 +155,8 @@ class CollapsingNavOverlay extends StatelessWidget {
                   child: IgnorePointer(
                     child: ClipRect(
                       // Blur visible sin volver a sigma 22 (afectaba scroll en listas).
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: TwGlassFilter(
+                        sigma: 18,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: isHome

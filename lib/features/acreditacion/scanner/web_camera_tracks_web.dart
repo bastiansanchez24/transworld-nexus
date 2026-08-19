@@ -13,8 +13,9 @@ void stopOrphanWebCameraTracks() {
     if (node == null) continue;
     final video = node as web.HTMLVideoElement;
     final stream = video.srcObject;
-    if (stream is! web.MediaStream) continue;
-    for (final track in stream.getTracks().toDart) {
+    if (stream == null || !stream.isA<web.MediaStream>()) continue;
+    final mediaStream = stream as web.MediaStream;
+    for (final track in mediaStream.getTracks().toDart) {
       track.stop();
     }
     video

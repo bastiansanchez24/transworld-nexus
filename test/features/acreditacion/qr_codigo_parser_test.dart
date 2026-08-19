@@ -15,15 +15,14 @@ void main() {
     });
 
     test('acepta JSON con registrado_id', () {
-      expect(
-        extraerRegistradoIdDeTexto('{"registrado_id":"$uuid"}'),
-        uuid,
-      );
+      expect(extraerRegistradoIdDeTexto('{"registrado_id":"$uuid"}'), uuid);
     });
 
     test('acepta URL con query param', () {
       expect(
-        extraerRegistradoIdDeTexto('https://app.com/acreditar?registrado_id=$uuid'),
+        extraerRegistradoIdDeTexto(
+          'https://app.com/acreditar?registrado_id=$uuid',
+        ),
         uuid,
       );
     });

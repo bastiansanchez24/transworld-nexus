@@ -197,10 +197,8 @@ class _AcreditarConfirmadoScreenState
                   itemCount: filtrados.length,
                   separatorBuilder: (_, _) =>
                       const SizedBox(height: AppSpacing.cardGap),
-                  itemBuilder: (context, index) => StaggeredListItem(
-                    index: index,
-                    child: _buildRegistradoTile(filtrados[index], index),
-                  ),
+                  itemBuilder: (context, index) =>
+                      _buildRegistradoTile(filtrados[index], index),
                 ),
               ),
             ];

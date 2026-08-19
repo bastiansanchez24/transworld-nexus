@@ -62,10 +62,7 @@ class UpdateController extends StateNotifier<UpdateState> {
 
     final previous = state;
 
-    state = state.copyWith(
-      status: UpdateStatus.checking,
-      clearError: true,
-    );
+    state = state.copyWith(status: UpdateStatus.checking, clearError: true);
 
     try {
       final outcome = await _service.checkForUpdates(onResume: onResume);
@@ -110,14 +107,10 @@ class UpdateController extends StateNotifier<UpdateState> {
       return;
     }
 
-    state = state.copyWith(
-      status: UpdateStatus.checking,
-      clearError: true,
-    );
+    state = state.copyWith(status: UpdateStatus.checking, clearError: true);
 
     try {
-      final outcome =
-          await _service.checkForUpdates(force: true, manual: true);
+      final outcome = await _service.checkForUpdates(force: true, manual: true);
       final info = outcome.info;
       if (info == null) {
         state = state.copyWith(status: UpdateStatus.upToDate, clearInfo: true);
@@ -256,8 +249,7 @@ class UpdateController extends StateNotifier<UpdateState> {
         state = state.copyWith(
           status: UpdateStatus.failed,
           needsInstallPermission: true,
-          errorMessage:
-              result.message ?? ApkInstaller.installPermissionMessage,
+          errorMessage: result.message ?? ApkInstaller.installPermissionMessage,
           downloadedFilePath: filePath,
         );
         return;
@@ -290,5 +282,5 @@ class UpdateController extends StateNotifier<UpdateState> {
 
 final updateControllerProvider =
     StateNotifierProvider<UpdateController, UpdateState>((ref) {
-  return UpdateController(ref);
-});
+      return UpdateController(ref);
+    });

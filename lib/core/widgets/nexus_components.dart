@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/tw_tokens.dart';
+import 'app_network_image.dart';
 import 'tw_components.dart';
 import 'pressable.dart';
 
@@ -79,14 +79,20 @@ class AvatarPerfil extends StatelessWidget {
           _AvatarCirculo(
             size: size,
             child: _tieneFoto
-                ? CachedNetworkImage(
-                    imageUrl: fotoUrl!,
+                ? AppNetworkImage(
+                    url: fotoUrl!,
                     fit: BoxFit.cover,
                     memCacheWidth: (size * 3).round(),
-                    placeholder: (_, _) =>
-                        AvatarInitials(name: nombre, size: size, index: index),
-                    errorWidget: (_, _, _) =>
-                        AvatarInitials(name: nombre, size: size, index: index),
+                    placeholder: AvatarInitials(
+                      name: nombre,
+                      size: size,
+                      index: index,
+                    ),
+                    errorWidget: AvatarInitials(
+                      name: nombre,
+                      size: size,
+                      index: index,
+                    ),
                   )
                 : AvatarInitials(name: nombre, size: size, index: index),
           ),
@@ -338,7 +344,8 @@ class EventRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chevron = trailing ??
+    final chevron =
+        trailing ??
         const Icon(
           Symbols.chevron_right_rounded,
           size: 22,
@@ -448,10 +455,7 @@ class EventRow extends StatelessWidget {
           if (actions != null)
             Padding(
               padding: const EdgeInsets.only(right: 10),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: actions!,
-              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: actions!),
             ),
         ],
       ),
@@ -473,11 +477,7 @@ class PrimaryGradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TwPrimaryButton(
-      label: label,
-      loading: loading,
-      onTap: onPressed,
-    );
+    return TwPrimaryButton(label: label, loading: loading, onTap: onPressed);
   }
 }
 
@@ -714,24 +714,6 @@ class _DashedCirclePainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
-class StaggeredListItem extends StatelessWidget {
-  const StaggeredListItem({
-    super.key,
-    required this.index,
-    required this.child,
-  });
-
-  final int index;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    // Sin animación: el stagger (Opacity + Translate) trababa el scroll a
-    // 120 Hz y dejaba filas “volando” al filtrar/buscar.
-    return child;
-  }
-}
-
 /// Etiqueta compacta sobre un campo de formulario (leads, registrados, etc.).
 class NexusFieldLabel extends StatelessWidget {
   const NexusFieldLabel(this.text, {super.key});
@@ -952,9 +934,9 @@ class PersonaIdentityBanner extends StatelessWidget {
         disabledBorder: _borde(0.14),
         focusedBorder: _borde(0.8, grosor: 1.5),
         // El rojo de error no se lee sobre el navy; la lima del brand sí.
-        errorBorder: _borde(0.5).copyWith(
-          borderSide: const BorderSide(color: AppColors.accent),
-        ),
+        errorBorder: _borde(
+          0.5,
+        ).copyWith(borderSide: const BorderSide(color: AppColors.accent)),
         focusedErrorBorder: _borde(0.5).copyWith(
           borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
         ),

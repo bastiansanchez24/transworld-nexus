@@ -29,10 +29,12 @@ class EditarRegistradoScreen extends ConsumerStatefulWidget {
   final String registradoId;
 
   @override
-  ConsumerState<EditarRegistradoScreen> createState() => _EditarRegistradoScreenState();
+  ConsumerState<EditarRegistradoScreen> createState() =>
+      _EditarRegistradoScreenState();
 }
 
-class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen> {
+class _EditarRegistradoScreenState
+    extends ConsumerState<EditarRegistradoScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _empresaController = TextEditingController();
@@ -89,9 +91,13 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
       final isOnline = ref.read(isOnlineProvider);
 
       if (isOnline && !_esPendiente) {
-        await ref.read(registradosRepositoryProvider).actualizar(widget.registradoId, cambios);
+        await ref
+            .read(registradosRepositoryProvider)
+            .actualizar(widget.registradoId, cambios);
       } else {
-        await ref.read(syncQueueServiceProvider.notifier).enqueueUpdate(
+        await ref
+            .read(syncQueueServiceProvider.notifier)
+            .enqueueUpdate(
               table: SupabaseTables.registrados,
               entityId: widget.registradoId,
               changes: cambios,
@@ -103,7 +109,9 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
         volverALista(context, RoutePaths.verRegistrados(widget.eventoId));
       }
     } catch (e) {
-      if (mounted) showAppSnackBar(context, 'No se pudo guardar.', isError: true);
+      if (mounted) {
+        showAppSnackBar(context, 'No se pudo guardar.', isError: true);
+      }
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
@@ -118,20 +126,26 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
     );
     if (!confirmado) return;
     try {
-      await ref.read(registradosRepositoryProvider).eliminar(widget.registradoId);
+      await ref
+          .read(registradosRepositoryProvider)
+          .eliminar(widget.registradoId);
       ref.invalidate(registradosPorEventoProvider(widget.eventoId));
       if (mounted) {
         volverALista(context, RoutePaths.verRegistrados(widget.eventoId));
       }
     } catch (e) {
-      if (mounted) showAppSnackBar(context, 'No se pudo eliminar.', isError: true);
+      if (mounted) {
+        showAppSnackBar(context, 'No se pudo eliminar.', isError: true);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final esAdmin = ref.watch(isAdminProvider);
-    final registradosAsync = ref.watch(registradosPorEventoProvider(widget.eventoId));
+    final registradosAsync = ref.watch(
+      registradosPorEventoProvider(widget.eventoId),
+    );
 
     return AppScaffold(
       title: 'Editar registrado',
@@ -147,98 +161,98 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
           ),
       ],
       body: registradosAsync.when(
-              loading: () => const LoadingView(),
-              error: (e, _) => const ErrorView(message: 'No se pudo cargar.'),
-              data: (registrados) {
-                final registrado = registrados.where((r) => r.id == widget.registradoId).firstOrNull;
-                if (registrado == null) {
-                  return const EmptyStateView(
-                    icon: Symbols.person_off_rounded,
-                    message: 'No se encontró este registro.',
-                  );
-                }
-                _precargar(registrado);
+        loading: () => const LoadingView(),
+        error: (e, _) => const ErrorView(message: 'No se pudo cargar.'),
+        data: (registrados) {
+          final registrado = registrados
+              .where((r) => r.id == widget.registradoId)
+              .firstOrNull;
+          if (registrado == null) {
+            return const EmptyStateView(
+              icon: Symbols.person_off_rounded,
+              message: 'No se encontró este registro.',
+            );
+          }
+          _precargar(registrado);
 
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        PersonaIdentityBanner(
-                          nombre: _nombreController.text,
-                          email: registrado.email,
-                          nombreController: _nombreController,
-                          nombreHint: 'Ej. María González',
-                          nombreEnabled: !_guardando,
-                          nombreValidator: (v) =>
-                              (v == null || v.trim().isEmpty)
-                              ? 'Requerido'
-                              : null,
-                          badge: StatusChip(
-                            label: _acreditado ? 'Acreditado' : 'Pendiente',
-                            variant: _acreditado
-                                ? StatusChipVariant.success
-                                : StatusChipVariant.warning,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        NexusFormTextField(
-                          label: 'Empresa',
-                          controller: _empresaController,
-                          hintText: 'Ej. Transworld',
-                          enabled: !_guardando,
-                        ),
-                        const SizedBox(height: 14),
-                        NexusFormTextField(
-                          label: 'Cargo',
-                          controller: _cargoController,
-                          hintText: 'Ej. Gerente comercial',
-                          enabled: !_guardando,
-                        ),
-                        const SizedBox(height: 14),
-                        NexusFormTextField(
-                          label: 'Teléfono',
-                          controller: _telefonoController,
-                          hintText: '+56 9 1234 5678',
-                          keyboardType: TextInputType.phone,
-                          enabled: !_guardando,
-                        ),
-                        const SizedBox(height: 14),
-                        NexusFormTextField(
-                          label: 'RUT / RUC',
-                          controller: _rutController,
-                          hintText: '12.345.678-5',
-                          enabled: !_guardando,
-                          validator: (v) => validarRut(v, requerido: false),
-                        ),
-                        const SizedBox(height: 14),
-                        NexusFormTextField(
-                          label: 'Patente',
-                          controller: _patenteController,
-                          hintText: 'ABCD12',
-                          enabled: !_guardando,
-                          validator: (v) => validarPatente(v, requerido: false),
-                        ),
-                        const SizedBox(height: 14),
-                        _ToggleRow(
-                          title: 'Acreditado',
-                          subtitle: 'Estado de ingreso al evento',
-                          value: _acreditado,
-                          onChanged: (v) => setState(() => _acreditado = v),
-                        ),
-                        const SizedBox(height: 24),
-                        PrimaryGradientButton(
-                          label: 'Guardar cambios',
-                          loading: _guardando,
-                          onPressed: _guardando ? null : _guardar,
-                        ),
-                      ],
+          return SingleChildScrollView(
+            padding: AppSpacing.form,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PersonaIdentityBanner(
+                    nombre: _nombreController.text,
+                    email: registrado.email,
+                    nombreController: _nombreController,
+                    nombreHint: 'Ej. María González',
+                    nombreEnabled: !_guardando,
+                    nombreValidator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                    badge: StatusChip(
+                      label: _acreditado ? 'Acreditado' : 'Pendiente',
+                      variant: _acreditado
+                          ? StatusChipVariant.success
+                          : StatusChipVariant.warning,
                     ),
                   ),
-                );
-              },
+                  const SizedBox(height: 14),
+                  NexusFormTextField(
+                    label: 'Empresa',
+                    controller: _empresaController,
+                    hintText: 'Ej. Transworld',
+                    enabled: !_guardando,
+                  ),
+                  const SizedBox(height: 14),
+                  NexusFormTextField(
+                    label: 'Cargo',
+                    controller: _cargoController,
+                    hintText: 'Ej. Gerente comercial',
+                    enabled: !_guardando,
+                  ),
+                  const SizedBox(height: 14),
+                  NexusFormTextField(
+                    label: 'Teléfono',
+                    controller: _telefonoController,
+                    hintText: '+56 9 1234 5678',
+                    keyboardType: TextInputType.phone,
+                    enabled: !_guardando,
+                  ),
+                  const SizedBox(height: 14),
+                  NexusFormTextField(
+                    label: 'RUT / RUC',
+                    controller: _rutController,
+                    hintText: '12.345.678-5',
+                    enabled: !_guardando,
+                    validator: (v) => validarRut(v, requerido: false),
+                  ),
+                  const SizedBox(height: 14),
+                  NexusFormTextField(
+                    label: 'Patente',
+                    controller: _patenteController,
+                    hintText: 'ABCD12',
+                    enabled: !_guardando,
+                    validator: (v) => validarPatente(v, requerido: false),
+                  ),
+                  const SizedBox(height: 14),
+                  _ToggleRow(
+                    title: 'Acreditado',
+                    subtitle: 'Estado de ingreso al evento',
+                    value: _acreditado,
+                    onChanged: (v) => setState(() => _acreditado = v),
+                  ),
+                  const SizedBox(height: 24),
+                  PrimaryGradientButton(
+                    label: 'Guardar cambios',
+                    loading: _guardando,
+                    onPressed: _guardando ? null : _guardar,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -52,7 +52,9 @@ void main() {
     });
 
     test('no repite siempre la misma contraseña', () {
-      final generadas = {for (var i = 0; i < 50; i++) generarContrasenaInvitacion()};
+      final generadas = {
+        for (var i = 0; i < 50; i++) generarContrasenaInvitacion(),
+      };
       expect(generadas.length, greaterThan(40));
     });
   });

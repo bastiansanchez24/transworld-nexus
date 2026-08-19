@@ -8,12 +8,11 @@ import '../../usuarios/providers/usuarios_providers.dart';
 final usuariosAsignablesAccesoProvider =
     FutureProvider.autoDispose<List<Perfil>>((ref) async {
       final todos = await ref.watch(usuariosListProvider.future);
-      return todos.where((u) => u.requiresEventAssignment).toList()
-        ..sort(
-          (a, b) => a.nombreCompleto.toLowerCase().compareTo(
-            b.nombreCompleto.toLowerCase(),
-          ),
-        );
+      return todos.where((u) => u.requiresEventAssignment).toList()..sort(
+        (a, b) => a.nombreCompleto.toLowerCase().compareTo(
+          b.nombreCompleto.toLowerCase(),
+        ),
+      );
     });
 
 final usuariosAutorizadosEventoProvider = FutureProvider.autoDispose

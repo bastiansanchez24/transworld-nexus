@@ -16,9 +16,9 @@ enum TipoNotificacion {
   }
 
   bool get esAcreditacion => switch (this) {
-        TipoNotificacion.registro => false,
-        _ => true,
-      };
+    TipoNotificacion.registro => false,
+    _ => true,
+  };
 }
 
 class NotificacionInbox {

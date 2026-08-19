@@ -46,7 +46,8 @@ class _CrearEditarEventoForm extends ConsumerStatefulWidget {
       _CrearEditarEventoFormState();
 }
 
-class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> {
+class _CrearEditarEventoFormState
+    extends ConsumerState<_CrearEditarEventoForm> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _paisController = TextEditingController();
@@ -180,7 +181,8 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
     final confirmado = await confirmDialog(
       context,
       title: 'Eliminar evento',
-      message: 'Esta acción no se puede deshacer. ¿Eliminar el evento y sus registrados?',
+      message:
+          'Esta acción no se puede deshacer. ¿Eliminar el evento y sus registrados?',
       confirmLabel: 'Eliminar',
     );
     if (!confirmado) return;
@@ -194,7 +196,11 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
       if (mounted) showAppSnackBar(context, e.toString(), isError: true);
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(context, 'No se pudo eliminar el evento.', isError: true);
+        showAppSnackBar(
+          context,
+          'No se pudo eliminar el evento.',
+          isError: true,
+        );
       }
     }
   }
@@ -224,7 +230,7 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
       body: eventoAsync != null && eventoAsync.isLoading && !_cargado
           ? const LoadingView()
           : SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+              padding: AppSpacing.form,
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -242,8 +248,8 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
                       onElegir: _elegirImagen,
                       onQuitar:
                           _imagenBytes == null && _imagenUrlExistente == null
-                              ? null
-                              : _quitarImagen,
+                          ? null
+                          : _quitarImagen,
                     ),
                     const SizedBox(height: 14),
                     _FieldLabel('Nombre'),
@@ -259,10 +265,7 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
                     const SizedBox(height: 14),
                     _FieldLabel('Fecha'),
                     const SizedBox(height: 6),
-                    _FechaPickerRow(
-                      fecha: _fecha,
-                      onTap: _elegirFecha,
-                    ),
+                    _FechaPickerRow(fecha: _fecha, onTap: _elegirFecha),
                     const SizedBox(height: 14),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -334,8 +337,9 @@ class _CrearEditarEventoFormState extends ConsumerState<_CrearEditarEventoForm> 
                           child: Text('Cliente'),
                         ),
                       ],
-                      onChanged: (value) =>
-                          setState(() => _tipoRegistro = value ?? _tipoRegistro),
+                      onChanged: (value) => setState(
+                        () => _tipoRegistro = value ?? _tipoRegistro,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     _ToggleCard(

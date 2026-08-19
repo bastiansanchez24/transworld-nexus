@@ -93,9 +93,7 @@ class EventoLead {
       eventoOrigenId: SupabaseRowParsers.asStringOrNull(
         map['evento_origen_id'],
       ),
-      tipo: TipoEventoLead.fromString(
-        map['tipo_evento_lead'] as String?,
-      ),
+      tipo: TipoEventoLead.fromString(map['tipo_evento_lead'] as String?),
       imagenUrl: SupabaseRowParsers.asStringOrNull(map['imagen_url']),
       createdAt: SupabaseRowParsers.parseDateTimeOrNull(map['created_at']),
     );
@@ -127,6 +125,7 @@ class EventoLead {
       'pais': pais,
       'tematica': tematica,
       'certificacion_capacitacion': certificacionCapacitacion,
+      'imagen_url': imagenUrl,
     };
   }
 

@@ -1,10 +1,9 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/tw_tokens.dart';
 import 'pressable.dart';
+import 'tw_components.dart';
 
 class TwNavItemData {
   const TwNavItemData({
@@ -76,8 +75,8 @@ class TwBottomNavBar extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: _radius,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: _blurSigma, sigmaY: _blurSigma),
+          child: TwGlassFilter(
+            sigma: _blurSigma,
             child: ColoredBox(
               color: TwColors.surface.withValues(alpha: _fillAlpha),
               child: SizedBox(

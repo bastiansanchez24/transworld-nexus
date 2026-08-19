@@ -111,7 +111,7 @@ class _GestionarAccesoEventoBodyState
               },
             )
           : SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+              padding: AppSpacing.form,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

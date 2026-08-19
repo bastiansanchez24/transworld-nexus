@@ -1,12 +1,12 @@
 import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../data/images/image_compressor.dart';
 import '../theme/app_theme.dart';
+import 'app_network_image.dart';
 import 'app_widgets.dart';
 import 'modal_recorte_imagen.dart';
 import 'nexus_components.dart';
@@ -276,17 +276,15 @@ class SelectorImagen extends StatelessWidget {
         cacheWidth: kLadoMaximoSubida,
       );
     }
-    return CachedNetworkImage(
-      imageUrl: urlExistente!,
+    return AppNetworkImage(
+      url: urlExistente!,
       fit: BoxFit.cover,
       memCacheWidth: kLadoMaximoSubida,
-      placeholder: (_, _) => Container(
+      placeholder: Container(
         color: AppColors.tintNavy,
-        child: const Center(
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
-      errorWidget: (_, _, _) => Container(
+      errorWidget: Container(
         color: AppColors.tintNavy,
         child: const Icon(
           Symbols.broken_image_rounded,

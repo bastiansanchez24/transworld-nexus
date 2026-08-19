@@ -179,8 +179,10 @@ class _ListarEventosLeadsScreenState
           filled: true,
           fillColor: AppColors.surface,
           isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.input),
             borderSide: const BorderSide(color: AppColors.border),
@@ -191,8 +193,10 @@ class _ListarEventosLeadsScreenState
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.input),
-            borderSide:
-                const BorderSide(color: AppColors.primaryLight, width: 1.5),
+            borderSide: const BorderSide(
+              color: AppColors.primaryLight,
+              width: 1.5,
+            ),
           ),
         ),
       ),
@@ -246,10 +250,7 @@ class _ListarEventosLeadsScreenState
         const SizedBox(height: 2),
         const Text(
           'Registre actividades y capture oportunidades potenciales de negocio.',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
         ),
         if (total != null && proximos != null) ...[
           const SizedBox(height: 6),
@@ -292,10 +293,7 @@ class _ListarEventosLeadsScreenState
               error: (_, _) => _buildHeader(),
               data: (eventos) {
                 final proximos = eventos.where((e) => !e.yaOcurrio).length;
-                return _buildHeader(
-                  total: eventos.length,
-                  proximos: proximos,
-                );
+                return _buildHeader(total: eventos.length, proximos: proximos);
               },
             ),
           ),
@@ -347,20 +345,17 @@ class _ListarEventosLeadsScreenState
                   itemBuilder: (context, index) {
                     final evento = filtrados[index];
                     final fijado = fijados.contains(evento.id);
-                    return StaggeredListItem(
-                      index: index,
-                      child: EventRow(
-                        date: evento.fecha,
-                        title: evento.nombre,
-                        place: evento.pais ?? '',
-                        finalizado: evento.yaOcurrio,
-                        fijado: fijado,
-                        chip: TwOriginPill(interno: evento.esInterno),
-                        onTap: () =>
-                            context.push(RoutePaths.usarEventoLead(evento.id)),
-                        onLongPress: () =>
-                            _mostrarMenuEventoLead(evento, fijados),
-                      ),
+                    return EventRow(
+                      date: evento.fecha,
+                      title: evento.nombre,
+                      place: evento.pais ?? '',
+                      finalizado: evento.yaOcurrio,
+                      fijado: fijado,
+                      chip: TwOriginPill(interno: evento.esInterno),
+                      onTap: () =>
+                          context.push(RoutePaths.usarEventoLead(evento.id)),
+                      onLongPress: () =>
+                          _mostrarMenuEventoLead(evento, fijados),
                     );
                   },
                 ),

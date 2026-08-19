@@ -2,19 +2,32 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'core/config/app_bootstrap.dart';
 import 'core/desktop/desktop_window.dart';
 import 'core/router/app_router.dart';
+import 'core/theme/app_scroll_behavior.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/browser_theme_color.dart';
 import 'core/widgets/app_widgets.dart';
 import 'core/widgets/sync_conflict_listener.dart';
+import 'core/widgets/windows_mouse_gestures.dart';
 import 'data/offline/sync_coordinator.dart';
 import 'features/auth/providers/auth_providers.dart';
 import 'features/auth/screens/splash_screen.dart';
 import 'features/notificaciones/providers/notificaciones_providers.dart';
 import 'features/notificaciones/services/push_notification_service.dart';
+
+/// Router mínimo del splash de bootstrap.
+///
+/// Tiene que ser [MaterialApp.router] (no un [MaterialApp] con `home`): en web
+/// el `MaterialApp` suelto pone el motor en historial de una sola entrada y el
+/// botón atrás de Chrome deja de recorrer las pantallas de la app.
+final _bootRouter = GoRouter(
+  routes: [GoRoute(path: '/', builder: (context, state) => const _BootGate())],
+  errorBuilder: (context, state) => const _BootGate(),
+);
 
 class TransworldNexusApp extends ConsumerWidget {
   const TransworldNexusApp({super.key});
@@ -39,7 +52,7 @@ class TransworldNexusApp extends ConsumerWidget {
 
     return BrowserThemeColor(
       color: AppColors.background,
-      child: MaterialApp(
+      child: MaterialApp.router(
         title: publicAppName,
         debugShowCheckedModeBanner: false,
         // Tema liviano: [AppTheme.light] baja Plus Jakarta (google_fonts) y
@@ -55,17 +68,29 @@ class TransworldNexusApp extends ConsumerWidget {
         locale: const Locale('es'),
         supportedLocales: const [Locale('es')],
         localizationsDelegates: _localizationsDelegates,
-        home: boot.hasError
-            ? Scaffold(
-                backgroundColor: AppColors.background,
-                body: ErrorView(
-                  message: 'No se pudo iniciar la app.\n${boot.error}',
-                  onRetry: () => ref.invalidate(appBootstrapProvider),
-                ),
-              )
-            : const SplashScreen(),
+        scrollBehavior: const AppScrollBehavior(),
+        routerConfig: _bootRouter,
       ),
     );
+  }
+}
+
+class _BootGate extends ConsumerWidget {
+  const _BootGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final boot = ref.watch(appBootstrapProvider);
+    if (boot.hasError) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: ErrorView(
+          message: 'No se pudo iniciar la app.\n${boot.error}',
+          onRetry: () => ref.invalidate(appBootstrapProvider),
+        ),
+      );
+    }
+    return const SplashScreen();
   }
 }
 
@@ -92,9 +117,15 @@ class _ReadyApp extends ConsumerWidget {
         locale: const Locale('es'),
         supportedLocales: const [Locale('es')],
         localizationsDelegates: TransworldNexusApp._localizationsDelegates,
+        scrollBehavior: const AppScrollBehavior(),
         routerConfig: router,
         builder: (context, child) => DesktopWindowFrame(
-          child: SyncConflictListener(child: child ?? const SizedBox.shrink()),
+          child: WindowsMouseGestures(
+            router: router,
+            child: SyncConflictListener(
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
         ),
       ),
     );

@@ -14,6 +14,7 @@ import 'package:transworld_nexus/data/offline/sync_queue_service.dart';
 Future<void> _montarPantallaPush(
   WidgetTester tester, {
   List<Widget>? actions,
+  Widget body = const SizedBox.shrink(),
   bool settle = true,
 }) async {
   SharedPreferences.setMockInitialValues({});
@@ -28,11 +29,8 @@ Future<void> _montarPantallaPush(
         routes: [
           GoRoute(
             path: 'editar',
-            builder: (_, _) => AppScaffold(
-              title: 'Editar algo',
-              actions: actions,
-              body: const SizedBox.shrink(),
-            ),
+            builder: (_, _) =>
+                AppScaffold(title: 'Editar algo', actions: actions, body: body),
           ),
         ],
       ),
@@ -65,10 +63,7 @@ void main() {
     await _montarPantallaPush(
       tester,
       actions: [
-        NexusHeaderAction(
-          icon: Symbols.delete_outline_rounded,
-          onTap: () {},
-        ),
+        NexusHeaderAction(icon: Symbols.delete_outline_rounded, onTap: () {}),
       ],
     );
 
@@ -104,10 +99,7 @@ void main() {
     await _montarPantallaPush(
       tester,
       actions: [
-        NexusHeaderAction(
-          icon: Symbols.delete_outline_rounded,
-          onTap: () {},
-        ),
+        NexusHeaderAction(icon: Symbols.delete_outline_rounded, onTap: () {}),
       ],
     );
 
@@ -117,9 +109,7 @@ void main() {
   testWidgets('una acción deshabilitada se ve atenuada', (tester) async {
     await _montarPantallaPush(
       tester,
-      actions: const [
-        NexusHeaderAction(icon: Symbols.delete_outline_rounded),
-      ],
+      actions: const [NexusHeaderAction(icon: Symbols.delete_outline_rounded)],
     );
 
     final icono = tester.widget<Icon>(
@@ -146,8 +136,9 @@ void main() {
     expect(icono.color, TwColors.danger);
   });
 
-  testWidgets('en estado loading muestra el spinner en lugar del icono',
-      (tester) async {
+  testWidgets('en estado loading muestra el spinner en lugar del icono', (
+    tester,
+  ) async {
     await _montarPantallaPush(
       tester,
       settle: false,
@@ -167,5 +158,25 @@ void main() {
       tester.getSize(find.byType(NexusHeaderAction).last),
       const Size(NexusHeaderAction.size, NexusHeaderAction.size),
     );
+  });
+
+  testWidgets('un cuerpo corto arranca bajo la cabecera, no al centro', (
+    tester,
+  ) async {
+    const cuerpo = Key('cuerpo-corto');
+    await _montarPantallaPush(
+      tester,
+      body: const ColoredBox(
+        key: cuerpo,
+        color: Color(0xFFFF0000),
+        child: SizedBox(height: 48, width: 200),
+      ),
+    );
+
+    final headerBottom = tester
+        .getRect(find.byType(BackdropFilter).first)
+        .bottom;
+    final bodyTop = tester.getRect(find.byKey(cuerpo)).top;
+    expect(bodyTop, closeTo(headerBottom, 0.5));
   });
 }

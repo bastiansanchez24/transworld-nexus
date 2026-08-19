@@ -2,7 +2,6 @@ import 'dart:io' show exit;
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +13,7 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/theme/tw_tokens.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/notificaciones_header_button.dart';
@@ -499,12 +499,12 @@ class _HomeAvatar extends StatelessWidget {
       child: ClipRRect(
         borderRadius: TwRadii.field,
         child: tieneFoto
-            ? CachedNetworkImage(
-                imageUrl: fotoUrl!,
+            ? AppNetworkImage(
+                url: fotoUrl!,
                 fit: BoxFit.cover,
                 memCacheWidth: 132,
-                placeholder: (_, _) => _Inicial(letra: _inicial),
-                errorWidget: (_, _, _) => _Inicial(letra: _inicial),
+                placeholder: _Inicial(letra: _inicial),
+                errorWidget: _Inicial(letra: _inicial),
               )
             : _Inicial(letra: _inicial),
       ),
@@ -522,10 +522,7 @@ class _Inicial extends StatelessWidget {
     return Center(
       child: Text(
         letra,
-        style: TwText.brandName.copyWith(
-          fontSize: 17,
-          color: TwColors.hero700,
-        ),
+        style: TwText.brandName.copyWith(fontSize: 17, color: TwColors.hero700),
       ),
     );
   }
@@ -556,9 +553,7 @@ class _IconChip extends StatelessWidget {
           decoration: const BoxDecoration(
             color: TwColors.surface,
             borderRadius: TwRadii.iconLg,
-            border: Border.fromBorderSide(
-              BorderSide(color: TwColors.border08),
-            ),
+            border: Border.fromBorderSide(BorderSide(color: TwColors.border08)),
             boxShadow: TwShadows.soft,
           ),
           child: Icon(icon, color: TwColors.iconInk, size: 20),

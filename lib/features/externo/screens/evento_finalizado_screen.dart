@@ -42,10 +42,7 @@ class EventoFinalizadoScreen extends ConsumerWidget {
               const Text(
                 'Tu acceso temporal ya no está disponible.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 24),
               NexusExtendedFab(

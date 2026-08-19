@@ -25,9 +25,7 @@ class EventosLeadsRepository {
         .select()
         .order('fecha', ascending: false);
     return rows
-        .map(
-          (row) => EventoLead.fromMap(Map<String, dynamic>.from(row as Map)),
-        )
+        .map((row) => EventoLead.fromMap(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
@@ -60,9 +58,7 @@ class EventosLeadsRepository {
 
     final lower = nombreNormalizado.toLowerCase();
     final matches = rows
-        .map(
-          (row) => EventoLead.fromMap(Map<String, dynamic>.from(row as Map)),
-        )
+        .map((row) => EventoLead.fromMap(Map<String, dynamic>.from(row as Map)))
         .where((c) => c.nombre.trim().toLowerCase() == lower)
         .toList();
 
@@ -91,10 +87,7 @@ class EventosLeadsRepository {
     final userId = _client.auth.currentUser?.id;
     final row = await _client
         .from(SupabaseTables.eventosLeads)
-        .insert({
-          ...evento.toInsertMap(),
-          'perfil_id': userId,
-        })
+        .insert({...evento.toInsertMap(), 'perfil_id': userId})
         .select()
         .single();
     return EventoLead.fromMap(Map<String, dynamic>.from(row));

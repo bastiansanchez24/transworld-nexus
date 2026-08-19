@@ -1,7 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'app_network_image.dart';
 
 /// Contenedor del banner operativo de un evento: degradado navy, o la foto
 /// de portada si el evento la tiene.
@@ -49,13 +49,10 @@ class EventoHeroBanner extends StatelessWidget {
   }
 }
 
-/// Foto de portada a sangre con velo oscuro para que el texto blanco lea.
-class EventoHeroFoto extends StatefulWidget {
-  const EventoHeroFoto({
-    super.key,
-    required this.imagenUrl,
-    this.velo = 0.40,
-  });
+/// Foto de portada a sangre. Delega la red a [AppNetworkImage] para que
+/// sobreviva rebuilds en web (swipe del home, reabrir un evento).
+class EventoHeroFoto extends StatelessWidget {
+  const EventoHeroFoto({super.key, required this.imagenUrl, this.velo = 0.40});
 
   final String imagenUrl;
 
@@ -63,33 +60,18 @@ class EventoHeroFoto extends StatefulWidget {
   final double velo;
 
   @override
-  State<EventoHeroFoto> createState() => _EventoHeroFotoState();
-}
-
-class _EventoHeroFotoState extends State<EventoHeroFoto> {
-  bool _imagenLista = false;
-
-  @override
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
       children: [
-        CachedNetworkImage(
-          imageUrl: widget.imagenUrl,
+        AppNetworkImage(
+          url: imagenUrl,
           fit: BoxFit.cover,
-          placeholder: (_, _) => const EventoHeroGradiente(),
-          errorWidget: (_, _, _) => const EventoHeroGradiente(),
-          imageBuilder: (context, imageProvider) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && !_imagenLista) {
-                setState(() => _imagenLista = true);
-              }
-            });
-            return Image(image: imageProvider, fit: BoxFit.cover);
-          },
+          alignment: Alignment.center,
+          placeholder: const EventoHeroGradiente(),
+          errorWidget: const EventoHeroGradiente(),
         ),
-        if (_imagenLista && widget.velo > 0)
-          ColoredBox(color: Colors.black.withValues(alpha: widget.velo)),
+        if (velo > 0) ColoredBox(color: Colors.black.withValues(alpha: velo)),
       ],
     );
   }

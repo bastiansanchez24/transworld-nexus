@@ -174,7 +174,9 @@ final leadsResumenLocalProvider = Provider.autoDispose
       );
       final cache = ref.watch(offlineReadCacheProvider);
 
-      final remoto = ref.watch(leadsResumenRemotoProvider(eventoId)).valueOrNull;
+      final remoto = ref
+          .watch(leadsResumenRemotoProvider(eventoId))
+          .valueOrNull;
       final cacheados = cache.leerLocal(
         tabla: leadsResumenCacheTabla,
         eventoId: eventoId,

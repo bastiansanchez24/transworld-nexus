@@ -70,8 +70,11 @@ class ExcelSheetStyler {
 
     for (var col = 0; col < columnas; col++) {
       sheet
-          .cell(xls.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0))
-          .cellStyle = headerStyle;
+              .cell(
+                xls.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0),
+              )
+              .cellStyle =
+          headerStyle;
       sheet.setColumnWidth(col, _anchoParaCabecera(cabeceras[col]));
     }
 
@@ -79,10 +82,14 @@ class ExcelSheetStyler {
       final estilo = row.isOdd ? filaPar : filaImpar;
       for (var col = 0; col < columnas; col++) {
         sheet
-            .cell(
-              xls.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row),
-            )
-            .cellStyle = estilo;
+                .cell(
+                  xls.CellIndex.indexByColumnRow(
+                    columnIndex: col,
+                    rowIndex: row,
+                  ),
+                )
+                .cellStyle =
+            estilo;
       }
     }
   }

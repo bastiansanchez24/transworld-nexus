@@ -50,22 +50,16 @@ class WindowsUninstaller {
     final tempDir = await getTemporaryDirectory();
     final stamp = DateTime.now().millisecondsSinceEpoch;
     final wrapperPath = '${tempDir.path}\\regispro-uninstall-$stamp.ps1';
-    final launcherPath = '${tempDir.path}\\regispro-uninstall-launch-$stamp.cmd';
+    final launcherPath =
+        '${tempDir.path}\\regispro-uninstall-launch-$stamp.cmd';
 
     try {
       await File(wrapperPath).writeAsString(
-        '\u{FEFF}${_wrapperScript(
-          uninstallScript: installedScript,
-          installDir: installDir,
-          parentPid: pid,
-        )}',
+        '\u{FEFF}${_wrapperScript(uninstallScript: installedScript, installDir: installDir, parentPid: pid)}',
         flush: true,
       );
       await File(launcherPath).writeAsString(
-        '\u{FEFF}${_launcherCmd(
-          powershell: _powershellExecutable,
-          scriptPath: wrapperPath,
-        )}',
+        '\u{FEFF}${_launcherCmd(powershell: _powershellExecutable, scriptPath: wrapperPath)}',
         flush: true,
       );
     } catch (e) {

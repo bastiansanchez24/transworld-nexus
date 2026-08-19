@@ -7,7 +7,9 @@ final usuariosListProvider = FutureProvider.autoDispose<List<Perfil>>((ref) {
   return ref.watch(authRepositoryProvider).obtenerTodosLosUsuarios();
 });
 
-final usuarioPorIdProvider =
-    FutureProvider.autoDispose.family<Perfil, String>((ref, id) {
+final usuarioPorIdProvider = FutureProvider.autoDispose.family<Perfil, String>((
+  ref,
+  id,
+) {
   return ref.watch(authRepositoryProvider).obtenerUsuarioPorId(id);
 });

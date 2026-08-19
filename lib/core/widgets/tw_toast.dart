@@ -59,14 +59,17 @@ class TwToast {
     double bottomOffset = kBottom,
   }) => show(c, m, kind: TwToastKind.success, bottomOffset: bottomOffset);
 
-  static void error(BuildContext c, String m, {double bottomOffset = kBottom}) =>
-      show(
-        c,
-        m,
-        kind: TwToastKind.error,
-        duration: const Duration(milliseconds: 3200),
-        bottomOffset: bottomOffset,
-      );
+  static void error(
+    BuildContext c,
+    String m, {
+    double bottomOffset = kBottom,
+  }) => show(
+    c,
+    m,
+    kind: TwToastKind.error,
+    duration: const Duration(milliseconds: 3200),
+    bottomOffset: bottomOffset,
+  );
 
   static void link(BuildContext c, String m, {double bottomOffset = kBottom}) =>
       show(c, m, kind: TwToastKind.link, bottomOffset: bottomOffset);
@@ -145,11 +148,10 @@ class _TwToastLayerState extends State<_TwToastLayer> {
           transitionBuilder: (child, anim) => FadeTransition(
             opacity: anim,
             child: SlideTransition(
-              position:
-                  Tween<Offset>(
-                    begin: const Offset(0, 0.28), // ~12 px hacia abajo
-                    end: Offset.zero,
-                  ).animate(anim),
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.28), // ~12 px hacia abajo
+                end: Offset.zero,
+              ).animate(anim),
               child: child,
             ),
           ),
@@ -216,10 +218,8 @@ class _TwToastCard extends StatelessWidget {
       ),
       TwToastKind.error => (Symbols.error_rounded, TwColors.toastError),
       TwToastKind.link => (Symbols.link_rounded, TwColors.toastSuccess),
-      TwToastKind.info || TwToastKind.progress => (
-        Symbols.info_rounded,
-        TwColors.toastInfo,
-      ),
+      TwToastKind.info ||
+      TwToastKind.progress => (Symbols.info_rounded, TwColors.toastInfo),
     };
     return Icon(icon, size: 19, color: color, fill: 1);
   }

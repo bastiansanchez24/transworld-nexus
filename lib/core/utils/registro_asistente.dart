@@ -30,9 +30,7 @@ class PaisTelefono {
 
   String get bandera {
     final upper = iso.toUpperCase();
-    return String.fromCharCodes(
-      upper.codeUnits.map((c) => 0x1F1E6 - 65 + c),
-    );
+    return String.fromCharCodes(upper.codeUnits.map((c) => 0x1F1E6 - 65 + c));
   }
 
   String get etiquetaCodigo => '+$dialCode';
@@ -277,18 +275,22 @@ String aTitleCase(String value) {
 }
 
 String _capitalizarPalabra(String word) {
-  return word.split('-').map((parte) {
-    if (parte.isEmpty) return parte;
-    final lower = parte.toLowerCase();
-    return '${lower[0].toUpperCase()}${lower.substring(1)}';
-  }).join('-');
+  return word
+      .split('-')
+      .map((parte) {
+        if (parte.isEmpty) return parte;
+        final lower = parte.toLowerCase();
+        return '${lower[0].toUpperCase()}${lower.substring(1)}';
+      })
+      .join('-');
 }
 
 String formatearNombreCompleto(String value) => aTitleCase(value);
 
 String formatearCargo(String value) => aTitleCase(value);
 
-String formatearEmpresa(String value) => value.trim().replaceAll(RegExp(r'\s+'), ' ');
+String formatearEmpresa(String value) =>
+    value.trim().replaceAll(RegExp(r'\s+'), ' ');
 
 String formatearEmail(String value) => value.trim().toLowerCase();
 
@@ -485,5 +487,4 @@ String? validarPatente(String? value, {bool requerido = true}) {
   return null;
 }
 
-const kMensajeEmailDuplicado =
-    'Ese correo ya está registrado en este evento.';
+const kMensajeEmailDuplicado = 'Ese correo ya está registrado en este evento.';

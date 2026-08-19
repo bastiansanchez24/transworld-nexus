@@ -68,7 +68,8 @@ class _UpdateCheckerState extends ConsumerState<UpdateChecker>
     ref.listen<UpdateState>(updateControllerProvider, (prev, next) {
       if (!_isLoggedIn) return;
 
-      final becameAvailable = next.status == UpdateStatus.available &&
+      final becameAvailable =
+          next.status == UpdateStatus.available &&
           prev?.status != UpdateStatus.available;
       final controller = ref.read(updateControllerProvider.notifier);
 

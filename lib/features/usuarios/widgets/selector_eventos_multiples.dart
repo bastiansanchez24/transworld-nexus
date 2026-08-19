@@ -120,45 +120,45 @@ class _SelectorEventosMultiplesState extends State<SelectorEventosMultiples> {
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: ListView.separated(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: filtrados.length,
-                  separatorBuilder: (_, _) =>
-                      const Divider(height: 1, color: AppColors.divider),
-                  itemBuilder: (context, index) {
-                    final e = filtrados[index];
-                    final checked = widget.seleccionados.contains(e.id);
-                    final inactivo = !e.activo || e.yaOcurrio;
-                    return CheckboxListTile(
-                      dense: true,
-                      value: checked,
-                      onChanged: widget.enabled ? (_) => _toggle(e.id) : null,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      title: Text(
-                        e.nombre,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: inactivo && !checked
-                              ? AppColors.textTertiary
-                              : AppColors.ink,
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: filtrados.length,
+                    separatorBuilder: (_, _) =>
+                        const Divider(height: 1, color: AppColors.divider),
+                    itemBuilder: (context, index) {
+                      final e = filtrados[index];
+                      final checked = widget.seleccionados.contains(e.id);
+                      final inactivo = !e.activo || e.yaOcurrio;
+                      return CheckboxListTile(
+                        dense: true,
+                        value: checked,
+                        onChanged: widget.enabled ? (_) => _toggle(e.id) : null,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                          e.nombre,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: inactivo && !checked
+                                ? AppColors.textTertiary
+                                : AppColors.ink,
+                          ),
                         ),
-                      ),
-                      subtitle: inactivo
-                          ? Text(
-                              e.yaOcurrio ? 'Finalizado' : 'Inactivo',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
-                              ),
-                            )
-                          : null,
-                    );
-                  },
+                        subtitle: inactivo
+                            ? Text(
+                                e.yaOcurrio ? 'Finalizado' : 'Inactivo',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              )
+                            : null,
+                      );
+                    },
+                  ),
                 ),
-              ),
         ),
         if (widget.errorText != null) ...[
           const SizedBox(height: 6),

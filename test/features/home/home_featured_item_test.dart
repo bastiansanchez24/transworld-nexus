@@ -78,9 +78,10 @@ void main() {
     final item = HomeFeaturedItem.campanaFijada(campana);
 
     expect(item.etiqueta, 'ACTIVIDAD FIJADA');
-    expect(item.ctaLabel, 'Capturar lead');
-    expect(item.ctaRoutePath, '/capturador/c1/capturar');
-    expect(item.secondaryCtaLabel, 'Ver actividad');
+    expect(item.ctaLabel, 'Ver actividad');
+    expect(item.ctaRoutePath, '/capturador/c1/usar');
+    expect(item.secondaryCtaLabel, 'Capturar lead');
+    expect(item.secondaryRoutePath, '/capturador/c1/capturar');
     expect(item.qrRoutePath, isNull);
     expect(item.tieneImagen, isTrue);
     expect(item.imagenUrl, 'https://cdn.example/feria.jpg');

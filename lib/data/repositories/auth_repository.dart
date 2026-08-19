@@ -279,10 +279,7 @@ class AuthRepository {
   }) async {
     await _client.rpc(
       SupabaseRpc.configurarAccesoEvento,
-      params: {
-        'p_evento_id': eventoId,
-        'p_usuario_ids': usuarioIds,
-      },
+      params: {'p_evento_id': eventoId, 'p_usuario_ids': usuarioIds},
     );
   }
 

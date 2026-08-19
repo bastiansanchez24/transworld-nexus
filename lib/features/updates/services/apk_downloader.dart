@@ -7,16 +7,17 @@ import 'package:path_provider/path_provider.dart';
 /// Descarga APKs con progreso y cancelación vía Dio.
 class ApkDownloader {
   ApkDownloader({Dio? dio})
-      : _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 30),
-                // APK ~80 MB: sin receiveTimeout estricto; la cancelación
-                // la controla el usuario.
-                receiveTimeout: Duration.zero,
-                headers: const {'User-Agent': 'Nexus-OTA'},
-              ),
-            );
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 30),
+              // APK ~80 MB: sin receiveTimeout estricto; la cancelación
+              // la controla el usuario.
+              receiveTimeout: Duration.zero,
+              headers: const {'User-Agent': 'Nexus-OTA'},
+            ),
+          );
 
   final Dio _dio;
   CancelToken? _cancelToken;
