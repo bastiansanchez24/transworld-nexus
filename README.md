@@ -166,21 +166,26 @@ de evento). Detalle del webhook y Firebase:
 ## Plan de mejora
 
 La hoja de ruta viva está en
-[`docs/PLAN_DE_MEJORA.md`](docs/PLAN_DE_MEJORA.md): diagnóstico sobre
-`1.6.0`, prioridades P0–P2 y el orden de PRs. Resumen de lo P0:
+[`docs/PLAN_DE_MEJORA.md`](docs/PLAN_DE_MEJORA.md): dos tracks en
+paralelo, glosario (evento ≠ actividad de captura) y orden de PRs.
 
-- **Higiene:** `.env.example`, no embeber `.env` en el bundle, CI
-  (`analyze` + `test`) en cada PR.
-- **RLS write:** un organizador no debe poder `UPDATE` un evento ajeno
-  por API (`rpe_eventos_update` hoy solo chequea rol, no alcance).
-- **Feria:** no bajar 5.000 registrados al teléfono para pintar KPI;
-  Realtime en acreditación; cola offline fuera de `SharedPreferences`.
-- **Observabilidad:** Crashlytics/Sentry. Hoy un crash en puerta no
-  deja rastro.
+**Track A — producto pedido** (copy, CTAs, validación, herencia):
 
-Ítems que el README listaba antes (push FCM, tests de repositorios,
-plantilla Excel, splash) siguen vigentes y están absorbidos en ese
-documento, no se perdieron.
+- Dejar de decir “evento de leads”: **actividad de captura**.
+- Home: botón **Capturar lead** en la actividad fijada.
+- Mover **Crear actividad de captura** a Acciones del evento.
+- Botones de exportar **dentro** de su card, como la de importar.
+- Validar RUT y patente del registrado.
+- Actividad interna: campos heredados del evento, no editables a mano.
+- Mostrar la imagen del evento en el flujo de captura.
+
+**Track B — plataforma** (P0):
+
+- Higiene: `.env.example`, no embeber `.env`, CI `analyze` + `test`.
+- RLS write: un organizador no debe poder `UPDATE` un evento ajeno.
+- Feria: no bajar 5.000 registrados al teléfono; Realtime; cola fuera
+  de `SharedPreferences`.
+- Observabilidad: Crashlytics. Hoy un crash en puerta no deja rastro.
 
 ## Actualizaciones OTA (Android / Windows / GitHub Releases)
 
