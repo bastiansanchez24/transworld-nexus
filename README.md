@@ -57,7 +57,8 @@ lib/
     usuarios/
     updates/          # OTA vía GitHub Releases (Android / Windows)
 docs/
-  NOTIFICACIONES_PUSH.md   # Setup Firebase + webhook Supabase
+  PLAN_DE_MEJORA.md        # Hoja de ruta priorizada (seguridad, feria, deuda)
+  NOTIFICACIONES_PUSH.md   # Setup Firebase + webhook Supabase (pendiente de restaurar)
 ```
 
 - **Sistema de diseño**: `core/theme/app_theme.dart` define los tokens
@@ -162,23 +163,24 @@ comparten las funciones de correo. Remitentes: `soporte@transworld.cl`
 de evento). Detalle del webhook y Firebase:
 [`docs/NOTIFICACIONES_PUSH.md`](docs/NOTIFICACIONES_PUSH.md).
 
-## Pendiente / próximos pasos
+## Plan de mejora
 
-- **Push en dashboards**: webhook Database → `enviar-push` y secret
-  Firebase (checklist en `docs/NOTIFICACIONES_PUSH.md`). El inbox in-app
-  ya funciona sin eso.
-- **RLS más granular por evento**: `usuarios_eventos` ya acota al rol
-  externo en la app; falta reforzar a nivel de políticas que un usuario
-  autenticado genérico no opere eventos ajenos solo vía API.
-- Tests de integración con mocks de Supabase (por ejemplo con
-  `mocktail` + fakes de `SupabaseClient`) para los repositorios y el motor
-  de sincronización offline.
-- Configurar íconos/splash screen definitivos (`flutter_launcher_icons`,
-  `flutter_native_splash`) — hoy el proyecto usa los assets por defecto de
-  `flutter create`.
-- Subir `Plantilla_Registro.xlsx` al bucket `plantillas` de Storage (lo
-  referencia `StorageRepository.urlPlantillaRegistro`, pero el archivo en
-  sí no se genera desde este repo).
+La hoja de ruta viva está en
+[`docs/PLAN_DE_MEJORA.md`](docs/PLAN_DE_MEJORA.md): diagnóstico sobre
+`1.6.0`, prioridades P0–P2 y el orden de PRs. Resumen de lo P0:
+
+- **Higiene:** `.env.example`, no embeber `.env` en el bundle, CI
+  (`analyze` + `test`) en cada PR.
+- **RLS write:** un organizador no debe poder `UPDATE` un evento ajeno
+  por API (`rpe_eventos_update` hoy solo chequea rol, no alcance).
+- **Feria:** no bajar 5.000 registrados al teléfono para pintar KPI;
+  Realtime en acreditación; cola offline fuera de `SharedPreferences`.
+- **Observabilidad:** Crashlytics/Sentry. Hoy un crash en puerta no
+  deja rastro.
+
+Ítems que el README listaba antes (push FCM, tests de repositorios,
+plantilla Excel, splash) siguen vigentes y están absorbidos en ese
+documento, no se perdieron.
 
 ## Actualizaciones OTA (Android / Windows / GitHub Releases)
 
