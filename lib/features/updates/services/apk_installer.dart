@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'ota_debug_log.dart';
+
 const _installChannel = MethodChannel('com.transworld.nexus/apk_installer');
 
 /// Resultado de intentar instalar un APK sideload.
@@ -124,20 +126,50 @@ class ApkInstaller {
     }
 
     try {
+      final fileLen = await apkFile.length();
+      List<int> header = const [];
+      try {
+        header = await apkFile.openRead(0, 4).first;
+      } catch (_) {}
       final raw = await _installChannel.invokeMethod<dynamic>('installApk', {
         'path': apkFile.path,
       });
       if (raw is Map) {
         final map = Map<String, dynamic>.from(raw);
         final ok = map['ok'] == true;
+        final status = (map['status'] as num?)?.toInt() ?? 1;
+        final legacyStatus = (map['legacyStatus'] as num?)?.toInt() ?? 0;
+        // #region agent log
+        otaDebugLog(
+          location: 'apk_installer.dart:install',
+          message: 'android PackageInstaller result',
+          hypothesisId: ok
+              ? 'H-A'
+              : (status == 4 || legacyStatus == -7
+                    ? 'H-A'
+                    : (status == 6 ||
+                              legacyStatus == -103 ||
+                              legacyStatus == -2
+                          ? 'H-B'
+                          : (legacyStatus == -25 ? 'H-C' : 'H-B'))),
+          data: {
+            'ok': ok,
+            'status': status,
+            'legacyStatus': legacyStatus,
+            'systemMessage': map['message'] as String? ?? '',
+            'fileLen': fileLen,
+            'magic': header.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+          },
+        );
+        // #endregion
         if (ok) {
           return const ApkInstallResult(ApkInstallOutcome.launched);
         }
         return ApkInstallResult(
           ApkInstallOutcome.failed,
           message: mapApkInstallFailure(
-            status: (map['status'] as num?)?.toInt() ?? 1,
-            legacyStatus: (map['legacyStatus'] as num?)?.toInt() ?? 0,
+            status: status,
+            legacyStatus: legacyStatus,
             message: map['message'] as String? ?? '',
           ),
         );
@@ -145,6 +177,14 @@ class ApkInstaller {
     } on MissingPluginException {
       // Tests / builds sin el channel nativo.
     } on PlatformException catch (e) {
+      // #region agent log
+      otaDebugLog(
+        location: 'apk_installer.dart:install',
+        message: 'android install PlatformException',
+        hypothesisId: 'H-B',
+        data: {'code': e.code, 'errorMessage': e.message ?? ''},
+      );
+      // #endregion
       return ApkInstallResult(
         ApkInstallOutcome.failed,
         message: e.message ?? 'No se pudo iniciar la instalación.',

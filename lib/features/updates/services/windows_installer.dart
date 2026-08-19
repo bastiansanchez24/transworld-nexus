@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'ota_debug_log.dart';
+
 /// Resultado de intentar aplicar una actualización Windows.
 enum WindowsInstallOutcome { launched, unsupportedPlatform, failed }
 
@@ -117,6 +119,19 @@ class WindowsInstaller {
       } catch (_) {}
 
       if (launch.exitCode != 0) {
+        // #region agent log
+        otaDebugLog(
+          location: 'windows_installer.dart:install',
+          message: 'launcher Process.run failed',
+          hypothesisId: 'H-D',
+          data: {
+            'exitCode': launch.exitCode,
+            'stderr': launch.stderr.toString().trim(),
+            'installDir': installDir,
+            'exeName': exeName,
+          },
+        );
+        // #endregion
         return WindowsInstallResult(
           WindowsInstallOutcome.failed,
           message:
@@ -131,7 +146,24 @@ class WindowsInstaller {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
 
-      if (!await ready.exists()) {
+      final readyExists = await ready.exists();
+      // #region agent log
+      otaDebugLog(
+        location: 'windows_installer.dart:install',
+        message: 'updater handshake',
+        hypothesisId: 'H-D',
+        data: {
+          'readyExists': readyExists,
+          'launchExitCode': launch.exitCode,
+          'installDir': installDir,
+          'exeName': exeName,
+          'zipLen': await zipFile.length(),
+          'parentPid': pid,
+        },
+      );
+      // #endregion
+
+      if (!readyExists) {
         return const WindowsInstallResult(
           WindowsInstallOutcome.failed,
           message:
@@ -310,7 +342,7 @@ function Copy-Payload([string]$Source, [string]$Destination) {
 }
 
 Write-Log '--- Inicio de actualización ---'
-Write-Log ('InstallDir=' + $InstallDir + ' ExeName=' + $ExeName + ' Zip=' + $ZipPath + ' Pid=' + $PID)
+Write-Log ('DBG-0b9d45 H-D/H-E InstallDir=' + $InstallDir + ' ExeName=' + $ExeName + ' Zip=' + $ZipPath + ' ZipExists=' + (Test-Path -LiteralPath $ZipPath) + ' Pid=' + $PID + ' ParentPid=' + $ParentPid)
 
 # Handshake con Nexus: confirma que PowerShell inició y pudo interpretar todos
 # los parámetros antes de que la app se cierre y libere sus binarios.

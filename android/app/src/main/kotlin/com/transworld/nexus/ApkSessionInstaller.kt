@@ -9,6 +9,7 @@ import android.content.pm.PackageInstaller
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.lang.ref.WeakReference
@@ -38,6 +39,14 @@ object ApkSessionInstaller {
         activityRef = WeakReference(activity)
 
         val file = File(apkPath)
+        // #region agent log
+        debugOtaLog(
+            hypothesisId = "H-B",
+            location = "ApkSessionInstaller.kt:install",
+            message = "session install start",
+            data = """{"pathLen":${apkPath.length},"fileLen":${file.length()},"exists":${file.exists()},"packageName":${jsonString(activity.packageName)}}""",
+        )
+        // #endregion
         if (!file.exists() || file.length() == 0L) {
             complete(
                 ok = false,
@@ -112,9 +121,26 @@ object ApkSessionInstaller {
             PackageInstaller.EXTRA_STATUS,
             PackageInstaller.STATUS_FAILURE,
         )
+        val legacyStatus = intent.getIntExtra(EXTRA_LEGACY_STATUS, 0)
+        val statusMessage = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+        val confirmIntent = extraIntent(intent)
+        // #region agent log
+        debugOtaLog(
+            hypothesisId = when {
+                status == PackageInstaller.STATUS_PENDING_USER_ACTION -> "H-A"
+                status == PackageInstaller.STATUS_SUCCESS -> "H-A"
+                status == 4 || legacyStatus == -7 -> "H-A"
+                legacyStatus == -25 -> "H-C"
+                else -> "H-B"
+            },
+            location = "ApkSessionInstaller.kt:handleStatus",
+            message = "PackageInstaller status",
+            data = """{"status":$status,"legacyStatus":$legacyStatus,"systemMessage":${jsonString(statusMessage)},"hasConfirmIntent":${confirmIntent != null}}""",
+        )
+        // #endregion
         when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                val confirm = extraIntent(intent) ?: run {
+                val confirm = confirmIntent ?: run {
                     complete(
                         ok = false,
                         status = status,
@@ -151,11 +177,50 @@ object ApkSessionInstaller {
             else -> complete(
                 ok = false,
                 status = status,
-                legacyStatus = intent.getIntExtra(EXTRA_LEGACY_STATUS, 0),
-                message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE),
+                legacyStatus = legacyStatus,
+                message = statusMessage,
             )
         }
     }
+
+    // #region agent log
+    private fun jsonString(value: String?): String {
+        if (value == null) return "null"
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    }
+
+    private fun debugOtaLog(
+        hypothesisId: String,
+        location: String,
+        message: String,
+        data: String,
+    ) {
+        Thread {
+            try {
+                val payload =
+                    """{"sessionId":"0b9d45","runId":"pre-fix","hypothesisId":"$hypothesisId","location":"$location","message":"$message","data":$data,"timestamp":${System.currentTimeMillis()}}"""
+                Log.i("OTADebug", payload)
+                val url = java.net.URL(
+                    "http://127.0.0.1:7305/ingest/02f03f94-db5d-49ad-bd74-d663fc657326",
+                )
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("X-Debug-Session-Id", "0b9d45")
+                conn.connectTimeout = 800
+                conn.readTimeout = 800
+                conn.doOutput = true
+                conn.outputStream.use { it.write(payload.toByteArray()) }
+                try {
+                    conn.inputStream.close()
+                } catch (_: Exception) {
+                }
+                conn.disconnect()
+            } catch (_: Exception) {
+            }
+        }.start()
+    }
+    // #endregion
 
     private fun extraIntent(intent: Intent): Intent? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
