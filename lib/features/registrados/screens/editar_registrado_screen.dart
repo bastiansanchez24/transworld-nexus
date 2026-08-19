@@ -8,6 +8,7 @@ import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
@@ -79,8 +80,8 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
       'empresa': _empresaController.text.trim(),
       'cargo': _cargoController.text.trim(),
       'telefono': _telefonoController.text.trim(),
-      'rut': _rutController.text.trim(),
-      'patente': _patenteController.text.trim(),
+      'rut': formatearRut(_rutController.text),
+      'patente': formatearPatente(_patenteController.text),
       'acreditado': _acreditado,
     };
 
@@ -208,8 +209,9 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
                         NexusFormTextField(
                           label: 'RUT / RUC',
                           controller: _rutController,
-                          hintText: '12.345.678-9',
+                          hintText: '12.345.678-5',
                           enabled: !_guardando,
+                          validator: (v) => validarRut(v, requerido: false),
                         ),
                         const SizedBox(height: 14),
                         NexusFormTextField(
@@ -217,6 +219,7 @@ class _EditarRegistradoScreenState extends ConsumerState<EditarRegistradoScreen>
                           controller: _patenteController,
                           hintText: 'ABCD12',
                           enabled: !_guardando,
+                          validator: (v) => validarPatente(v, requerido: false),
                         ),
                         const SizedBox(height: 14),
                         _ToggleRow(

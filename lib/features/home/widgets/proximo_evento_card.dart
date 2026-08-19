@@ -409,7 +409,7 @@ class _FeaturedSlide extends StatelessWidget {
                 _HeroCta(
                   label: item.ctaLabel,
                   filled: true,
-                  onTap: () => context.push(item.routePath),
+                  onTap: () => context.push(item.ctaRoutePath),
                 ),
                 if (item.qrRoutePath != null) ...[
                   const SizedBox(height: 10),
@@ -419,6 +419,14 @@ class _FeaturedSlide extends StatelessWidget {
                     icon: Symbols.qr_code_scanner_rounded,
                     filled: false,
                     onTap: () => context.push(item.qrRoutePath!),
+                  ),
+                ] else if (item.secondaryRoutePath != null) ...[
+                  const SizedBox(height: 10),
+                  _HeroCta(
+                    key: Key('proximo_evento_ver_actividad_${item.id}'),
+                    label: item.secondaryCtaLabel!,
+                    filled: false,
+                    onTap: () => context.push(item.secondaryRoutePath!),
                   ),
                 ],
               ],

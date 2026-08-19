@@ -7,7 +7,7 @@ import '../../../data/models/evento_lead.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
 import '../providers/capturador_providers.dart';
 
-/// Resuelve o crea el evento de leads interno de un evento de registro.
+/// Resuelve o crea la actividad de captura interna de un evento de registro.
 ///
 /// El vínculo es por id (`evento_origen_id`), no por nombre: dos eventos
 /// homónimos ya no comparten sus leads y renombrar uno no rompe la relación.
@@ -33,7 +33,7 @@ Future<EventoLead> obtenerOCrearEventoLeadInterno(
 
   if (!isOnline) {
     throw Exception(
-      'Se necesita conexión para crear el evento de leads de "${evento.nombre}".',
+      'Se necesita conexión para crear la actividad de captura de "${evento.nombre}".',
     );
   }
 
@@ -45,6 +45,7 @@ Future<EventoLead> obtenerOCrearEventoLeadInterno(
       pais: evento.pais,
       tematica: evento.tematica,
       certificacionCapacitacion: evento.certificacionCapacitacion,
+      imagenUrl: evento.imagenUrl,
     ),
   );
   ref.invalidate(eventosLeadsListProvider);

@@ -34,19 +34,30 @@ class HomeFeaturedItem {
       kind == HomeFeaturedKind.eventoFijado ||
       kind == HomeFeaturedKind.campanaFijada;
 
+  bool get esActividadCaptura => kind == HomeFeaturedKind.campanaFijada;
+
   String get etiqueta => switch (kind) {
     HomeFeaturedKind.proximoEvento => 'PRÓXIMO EVENTO',
     HomeFeaturedKind.eventoFijado => 'EVENTO FIJADO',
-    HomeFeaturedKind.campanaFijada => 'EVENTO DE LEADS FIJADO',
+    HomeFeaturedKind.campanaFijada => 'ACTIVIDAD FIJADA',
   };
 
-  /// Se distingue del evento de registro para que dos fijados homónimos no
-  /// ofrezcan el mismo botón.
-  String get ctaLabel => kind == HomeFeaturedKind.campanaFijada
-      ? 'Ver evento de leads'
-      : 'Ver evento';
+  /// Primario: capturar en una actividad fijada; abrir el evento en el resto.
+  String get ctaLabel =>
+      esActividadCaptura ? 'Capturar lead' : 'Ver evento';
 
-  bool get puedeEscanearQr => kind != HomeFeaturedKind.campanaFijada;
+  String get ctaRoutePath => esActividadCaptura
+      ? RoutePaths.capturarLead(id)
+      : RoutePaths.usarEvento(id);
+
+  /// Hub de la actividad (ghost). Null en eventos de registro.
+  String? get secondaryCtaLabel =>
+      esActividadCaptura ? 'Ver actividad' : null;
+
+  String? get secondaryRoutePath =>
+      esActividadCaptura ? RoutePaths.usarEventoLead(id) : null;
+
+  bool get puedeEscanearQr => !esActividadCaptura;
 
   String? get qrRoutePath =>
       puedeEscanearQr ? RoutePaths.acreditarQr(id) : null;
@@ -56,6 +67,7 @@ class HomeFeaturedItem {
     return '${((acreditados / registrados) * 100).round()}%';
   }
 
+  /// Destino del detalle (evento o hub de actividad), no el CTA primario.
   String get routePath => switch (kind) {
     HomeFeaturedKind.proximoEvento ||
     HomeFeaturedKind.eventoFijado => RoutePaths.usarEvento(id),
@@ -105,6 +117,7 @@ class HomeFeaturedItem {
       nombre: campana.nombre,
       fecha: campana.fecha,
       lugar: campana.pais ?? '',
+      imagenUrl: campana.imagenUrl,
     );
   }
 }

@@ -278,7 +278,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('el evento de leads fijado no muestra escanear QR', (
+  testWidgets('la actividad fijada ofrece capturar lead y no escanear QR', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -292,7 +292,7 @@ void main() {
                   HomeFeaturedItem(
                     kind: HomeFeaturedKind.campanaFijada,
                     id: 'evento-lead-1',
-                    nombre: 'Evento de leads destacado',
+                    nombre: 'Actividad de captura destacada',
                     fecha: DateTime(2026, 9, 12),
                   ),
                 ],
@@ -304,7 +304,9 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Ver evento de leads'), findsOneWidget);
+    expect(find.text('ACTIVIDAD FIJADA'), findsOneWidget);
+    expect(find.text('Capturar lead'), findsOneWidget);
+    expect(find.text('Ver actividad'), findsOneWidget);
     expect(find.text('Escanear QR'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -377,6 +379,67 @@ void main() {
         )
         .first;
     expect(tester.getSize(card).width, pageWidth - TwSpacing.screenH * 2);
+  });
+
+  testWidgets('el CTA Capturar lead de la actividad fijada abre el alta', (
+    tester,
+  ) async {
+    String? location;
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 320,
+                child: ProximoEventoCard(
+                  items: [
+                    HomeFeaturedItem(
+                      kind: HomeFeaturedKind.campanaFijada,
+                      id: 'campana-1',
+                      nombre: 'Feria retail',
+                      fecha: DateTime(2026, 9, 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/capturador/:id/capturar',
+          builder: (_, state) {
+            location = state.uri.path;
+            return const SizedBox.shrink();
+          },
+        ),
+        GoRoute(
+          path: '/capturador/:id/usar',
+          builder: (_, state) {
+            location = state.uri.path;
+            return const SizedBox.shrink();
+          },
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pump();
+
+    await tester.tap(find.text('Capturar lead'));
+    await tester.pump();
+    expect(location, '/capturador/campana-1/capturar');
+
+    location = null;
+    router.go('/');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Ver actividad'));
+    await tester.pump();
+    expect(location, '/capturador/campana-1/usar');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('solo el botón Ver evento navega al evento', (tester) async {

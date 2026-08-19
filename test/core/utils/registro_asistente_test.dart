@@ -95,4 +95,52 @@ void main() {
       expect(formatearEmpresa('  Acme  SPA '), 'Acme SPA');
     });
   });
+
+  group('validarRut Chile', () {
+    test('acepta un RUT con DV correcto y lo formatea', () {
+      expect(validarRut('123456785'), isNull);
+      expect(formatearRut('123456785'), '12.345.678-5');
+      expect(validarRut('12.345.678-5'), isNull);
+      expect(validarRut('12.345.670-K'), isNull);
+      expect(formatearRut('12345670k'), '12.345.670-K');
+    });
+
+    test('rechaza DV incorrecto', () {
+      expect(validarRut('12.345.678-9'), 'RUT inválido');
+      expect(validarRut('12345678-0'), 'RUT inválido');
+    });
+
+    test('vacío solo falla si es requerido', () {
+      expect(validarRut(''), 'Requerido');
+      expect(validarRut('', requerido: false), isNull);
+      expect(validarRut(null, requerido: false), isNull);
+    });
+
+    test('fuera de Chile valida un RUC genérico', () {
+      expect(validarRut('20123456789', esChile: false), isNull);
+      expect(validarRut('ab', esChile: false), 'RUC inválido');
+      expect(validarRut('', esChile: false, requerido: false), isNull);
+    });
+  });
+
+  group('validarPatente', () {
+    test('acepta formato vigente y antiguo', () {
+      expect(validarPatente('ABCD12'), isNull);
+      expect(validarPatente('ab-cd-12'), isNull);
+      expect(formatearPatente('ab-cd-12'), 'ABCD12');
+      expect(validarPatente('AB1234'), isNull);
+      expect(validarPatente('ab-12-34'), isNull);
+    });
+
+    test('rechaza longitudes o símbolos imposibles', () {
+      expect(validarPatente('12'), 'Patente inválida');
+      expect(validarPatente('ABCDE1'), 'Patente inválida');
+      expect(validarPatente('AB12'), 'Patente inválida');
+    });
+
+    test('vacío solo falla si es requerido', () {
+      expect(validarPatente(''), 'Requerido');
+      expect(validarPatente('', requerido: false), isNull);
+    });
+  });
 }

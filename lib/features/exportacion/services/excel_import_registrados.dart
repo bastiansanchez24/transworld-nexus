@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:excel/excel.dart' as xls;
 
+import '../../../core/utils/registro_asistente.dart';
 import '../../../data/models/registrado.dart';
 
 /// Lee un `.xlsx` de carga masiva y lo convierte en [Registrado]s.
@@ -47,6 +48,11 @@ class ExcelImportRegistrados {
       final email = celda(fila, iEmail).toLowerCase();
       if (nombre.isEmpty || email.isEmpty) continue;
 
+      final rutRaw = iRut == -1 ? '' : celda(fila, iRut);
+      final patenteRaw = iPatente == -1 ? '' : celda(fila, iPatente);
+      if (validarRut(rutRaw, requerido: false) != null) continue;
+      if (validarPatente(patenteRaw, requerido: false) != null) continue;
+
       registros.add(
         Registrado(
           id: '',
@@ -56,8 +62,8 @@ class ExcelImportRegistrados {
           empresa: celda(fila, iEmpresa),
           cargo: celda(fila, iCargo),
           telefono: celda(fila, iTelefono),
-          rut: iRut == -1 ? null : celda(fila, iRut),
-          patente: iPatente == -1 ? null : celda(fila, iPatente),
+          rut: rutRaw.isEmpty ? null : formatearRut(rutRaw),
+          patente: patenteRaw.isEmpty ? null : formatearPatente(patenteRaw),
           origen: OrigenRegistro.excel,
         ),
       );

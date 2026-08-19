@@ -12,6 +12,7 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/evento_hero_banner.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
@@ -537,6 +538,20 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (eventoAsync.asData?.value.tieneImagen == true) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: SizedBox(
+                    height: 120,
+                    width: double.infinity,
+                    child: EventoHeroFoto(
+                      imagenUrl: eventoAsync.asData!.value.imagenUrl!,
+                      velo: 0.28,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
               ListenableBuilder(
                 listenable: _emailController,
                 builder: (context, _) {

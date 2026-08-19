@@ -165,12 +165,12 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
                 border: Border.all(color: AppColors.border),
                 boxShadow: AppColors.shadowRest,
               ),
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SectionLabel('Exportación'),
-                  SizedBox(height: 10),
-                  Text(
+                  const SectionLabel('Exportación'),
+                  const SizedBox(height: 10),
+                  const Text(
                     'Descarga la lista de asistentes del evento para '
                     'guardarla o enviarla a quien necesites.',
                     style: TextStyle(
@@ -179,25 +179,25 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
                       height: 1.45,
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  PrimaryGradientButton(
+                    label: 'Exportar todos los registrados',
+                    loading: _generando,
+                    onPressed: _ocupado
+                        ? null
+                        : () => _exportar(soloAcreditados: false),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  NexusActionRow(
+                    icon: Symbols.verified_rounded,
+                    title: 'Exportar solo acreditados',
+                    subtitle: 'Incluye únicamente asistentes ya acreditados',
+                    onTap: () {
+                      if (!_ocupado) _exportar(soloAcreditados: true);
+                    },
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-            PrimaryGradientButton(
-              label: 'Exportar todos los registrados',
-              loading: _generando,
-              onPressed: _ocupado
-                  ? null
-                  : () => _exportar(soloAcreditados: false),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            NexusActionRow(
-              icon: Symbols.verified_rounded,
-              title: 'Exportar solo acreditados',
-              subtitle: 'Incluye únicamente asistentes ya acreditados',
-              onTap: () {
-                if (!_ocupado) _exportar(soloAcreditados: true);
-              },
             ),
             const SizedBox(height: AppSpacing.cardGap + 6),
             Container(

@@ -109,7 +109,7 @@ class _ListarEventosLeadsScreenState
           if (mounted) {
             showAppSnackBar(
               context,
-              'No se pudo fijar el evento.',
+              'No se pudo fijar la actividad.',
               isError: true,
             );
           }
@@ -129,9 +129,9 @@ class _ListarEventosLeadsScreenState
   Future<void> _eliminarEventoLead(EventoLead evento) async {
     final confirmado = await confirmDialog(
       context,
-      title: 'Eliminar evento',
+      title: 'Eliminar actividad',
       message:
-          'Esta acción no se puede deshacer. ¿Eliminar el evento de captura?',
+          'Esta acción no se puede deshacer. ¿Eliminar la actividad de captura?',
       confirmLabel: 'Eliminar',
     );
     if (!confirmado || !mounted) return;
@@ -147,7 +147,7 @@ class _ListarEventosLeadsScreenState
       if (mounted) {
         showAppSnackBar(
           context,
-          'No se pudo eliminar el evento.',
+          'No se pudo eliminar la actividad.',
           isError: true,
         );
       }
@@ -169,7 +169,7 @@ class _ListarEventosLeadsScreenState
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          hintText: 'Buscar evento…',
+          hintText: 'Buscar actividad…',
           hintStyle: const TextStyle(color: AppColors.placeholder),
           prefixIcon: const Icon(
             Symbols.search_rounded,
@@ -245,7 +245,7 @@ class _ListarEventosLeadsScreenState
         ),
         const SizedBox(height: 2),
         const Text(
-          'Registre eventos y capture oportunidades potenciales de negocio.',
+          'Registre actividades y capture oportunidades potenciales de negocio.',
           style: TextStyle(
             fontSize: 13,
             color: AppColors.textSecondary,
@@ -254,7 +254,7 @@ class _ListarEventosLeadsScreenState
         if (total != null && proximos != null) ...[
           const SizedBox(height: 6),
           Text(
-            '$total eventos · $proximos próximos',
+            '$total actividades · $proximos próximas',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
@@ -306,7 +306,7 @@ class _ListarEventosLeadsScreenState
           error: (e, _) => [
             SliverFillRemaining(
               child: ErrorView(
-                message: 'No se pudieron cargar los eventos de leads.',
+                message: 'No se pudieron cargar las actividades de captura.',
                 onRetry: () => ref.invalidate(eventosLeadsListProvider),
               ),
             ),
@@ -318,7 +318,7 @@ class _ListarEventosLeadsScreenState
                 const SliverFillRemaining(
                   child: EmptyStateView(
                     icon: Icons.person_search_rounded,
-                    message: 'Todavía no hay eventos de captura creados.',
+                    message: 'Todavía no hay actividades de captura creadas.',
                   ),
                 ),
               ];
@@ -332,8 +332,8 @@ class _ListarEventosLeadsScreenState
                         ? Icons.search_off_rounded
                         : Icons.filter_list_off_rounded,
                     message: porBusqueda
-                        ? 'No hay eventos que coincidan con la búsqueda.'
-                        : 'No hay eventos en este filtro.',
+                        ? 'No hay actividades que coincidan con la búsqueda.'
+                        : 'No hay actividades en este filtro.',
                   ),
                 ),
               ];

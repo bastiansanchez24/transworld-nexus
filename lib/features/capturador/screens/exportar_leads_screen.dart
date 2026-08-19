@@ -119,13 +119,13 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
                   border: Border.all(color: AppColors.border),
                   boxShadow: AppColors.shadowRest,
                 ),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SectionLabel('Exportación'),
-                    SizedBox(height: 10),
-                    Text(
-                      'Descarga la lista de leads de este evento para '
+                    const SectionLabel('Exportación'),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Descarga la lista de leads de esta actividad para '
                       'guardarla o enviarla a quien necesites.',
                       style: TextStyle(
                         fontSize: 14,
@@ -133,14 +133,14 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
                         height: 1.45,
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    PrimaryGradientButton(
+                      label: 'Exportar todos los leads',
+                      loading: _generando,
+                      onPressed: _generando ? null : _exportar,
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              PrimaryGradientButton(
-                label: 'Exportar todos los leads',
-                loading: _generando,
-                onPressed: _generando ? null : _exportar,
               ),
             ],
           ),

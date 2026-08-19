@@ -53,8 +53,8 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
     ref.invalidate(eventoLeadInternoProvider(widget.eventoId));
   }
 
-  /// Crea el evento de leads interno de este evento y lo abre. La otra vía es
-  /// capturar un lead desde los registrados: ambas resuelven al mismo id.
+  /// Crea la actividad de captura interna de este evento y la abre. La otra
+  /// vía es capturar un lead desde los registrados: ambas resuelven al mismo id.
   Future<void> _crearEventoLead(Evento evento) async {
     if (_creandoEventoLead) return;
     setState(() => _creandoEventoLead = true);
@@ -67,7 +67,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
       if (mounted) {
         showAppSnackBar(
           context,
-          'No se pudo crear el evento de leads.',
+          'No se pudo crear la actividad de captura.',
           isError: true,
         );
       }
@@ -167,6 +167,27 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
                           RoutePaths.verRegistrados(widget.eventoId),
                         ),
                       ),
+                      if (eventoLead != null) ...[
+                        const SizedBox(height: TwSpacing.tileGap),
+                        TwActionTile(
+                          icon: Symbols.person_search_rounded,
+                          title: 'Ver actividad de captura',
+                          subtitle: 'Captura de oportunidades de este evento',
+                          onTap: () => context.push(
+                            RoutePaths.usarEventoLead(eventoLead.id),
+                          ),
+                        ),
+                      ] else if (puedeEditar) ...[
+                        const SizedBox(height: TwSpacing.tileGap),
+                        TwActionTile(
+                          icon: Symbols.person_search_rounded,
+                          title: 'Crear actividad de captura',
+                          subtitle: _creandoEventoLead
+                              ? 'Creando…'
+                              : 'Capturar oportunidades en este evento',
+                          onTap: () => _crearEventoLead(evento),
+                        ),
+                      ],
                       const TwSectionLabel('Administración'),
                       if (esAdmin) ...[
                         TwActionTile(
@@ -176,27 +197,6 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
                           onTap: () => context.push(
                             RoutePaths.accesoEvento(widget.eventoId),
                           ),
-                        ),
-                        const SizedBox(height: TwSpacing.tileGap),
-                      ],
-                      if (eventoLead != null) ...[
-                        TwActionTile(
-                          icon: Symbols.person_search_rounded,
-                          title: 'Ver evento de leads',
-                          subtitle: 'Captura de oportunidades de este evento',
-                          onTap: () => context.push(
-                            RoutePaths.usarEventoLead(eventoLead.id),
-                          ),
-                        ),
-                        const SizedBox(height: TwSpacing.tileGap),
-                      ] else if (puedeEditar) ...[
-                        TwActionTile(
-                          icon: Symbols.person_search_rounded,
-                          title: 'Crear evento de leads',
-                          subtitle: _creandoEventoLead
-                              ? 'Creando…'
-                              : 'Capturar oportunidades en este evento',
-                          onTap: () => _crearEventoLead(evento),
                         ),
                         const SizedBox(height: TwSpacing.tileGap),
                       ],
