@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
@@ -64,7 +63,33 @@ class _CrearEditarEventoFormState
   bool _guardando = false;
   bool _cargado = false;
 
+  String _nombre0 = '';
+  String _pais0 = '';
+  String _tematica0 = '';
+  String _direccion0 = '';
+  String _lugar0 = '';
+  DateTime? _fecha0;
+  bool? _certificacion0;
+  bool? _activo0;
+  TipoRegistroEvento? _tipoRegistro0;
+  String? _imagenUrl0;
+
   bool get _esEdicion => widget.eventoId != null;
+
+  bool get _hayCambios {
+    if (!_esEdicion || !_cargado) return false;
+    return _nombreController.text != _nombre0 ||
+        _paisController.text != _pais0 ||
+        _tematicaController.text != _tematica0 ||
+        _direccionController.text != _direccion0 ||
+        _lugarController.text != _lugar0 ||
+        _fecha != _fecha0 ||
+        _certificacion != _certificacion0 ||
+        _activo != _activo0 ||
+        _tipoRegistro != _tipoRegistro0 ||
+        _imagenBytes != null ||
+        _imagenUrlExistente != _imagenUrl0;
+  }
 
   @override
   void dispose() {
@@ -89,6 +114,16 @@ class _CrearEditarEventoFormState
     _activo = evento.activo;
     _tipoRegistro = evento.tipoRegistro;
     _imagenUrlExistente = evento.imagenUrl;
+    _nombre0 = _nombreController.text;
+    _pais0 = _paisController.text;
+    _tematica0 = _tematicaController.text;
+    _direccion0 = _direccionController.text;
+    _lugar0 = _lugarController.text;
+    _fecha0 = _fecha;
+    _certificacion0 = _certificacion;
+    _activo0 = _activo;
+    _tipoRegistro0 = _tipoRegistro;
+    _imagenUrl0 = _imagenUrlExistente;
   }
 
   Future<void> _elegirImagen() async {
@@ -181,8 +216,7 @@ class _CrearEditarEventoFormState
     final confirmado = await confirmDialog(
       context,
       title: 'Eliminar evento',
-      message:
-          'Esta acción no se puede deshacer. ¿Eliminar el evento y sus registrados?',
+      message: 'Esta acción no se puede deshacer. ¿Eliminar el evento y sus registrados?',
       confirmLabel: 'Eliminar',
     );
     if (!confirmado) return;
@@ -218,6 +252,12 @@ class _CrearEditarEventoFormState
 
     return AppScaffold(
       title: _esEdicion ? 'Editar evento' : 'Nuevo evento',
+      onWillPop: () => handleFormExit(
+        context: context,
+        isCreate: !_esEdicion,
+        isDirty: _hayCambios,
+        save: _guardar,
+      ),
       actions: [
         if (_esEdicion && esAdmin)
           NexusHeaderAction(
@@ -265,7 +305,7 @@ class _CrearEditarEventoFormState
                     const SizedBox(height: 14),
                     _FieldLabel('Fecha'),
                     const SizedBox(height: 6),
-                    _FechaPickerRow(fecha: _fecha, onTap: _elegirFecha),
+                    FechaPickerField(fecha: _fecha, onTap: _elegirFecha),
                     const SizedBox(height: 14),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,8 +392,7 @@ class _CrearEditarEventoFormState
                       const SizedBox(height: 14),
                       _ToggleCard(
                         title: 'Evento activo',
-                        subtitle:
-                            'Los eventos inactivos no reciben autoregistro público',
+                        subtitle: 'Los eventos inactivos no reciben autoregistro público',
                         value: _activo,
                         onChanged: (v) => setState(() => _activo = v),
                       ),
@@ -385,51 +424,6 @@ class _FieldLabel extends StatelessWidget {
         fontSize: 12,
         fontWeight: FontWeight.w700,
         color: AppColors.textSecondary,
-      ),
-    );
-  }
-}
-
-class _FechaPickerRow extends StatelessWidget {
-  const _FechaPickerRow({required this.fecha, required this.onTap});
-
-  final DateTime fecha;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(AppRadius.input),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.input),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.input),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  DateFormat('dd/MM/yyyy').format(fecha),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
-                  ),
-                ),
-              ),
-              const Icon(
-                Symbols.calendar_today_rounded,
-                size: 19,
-                color: AppColors.primary,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

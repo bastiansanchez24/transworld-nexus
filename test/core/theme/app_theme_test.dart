@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transworld_nexus/core/theme/app_theme.dart';
+import 'package:transworld_nexus/core/theme/tw_tokens.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -221,4 +222,27 @@ void main() {
       debugDefaultTargetPlatformOverride = previous;
     }
   });
+
+  test(
+    'campos editables: fondo blanco y marco navy; disabled, el del fondo',
+    () {
+      final theme = AppTheme.light.inputDecorationTheme;
+      final fill = theme.fillColor! as WidgetStateColor;
+      expect(fill.resolve(const {}), TwColors.fieldBg);
+      expect(fill.resolve(const {WidgetState.disabled}), TwColors.bg);
+      expect(TwColors.fieldBg, TwColors.surface);
+      expect(
+        (theme.enabledBorder! as OutlineInputBorder).borderSide.color,
+        TwColors.fieldBorderActive,
+      );
+      expect(
+        (theme.focusedBorder! as OutlineInputBorder).borderSide.width,
+        1.5,
+      );
+      expect(
+        (theme.disabledBorder! as OutlineInputBorder).borderSide.color,
+        TwColors.fieldBorder,
+      );
+    },
+  );
 }

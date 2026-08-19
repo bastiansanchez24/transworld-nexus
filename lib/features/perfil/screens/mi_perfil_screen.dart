@@ -579,7 +579,7 @@ class _DatosUsuarioForm extends StatelessWidget {
             initialValue: email,
             readOnly: true,
             enableInteractiveSelection: true,
-            decoration: const InputDecoration(
+            decoration: twReadOnlyDecoration(
               hintText: 'Correo de la cuenta',
               helperText:
                   'El correo pertenece a tu cuenta y no se puede cambiar.',
@@ -615,7 +615,7 @@ class _DatosUsuarioForm extends StatelessWidget {
           TextFormField(
             initialValue: rolLabel,
             readOnly: true,
-            decoration: const InputDecoration(hintText: 'Rol'),
+            decoration: twReadOnlyDecoration(hintText: 'Rol'),
           ),
           const SizedBox(height: 18),
           PrimaryGradientButton(

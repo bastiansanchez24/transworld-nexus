@@ -61,7 +61,7 @@ class WindowsMouseGestures extends StatelessWidget {
   }
 
   void _popIfPossible() {
-    if (router.canPop()) router.pop();
+    router.routerDelegate.navigatorKey.currentState?.maybePop();
   }
 }
 

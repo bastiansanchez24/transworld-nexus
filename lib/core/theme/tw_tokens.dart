@@ -26,8 +26,11 @@ class TwColors {
   static const bg = Color(0xFFF2F5F9);
   static const surface = Color(0xFFFFFFFF); // tarjetas y tiles
   static const surfaceTint = Color(0xFFEEF2F9); // caja de icono neutro
-  static const fieldBg = Color(0xFFF4F6FA); // fondo de input
-  static const fieldBorder = Color(0xFFE3EAF4); // borde de input
+  static const fieldBg = Color(0xFFFFFFFF); // fondo de input editable
+  static const fieldBorder = Color(0xFFE3EAF4); // borde hairline (no editable)
+  static const fieldBorderActive = Color(
+    0xFF203E6D,
+  ); // marco navy de input editable
 
   // ---------- Bordes hairline (azul-negro translúcido) ----------
   static const border07 = Color(0x12102340); // rgba(16,35,64,.07) tarjetas

@@ -65,6 +65,12 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   Uint8List? _fotoBytes;
   bool _quitarFoto = false;
   final Set<String> _eventoIds = {};
+  Set<String> _eventoIds0 = {};
+  bool _eventoIdsListos = false;
+
+  String _nombre0 = '';
+  bool _activo0 = true;
+  AppRole _rol0 = AppRole.user;
 
   bool get _asignaEventos => _rol.requiresEventAssignment;
 
@@ -108,6 +114,8 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
         _eventoIds
           ..clear()
           ..addAll(ids);
+        _eventoIds0 = Set<String>.from(ids);
+        _eventoIdsListos = true;
         _eventosCargados = true;
         _eventosCargaError = false;
       });
@@ -332,6 +340,21 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
     }
   }
 
+  bool get _hayCambios {
+    if (!_cargado) return false;
+    if (_nombreController.text != _nombre0) return true;
+    if (_activo != _activo0) return true;
+    if (_rol != _rol0) return true;
+    if (_fotoBytes != null || _quitarFoto) return true;
+    if (_asignaEventos && _eventoIdsListos) {
+      if (_eventoIds.length != _eventoIds0.length ||
+          !_eventoIds.containsAll(_eventoIds0)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final usuarioAsync = ref.watch(usuarioPorIdProvider(widget.usuarioId));
@@ -345,6 +368,12 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
 
     return AppScaffold(
       title: 'Editar usuario',
+      onWillPop: () => handleFormExit(
+        context: context,
+        isCreate: false,
+        isDirty: _hayCambios,
+        save: _guardar,
+      ),
       actions: [
         if (!esCuentaPropia)
           NexusHeaderAction(
@@ -373,6 +402,9 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
             _activo = usuario.activo;
             _rol = usuario.rol;
             _rolOriginal = usuario.rol;
+            _nombre0 = usuario.nombreCompleto;
+            _activo0 = usuario.activo;
+            _rol0 = usuario.rol;
             _cargado = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _cargarEmail();
@@ -434,7 +466,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                     controller: _emailController,
                     readOnly: true,
                     enableInteractiveSelection: true,
-                    decoration: const InputDecoration(hintText: 'Cargando…'),
+                    decoration: twReadOnlyDecoration(hintText: 'Cargando…'),
                   ),
                   const SizedBox(height: 14),
                   const _FieldLabel('Contraseña'),
@@ -443,7 +475,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
                     controller: _passwordController,
                     readOnly: true,
                     obscureText: _passwordGenerada == null,
-                    decoration: InputDecoration(
+                    decoration: twReadOnlyDecoration(
                       hintText: 'No visible',
                       helperText: esCuentaPropia
                           ? 'Para cambiar tu contraseña usa Mi perfil.'

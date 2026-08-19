@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
@@ -60,8 +59,24 @@ class _CrearEditarEventoLeadFormState
   bool _cargado = false;
   bool _heredada = false;
 
+  String _nombre0 = '';
+  String _pais0 = '';
+  String _tematica0 = '';
+  DateTime? _fecha0;
+  String? _imagenUrl0;
+
   bool get _esEdicion => widget.eventoId != null;
   bool get _soloLectura => _heredada;
+
+  bool get _hayCambios {
+    if (!_esEdicion || !_cargado || _soloLectura) return false;
+    return _nombreController.text != _nombre0 ||
+        _paisController.text != _pais0 ||
+        _tematicaController.text != _tematica0 ||
+        _fecha != _fecha0 ||
+        _imagenBytes != null ||
+        _imagenUrlExistente != _imagenUrl0;
+  }
 
   @override
   void dispose() {
@@ -80,6 +95,11 @@ class _CrearEditarEventoLeadFormState
     _fecha = evento.fecha;
     _imagenUrlExistente = evento.imagenUrl;
     _heredada = evento.esInterno;
+    _nombre0 = _nombreController.text;
+    _pais0 = _paisController.text;
+    _tematica0 = _tematicaController.text;
+    _fecha0 = _fecha;
+    _imagenUrl0 = _imagenUrlExistente;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() {});
     });
@@ -177,8 +197,7 @@ class _CrearEditarEventoLeadFormState
     final confirmado = await confirmDialog(
       context,
       title: 'Eliminar actividad',
-      message:
-          'Esta acción no se puede deshacer. ¿Eliminar la actividad de captura?',
+      message: 'Esta acción no se puede deshacer. ¿Eliminar la actividad de captura?',
       confirmLabel: 'Eliminar',
     );
     if (!confirmado) return;
@@ -212,8 +231,17 @@ class _CrearEditarEventoLeadFormState
 
     return AppScaffold(
       title: _esEdicion
-          ? (_soloLectura ? 'Actividad de captura' : 'Editar actividad')
+          ? (_soloLectura
+                ? 'Actividad de captura'
+                : 'Editar actividad de captura')
           : 'Nueva actividad',
+      onWillPop: () => handleFormExit(
+        context: context,
+        isCreate: !_esEdicion,
+        isDirty: _hayCambios,
+        readOnly: _soloLectura,
+        save: _guardar,
+      ),
       actions: [
         if (_esEdicion && esAdmin)
           NexusHeaderAction(
@@ -268,48 +296,10 @@ class _CrearEditarEventoLeadFormState
                     const SizedBox(height: 14),
                     const _FieldLabel('Fecha'),
                     const SizedBox(height: 6),
-                    Material(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.input),
-                      child: InkWell(
-                        onTap: _soloLectura ? null : _elegirFecha,
-                        borderRadius: BorderRadius.circular(AppRadius.input),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 15,
-                            vertical: 13,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(
-                              AppRadius.input,
-                            ),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  DateFormat('dd/MM/yyyy').format(_fecha),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: _soloLectura
-                                        ? AppColors.textSecondary
-                                        : AppColors.ink,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.calendar_today_outlined,
-                                color: _soloLectura
-                                    ? AppColors.textSecondary
-                                    : AppColors.primary,
-                                size: 20,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    FechaPickerField(
+                      fecha: _fecha,
+                      onTap: _elegirFecha,
+                      enabled: !_soloLectura,
                     ),
                     const SizedBox(height: 14),
                     const _FieldLabel('País'),

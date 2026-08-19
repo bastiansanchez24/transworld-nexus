@@ -154,6 +154,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
 
     return AppScaffold(
       title: 'Nuevo usuario',
+      onWillPop: () => confirmDiscardCreate(context),
       body: SingleChildScrollView(
         padding: AppSpacing.form,
         child: Form(

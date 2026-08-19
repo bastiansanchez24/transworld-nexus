@@ -204,4 +204,78 @@ void main() {
       debugDefaultTargetPlatformOverride = previous;
     }
   });
+
+  testWidgets('descartar creación: Cancelar se queda, Descartar confirma', (
+    tester,
+  ) async {
+    bool? resultado;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () async {
+                resultado = await confirmDiscardCreate(context);
+              },
+              child: const Text('Abrir'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Abrir'));
+    await tester.pumpAndSettle();
+    expect(find.text('¿Descartar?'), findsOneWidget);
+
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(resultado, isFalse);
+
+    await tester.tap(find.text('Abrir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Descartar'));
+    await tester.pumpAndSettle();
+    expect(resultado, isTrue);
+  });
+
+  testWidgets('guardar cambios: tres acciones', (tester) async {
+    FormExitAction? resultado;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () async {
+                resultado = await confirmSaveEdits(context);
+              },
+              child: const Text('Abrir'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Abrir'));
+    await tester.pumpAndSettle();
+    expect(find.text('¿Guardar los cambios?'), findsOneWidget);
+
+    await tester.tap(find.text('Seguir editando'));
+    await tester.pumpAndSettle();
+    expect(resultado, FormExitAction.stay);
+
+    await tester.tap(find.text('Abrir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Descartar'));
+    await tester.pumpAndSettle();
+    expect(resultado, FormExitAction.discard);
+
+    await tester.tap(find.text('Abrir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+    expect(resultado, FormExitAction.save);
+  });
 }
