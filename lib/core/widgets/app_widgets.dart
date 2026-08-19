@@ -68,33 +68,57 @@ class EmptyStateView extends StatelessWidget {
     required this.message,
     this.icon = Icons.inbox_rounded,
     this.action,
+    this.onRefresh,
   });
 
   final String message;
   final IconData icon;
   final Widget? action;
+  final VoidCallback? onRefresh;
+
+  /// En Android/iOS el [SliverFillRemaining] llega detrás de la tab bar, así
+  /// que el centro geométrico queda bajo. Reservamos ese hueco y subimos un
+  /// poco más el aviso hacia el centro visible.
+  static const _mobileAlign = Alignment(0, -0.28);
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 48,
-              color: AppColors.textSecondary.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
-            if (action != null) ...[const SizedBox(height: 16), action!],
-          ],
+    final liftForNav =
+        onRefresh != null && !GlassNavTokens.usesSideRailOf(context);
+    final bottomInset = liftForNav
+        ? GlassNavTokens.contentBottomInset(context)
+        : 0.0;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Align(
+        alignment: liftForNav ? _mobileAlign : Alignment.center,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 48,
+                color: AppColors.textSecondary.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+              if (onRefresh != null) ...[
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: onRefresh,
+                  child: const Text('Actualizar'),
+                ),
+              ],
+              if (action != null) ...[const SizedBox(height: 16), action!],
+            ],
+          ),
         ),
       ),
     );

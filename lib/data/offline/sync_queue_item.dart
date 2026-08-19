@@ -48,6 +48,22 @@ class TerminalSyncConflictException implements Exception {
   String toString() => conflict.message;
 }
 
+/// El servidor ya tiene ese dato: el ítem se retira de la cola sin reintentos
+/// y sin bloquear a los que vienen detrás.
+///
+/// Es distinto de [TerminalSyncConflictException], que exige una decisión del
+/// usuario. Un duplicado no la necesita —el dato ya está— y en feria una hoja
+/// modal que hay que despachar a mano por cada repetido frena la fila de
+/// entrada, que es justo lo que el modo offline venía a evitar.
+class SyncDiscardedException implements Exception {
+  const SyncDiscardedException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// Error reintentable que además permite persistir un checkpoint del servidor.
 /// Evita repetir un INSERT si, por ejemplo, la fila se creó pero falló la foto.
 class RetryableSyncException implements Exception {

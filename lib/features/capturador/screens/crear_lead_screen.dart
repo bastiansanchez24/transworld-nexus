@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:uuid/uuid.dart';
 
@@ -10,6 +11,7 @@ import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/mascara_contacto.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
@@ -27,6 +29,17 @@ import '../providers/capturador_providers.dart';
 import '../widgets/foto_lead_identidad.dart';
 
 enum _CampoVoz { nombre, empresa, cargo, email, descripcion }
+
+/// Un campo de contacto queda bloqueado solo si el QR trajo el dato y el rol no
+/// puede verlo. En captura manual (sin dato) se escribe con normalidad.
+bool _contactoBloqueado(String? prefill, bool puedeVerContacto) {
+  return !puedeVerContacto && prefill != null;
+}
+
+String? _sinVacios(String valor) {
+  final texto = valor.trim();
+  return texto.isEmpty ? null : texto;
+}
 
 class CrearLeadScreen extends ConsumerStatefulWidget {
   const CrearLeadScreen({
@@ -69,6 +82,16 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
   bool _guardando = false;
   bool _accesoValidado = false;
 
+  /// Contacto que trajo el QR. Quien no puede ver el contacto lo edita con la
+  /// máscara a la vista, así que al guardar se envía este valor y no el texto
+  /// del campo. Si el QR no trajo nada, el campo queda libre para escribirlo.
+  String? _emailPrefill;
+  String? _telefonoPrefill;
+
+  /// `null` hasta la primera sincronización, para que el primer valor del rol
+  /// siempre se aplique.
+  bool? _contactoEnmascarado;
+
   /// `null` = junction aún cargando; set vacío = sin autorización usable.
   Set<String>? _idsPermitidosExterno() {
     final autorizados = ref.read(externoEventosAutorizadosIdsProvider);
@@ -83,6 +106,9 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
   void initState() {
     super.initState();
     _aplicarPrefill();
+    _sincronizarMascaraContacto(
+      puedeVerContacto: ref.read(canViewLeadContactDataProvider),
+    );
     _initSpeech();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _validarAccesoExterno(),
@@ -131,10 +157,31 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
       _cargoController.text = prefill.cargo!;
     }
     if (prefill.telefono != null) {
+      _telefonoPrefill = prefill.telefono;
       _telefonoController.text = prefill.telefono!;
     }
     if (prefill.email != null) {
+      _emailPrefill = prefill.email;
       _emailController.text = prefill.email!;
+    }
+  }
+
+  /// Cambia el contacto precargado entre su valor real y la máscara. Se llama
+  /// también cuando el rol se resuelve después del primer frame, así un
+  /// administrador nunca queda con la máscara puesta.
+  void _sincronizarMascaraContacto({required bool puedeVerContacto}) {
+    if (_contactoEnmascarado == !puedeVerContacto) return;
+    _contactoEnmascarado = !puedeVerContacto;
+
+    final email = _emailPrefill;
+    if (email != null) {
+      _emailController.text = puedeVerContacto ? email : enmascararEmail(email);
+    }
+    final telefono = _telefonoPrefill;
+    if (telefono != null) {
+      _telefonoController.text = puedeVerContacto
+          ? telefono
+          : enmascararTelefono(telefono);
     }
   }
 
@@ -216,6 +263,9 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     _telefonoController.clear();
     _emailController.clear();
     _descripcionController.clear();
+    // Sin esto la captura en cadena arrastraría el contacto del lead anterior.
+    _emailPrefill = null;
+    _telefonoPrefill = null;
     // Tras guardar se sigue capturando en cadena: si la foto no se limpia,
     // el siguiente lead se llevaría la del anterior.
     _fotoBytes = null;
@@ -283,6 +333,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     final isOnline = ref.read(isOnlineProvider);
     final perfil = ref.read(currentPerfilProvider).valueOrNull;
     final userId = perfil?.id;
+    final puedeVerContacto = perfil?.canViewLeadContactData ?? false;
     Lead? leadPreparado;
     List<String> fotosPreparadas = const [];
 
@@ -348,12 +399,14 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
         cargo: _cargoController.text.trim().isEmpty
             ? null
             : _cargoController.text.trim(),
-        telefono: _telefonoController.text.trim().isEmpty
-            ? null
-            : _telefonoController.text.trim(),
-        email: _emailController.text.trim().isEmpty
-            ? null
-            : _emailController.text.trim().toLowerCase(),
+        // Un campo bloqueado muestra la máscara: el valor que se guarda es el
+        // que trajo el QR.
+        telefono: _contactoBloqueado(_telefonoPrefill, puedeVerContacto)
+            ? _telefonoPrefill
+            : _sinVacios(_telefonoController.text),
+        email: _contactoBloqueado(_emailPrefill, puedeVerContacto)
+            ? _emailPrefill?.toLowerCase()
+            : _sinVacios(_emailController.text)?.toLowerCase(),
         descripcion: _descripcionController.text.trim().isEmpty
             ? null
             : _descripcionController.text.trim(),
@@ -502,6 +555,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     String? Function(String?)? validator,
     TextInputType? keyboardType,
     int maxLines = 1,
+    bool protegido = false,
   }) {
     final escuchando = campoVoz != null && _escuchandoCampo == campoVoz;
     return NexusFormTextField(
@@ -509,10 +563,20 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
       controller: controller,
       hintText: hintText,
       enabled: !escuchando && !_guardando,
+      readOnly: protegido,
       keyboardType: keyboardType,
       maxLines: maxLines,
       validator: validator,
-      suffixIcon: campoVoz == null ? null : _botonVoz(campoVoz),
+      helperText: protegido
+          ? 'Solo visible para administradores y organizadores'
+          : null,
+      suffixIcon: protegido
+          ? const Icon(
+              Symbols.lock_rounded,
+              size: 18,
+              color: AppColors.textTertiary,
+            )
+          : (campoVoz == null ? null : _botonVoz(campoVoz)),
     );
   }
 
@@ -521,8 +585,22 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     ref.listen(externoEventosAutorizadosIdsProvider, (_, _) {
       if (!_accesoValidado) _validarAccesoExterno();
     });
+    // El perfil puede resolverse después del primer frame: al llegar el rol se
+    // repinta el contacto precargado con o sin máscara.
+    ref.listen(canViewLeadContactDataProvider, (_, puedeVerContacto) {
+      if (!mounted) return;
+      setState(
+        () => _sincronizarMascaraContacto(puedeVerContacto: puedeVerContacto),
+      );
+    });
 
     final eventoAsync = ref.watch(eventoLeadByIdProvider(widget.eventoId));
+    final puedeVerContacto = ref.watch(canViewLeadContactDataProvider);
+    final emailBloqueado = _contactoBloqueado(_emailPrefill, puedeVerContacto);
+    final telefonoBloqueado = _contactoBloqueado(
+      _telefonoPrefill,
+      puedeVerContacto,
+    );
 
     return AppScaffold(
       titleWidget: eventoAsync.when(
@@ -599,15 +677,17 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                 controller: _telefonoController,
                 hintText: '+56 9 1234 5678',
                 keyboardType: TextInputType.phone,
+                protegido: telefonoBloqueado,
               ),
               const SizedBox(height: 14),
               _campoTexto(
                 label: 'Email',
                 controller: _emailController,
                 hintText: 'correo@empresa.com',
-                campoVoz: _CampoVoz.email,
+                campoVoz: emailBloqueado ? null : _CampoVoz.email,
                 keyboardType: TextInputType.emailAddress,
-                validator: _validarEmail,
+                validator: emailBloqueado ? null : _validarEmail,
+                protegido: emailBloqueado,
               ),
               const SizedBox(height: 14),
               _campoTexto(

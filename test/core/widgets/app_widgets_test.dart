@@ -278,4 +278,73 @@ void main() {
     await tester.pumpAndSettle();
     expect(resultado, FormExitAction.save);
   });
+
+  testWidgets('el vacío muestra Actualizar debajo del aviso', (tester) async {
+    var refrescos = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EmptyStateView(
+          message: 'Aún no hay asistentes registrados.',
+          onRefresh: () => refrescos++,
+        ),
+      ),
+    );
+
+    final aviso = find.text('Aún no hay asistentes registrados.');
+    final actualizar = find.text('Actualizar');
+    expect(aviso, findsOneWidget);
+    expect(actualizar, findsOneWidget);
+    expect(
+      tester.getTopLeft(actualizar).dy,
+      greaterThan(tester.getBottomLeft(aviso).dy),
+    );
+
+    await tester.tap(actualizar);
+    expect(refrescos, 1);
+  });
+
+  testWidgets(
+    'en Android e iOS el aviso vacío queda más arriba que en escritorio',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      Future<double> centroDelAviso(TargetPlatform platform) async {
+        final previous = debugDefaultTargetPlatformOverride;
+        debugDefaultTargetPlatformOverride = platform;
+        try {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: CustomScrollView(
+                slivers: [
+                  const SliverToBoxAdapter(child: SizedBox(height: 200)),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: EmptyStateView(
+                      message: 'Aún no hay asistentes registrados.',
+                      onRefresh: () {},
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          return tester
+              .getCenter(find.text('Aún no hay asistentes registrados.'))
+              .dy;
+        } finally {
+          debugDefaultTargetPlatformOverride = previous;
+        }
+      }
+
+      final yAndroid = await centroDelAviso(TargetPlatform.android);
+      final yIos = await centroDelAviso(TargetPlatform.iOS);
+      final yWindows = await centroDelAviso(TargetPlatform.windows);
+
+      expect(yAndroid, lessThan(yWindows));
+      expect(yIos, lessThan(yWindows));
+    },
+  );
 }

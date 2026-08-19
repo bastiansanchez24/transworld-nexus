@@ -24,33 +24,36 @@ class ApkInstallResult {
   final String? message;
 }
 
+bool _isSignatureMismatch({
+  required int status,
+  required int legacyStatus,
+  required String message,
+}) {
+  final detail = message.toUpperCase();
+  return status == 4 ||
+      legacyStatus == -7 ||
+      detail.contains('UPDATE_INCOMPATIBLE') ||
+      detail.contains('SIGNATURES DO NOT MATCH');
+}
+
 /// Traduce el status de [PackageInstaller] / códigos legacy a un mensaje.
 String mapApkInstallFailure({
   required int status,
   required int legacyStatus,
   String message = '',
 }) {
-  switch (status) {
-    case 2: // STATUS_FAILURE_ABORTED
-      return 'Instalación cancelada.';
-    case 3: // STATUS_FAILURE_BLOCKED
-      return 'El sistema bloqueó la instalación. Revisa el permiso de '
-          'instalar aplicaciones desconocidas.';
-    case 4: // STATUS_FAILURE_CONFLICT
-      return 'No se pudo instalar: ya hay una versión firmada con otra clave. '
-          'Desinstala RegisPro e instala esta actualización.';
-    case 5: // STATUS_FAILURE_INCOMPATIBLE
-      return 'Este paquete no es compatible con el dispositivo.';
-    case 6: // STATUS_FAILURE_INVALID
-      return 'El APK descargado es inválido o está dañado.';
-    case 7: // STATUS_FAILURE_STORAGE
-      return 'No hay espacio suficiente para instalar la actualización.';
+  // Android 14+ a menudo reporta UPDATE_INCOMPATIBLE como status 5
+  // (INCOMPATIBLE) en vez de 4 (CONFLICT). Mirar la firma primero.
+  if (_isSignatureMismatch(
+    status: status,
+    legacyStatus: legacyStatus,
+    message: message,
+  )) {
+    return 'No se pudo instalar: la app actual está firmada con otra clave. '
+        'Desinstala RegisPro e instala esta actualización.';
   }
 
   switch (legacyStatus) {
-    case -7: // INSTALL_FAILED_UPDATE_INCOMPATIBLE
-      return 'No se pudo instalar: la app actual está firmada con otra clave. '
-          'Desinstala RegisPro e instala de nuevo desde esta versión.';
     case -15: // INSTALL_FAILED_TEST_ONLY
       return 'No se pudo instalar: la app actual es un build de depuración '
           '(flutter run). Desinstálala e instala el APK de la Release.';
@@ -59,6 +62,24 @@ String mapApkInstallFailure({
           'instalado.';
     case -103: // INSTALL_PARSE_FAILED_NO_CERTIFICATES
       return 'El APK no tiene una firma válida.';
+    case -113: // INSTALL_FAILED_NO_MATCHING_ABIS
+      return 'Este paquete no incluye bibliotecas para este dispositivo.';
+    case -9: // INSTALL_FAILED_OLDER_SDK
+      return 'Este paquete requiere una versión de Android más reciente.';
+  }
+
+  switch (status) {
+    case 2: // STATUS_FAILURE_ABORTED
+      return 'Instalación cancelada.';
+    case 3: // STATUS_FAILURE_BLOCKED
+      return 'El sistema bloqueó la instalación. Revisa el permiso de '
+          'instalar aplicaciones desconocidas.';
+    case 5: // STATUS_FAILURE_INCOMPATIBLE
+      return 'Este paquete no es compatible con el dispositivo.';
+    case 6: // STATUS_FAILURE_INVALID
+      return 'El APK descargado es inválido o está dañado.';
+    case 7: // STATUS_FAILURE_STORAGE
+      return 'No hay espacio suficiente para instalar la actualización.';
   }
 
   final detail = message.trim();
@@ -147,9 +168,7 @@ class ApkInstaller {
               ? 'H-A'
               : (status == 4 || legacyStatus == -7
                     ? 'H-A'
-                    : (status == 6 ||
-                              legacyStatus == -103 ||
-                              legacyStatus == -2
+                    : (status == 6 || legacyStatus == -103 || legacyStatus == -2
                           ? 'H-B'
                           : (legacyStatus == -25 ? 'H-C' : 'H-B'))),
           data: {
@@ -158,7 +177,9 @@ class ApkInstaller {
             'legacyStatus': legacyStatus,
             'systemMessage': map['message'] as String? ?? '',
             'fileLen': fileLen,
-            'magic': header.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+            'magic': header
+                .map((b) => b.toRadixString(16).padLeft(2, '0'))
+                .join(),
           },
         );
         // #endregion

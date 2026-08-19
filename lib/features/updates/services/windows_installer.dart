@@ -49,12 +49,31 @@ class WindowsInstaller {
     final exePath = Platform.resolvedExecutable;
     final installDir = File(exePath).parent.path;
     final exeName = _exeFileName(exePath);
+    final exeExists = await File(exePath).exists();
+    final writable = await _isDirectoryWritable(installDir);
+    // #region agent log
+    otaDebugLog(
+      location: 'windows_installer.dart:install',
+      message: 'windows preflight',
+      hypothesisId: 'H-D',
+      data: {
+        'exeName': exeName,
+        'exeExists': exeExists,
+        'writable': writable,
+        'underLocalAppData': installDir.toLowerCase().contains(
+          '\\appdata\\local\\',
+        ),
+        'zipLen': await zipFile.length(),
+        'parentPid': pid,
+      },
+    );
+    // #endregion
 
     // Pre-flight: si no podemos escribir en el directorio de instalación
     // (típico en `C:\Program Files` sin elevación) abortamos ANTES de cerrar
     // la app; de lo contrario el usuario se queda sin Nexus abierto y sin
     // actualización aplicada.
-    if (!await _isDirectoryWritable(installDir)) {
+    if (!writable) {
       return WindowsInstallResult(
         WindowsInstallOutcome.failed,
         message:
@@ -236,27 +255,29 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function ConvertTo-SingleQuotedLiteral([string]$Value) {
-  return "'" + $Value.Replace("'", "''") + "'"
+function ConvertTo-CmdQuoted([string]$Value) {
+  return '"' + $Value.Replace('"', '\"') + '"'
 }
 
-$invocation = @(
-  '&',
-  (ConvertTo-SingleQuotedLiteral $UpdaterScript),
-  '-ZipPath', (ConvertTo-SingleQuotedLiteral $ZipPath),
-  '-InstallDir', (ConvertTo-SingleQuotedLiteral $InstallDir),
-  '-ExeName', (ConvertTo-SingleQuotedLiteral $ExeName),
+$arguments = @(
+  '-NoProfile',
+  '-ExecutionPolicy Bypass',
+  '-File', (ConvertTo-CmdQuoted $UpdaterScript),
+  '-ZipPath', (ConvertTo-CmdQuoted $ZipPath),
+  '-InstallDir', (ConvertTo-CmdQuoted $InstallDir),
+  '-ExeName', (ConvertTo-CmdQuoted $ExeName),
   '-ParentPid', $ParentPid,
-  '-ReadyPath', (ConvertTo-SingleQuotedLiteral $ReadyPath),
-  '-RemoteVersion', (ConvertTo-SingleQuotedLiteral $RemoteVersion)
+  '-ReadyPath', (ConvertTo-CmdQuoted $ReadyPath),
+  '-RemoteVersion', (ConvertTo-CmdQuoted $RemoteVersion)
 ) -join ' '
 
-$encoded = [Convert]::ToBase64String(
-  [Text.Encoding]::Unicode.GetBytes($invocation)
-)
-$arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand ' + $encoded
 $shell = New-Object -ComObject Shell.Application
-$shell.ShellExecute($PowerShellPath, $arguments, $InstallDir, 'open', 0)
+$rc = $shell.ShellExecute($PowerShellPath, $arguments, $InstallDir, 'open', 1)
+$agentLog = 'c:\src\CODE\project_transworld-nexus\projects\transworld-nexus\debug-23a43f.log'
+$ts = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+$payload = '{"sessionId":"23a43f","runId":"pre-fix","hypothesisId":"H-D","location":"windows_installer.dart:launcher","message":"ShellExecute result","data":{"rc":' + [int]$rc + ',"argLen":' + $arguments.Length + '},"timestamp":' + $ts + '}'
+try { Add-Content -LiteralPath $agentLog -Value $payload -Encoding UTF8 } catch { }
+try { Add-Content -LiteralPath (Join-Path $env:TEMP 'nexus-update-launch.log') -Value $payload -Encoding UTF8 } catch { }
 ''';
 
 /// Actualizador out-of-process.
@@ -288,16 +309,26 @@ function Write-Log([string]$Message) {
   try { Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8 } catch { }
 }
 
+function Write-AgentLog([string]$HypothesisId, [string]$Location, [string]$Message, [string]$DataJson) {
+  $ts = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+  $payload = '{"sessionId":"23a43f","runId":"pre-fix","hypothesisId":"' + $HypothesisId + '","location":"' + $Location + '","message":"' + $Message + '","data":' + $DataJson + ',"timestamp":' + $ts + '}'
+  try { Add-Content -LiteralPath 'c:\src\CODE\project_transworld-nexus\projects\transworld-nexus\debug-23a43f.log' -Value $payload -Encoding UTF8 } catch { }
+  Write-Log $Message
+}
+
 function Start-Nexus {
   try {
     if (Test-Path -LiteralPath $exePath) {
       Start-Process -FilePath $exePath -WorkingDirectory $InstallDir
       Write-Log ('RegisPro relanzado: ' + $exePath)
+      Write-AgentLog 'H-D' 'windows_installer.dart:updater' 'relaunched' '{"ok":true}'
     } else {
       Write-Log ('ERROR: no existe el ejecutable para relanzar: ' + $exePath)
+      Write-AgentLog 'H-D' 'windows_installer.dart:updater' 'relaunch skipped missing exe' '{"ok":false}'
     }
   } catch {
     Write-Log ('ERROR al relanzar RegisPro: ' + $_.Exception.Message)
+    Write-AgentLog 'H-D' 'windows_installer.dart:updater' 'relaunch threw' '{"ok":false}'
   }
 }
 
@@ -331,8 +362,11 @@ function Copy-Payload([string]$Source, [string]$Destination) {
   while ($true) {
     $attempts++
     try {
-      Copy-Item -Path (Join-Path $Source $payloadGlob) -Destination $Destination -Recurse -Force -ErrorAction Stop
-      return
+      $robo = Start-Process -FilePath "$env:SystemRoot\System32\robocopy.exe" -ArgumentList @(
+        $Source, $Destination, '/E', '/IS', '/IT', '/R:2', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/NP'
+      ) -Wait -PassThru -WindowStyle Hidden
+      if ($robo.ExitCode -le 7) { return }
+      throw ('robocopy exit ' + $robo.ExitCode)
     } catch {
       if ($attempts -ge 8) { throw }
       Write-Log ('Copia falló (intento ' + $attempts + '): ' + $_.Exception.Message)
@@ -341,14 +375,45 @@ function Copy-Payload([string]$Source, [string]$Destination) {
   }
 }
 
+Add-Type -AssemblyName System.Windows.Forms | Out-Null
+Add-Type -AssemblyName System.Drawing | Out-Null
+$form = New-Object System.Windows.Forms.Form
+$form.Text = 'RegisPro — Actualización'
+$form.Size = New-Object System.Drawing.Size(480, 170)
+$form.StartPosition = 'CenterScreen'
+$form.FormBorderStyle = 'FixedDialog'
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$form.TopMost = $true
+$label = New-Object System.Windows.Forms.Label
+$label.AutoSize = $false
+$label.Size = New-Object System.Drawing.Size(440, 48)
+$label.Location = New-Object System.Drawing.Point(16, 16)
+$label.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+$label.Text = 'Preparando actualización…'
+$bar = New-Object System.Windows.Forms.ProgressBar
+$bar.Location = New-Object System.Drawing.Point(16, 78)
+$bar.Size = New-Object System.Drawing.Size(430, 22)
+$bar.Style = 'Marquee'
+$form.Controls.Add($label)
+$form.Controls.Add($bar)
+$form.Show()
+$form.Refresh()
+function Set-UpdaterStatus([string]$Text) {
+  if ($label -and -not $label.IsDisposed) { $label.Text = $Text }
+  [System.Windows.Forms.Application]::DoEvents()
+}
+
 Write-Log '--- Inicio de actualización ---'
-Write-Log ('DBG-0b9d45 H-D/H-E InstallDir=' + $InstallDir + ' ExeName=' + $ExeName + ' Zip=' + $ZipPath + ' ZipExists=' + (Test-Path -LiteralPath $ZipPath) + ' Pid=' + $PID + ' ParentPid=' + $ParentPid)
+Write-Log ('DBG-23a43f H-D/H-E InstallDirLen=' + $InstallDir.Length + ' ExeName=' + $ExeName + ' ZipExists=' + (Test-Path -LiteralPath $ZipPath) + ' Pid=' + $PID + ' ParentPid=' + $ParentPid)
+Write-AgentLog 'H-D' 'windows_installer.dart:updater' 'updater started' ('{"exeName":"' + $ExeName + '","zipExists":' + ($(if (Test-Path -LiteralPath $ZipPath) { 'true' } else { 'false' }).ToLower()) + ',"parentPid":' + $ParentPid + ',"exeExists":' + ($(if (Test-Path -LiteralPath $exePath) { 'true' } else { 'false' }).ToLower()) + '}')
 
 # Handshake con Nexus: confirma que PowerShell inició y pudo interpretar todos
 # los parámetros antes de que la app se cierre y libere sus binarios.
 try {
   Set-Content -LiteralPath $ReadyPath -Value $PID -Encoding ASCII
   Write-Log 'Actualizador listo; esperando cierre de RegisPro.'
+  Set-UpdaterStatus 'Esperando que RegisPro se cierre…'
 } catch {
   Write-Log ('ERROR creando señal de inicio: ' + $_.Exception.Message)
   exit 1
@@ -371,16 +436,20 @@ if ($ParentPid -gt 0) {
 
 $deadline = (Get-Date).AddSeconds(180)
 while ((Get-Date) -lt $deadline) {
+  [System.Windows.Forms.Application]::DoEvents()
   if (Test-InstallDirUnlocked) { break }
-  Start-Sleep -Milliseconds 500
+  Start-Sleep -Milliseconds 200
 }
 
 if (-not (Test-InstallDirUnlocked)) {
+  Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'files still locked' '{"waitedSec":180}'
   Write-Log 'ERROR: archivos de instalación siguen bloqueados tras 180s. Se aborta sin tocar la instalación.'
   Start-Nexus
   Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
   exit 1
 }
+
+Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'install dir unlocked' '{"ok":true}'
 
 # Margen extra para antivirus / indexador tras liberar handles.
 Start-Sleep -Milliseconds 800
@@ -391,6 +460,7 @@ try {
 
   # 2. Extraer el ZIP.
   Write-Log 'Extrayendo paquete...'
+  Set-UpdaterStatus 'Extrayendo paquete…'
   $extracted = Join-Path $staging '__payload'
   New-Item -ItemType Directory -Path $extracted -Force | Out-Null
   Expand-Archive -LiteralPath $ZipPath -DestinationPath $extracted -Force
@@ -407,6 +477,7 @@ try {
   if (-not (Test-Path -LiteralPath (Join-Path $source $ExeName))) {
     throw ('El paquete no contiene ' + $ExeName + '; se cancela la actualización.')
   }
+  Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'payload validated' ('{"sourceHasExe":true}')
 
   # 5. Backup de la instalación actual para poder revertir.
   Write-Log 'Creando backup de la instalación actual...'
@@ -415,10 +486,12 @@ try {
 
   # 6. Aplicar la actualización.
   Write-Log 'Aplicando archivos nuevos...'
+  Set-UpdaterStatus 'Instalando archivos…'
   $restoreNeeded = $true
   Copy-Payload $source $InstallDir
   $restoreNeeded = $false
   Write-Log 'Actualización aplicada correctamente.'
+  Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'copy succeeded' ('{"ok":true}')
 
   if (-not [string]::IsNullOrWhiteSpace($RemoteVersion)) {
     try {
@@ -430,6 +503,7 @@ try {
   }
 } catch {
   Write-Log ('ERROR: ' + $_.Exception.Message)
+  Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'updater error' ('{"restoreNeeded":' + ($(if ($restoreNeeded) { 'true' } else { 'false' }).ToLower()) + '}')
   if ($restoreNeeded) {
     try {
       Write-Log 'Restaurando backup...'
@@ -440,8 +514,10 @@ try {
     }
   }
 } finally {
+  Set-UpdaterStatus 'Abriendo RegisPro…'
   # 7. Pase lo que pase, devolver al usuario una app funcional.
   Start-Nexus
+  try { $form.Close() } catch { }
   Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $ZipPath -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $ReadyPath -Force -ErrorAction SilentlyContinue

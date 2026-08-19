@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/tw_tokens.dart';
+import 'offline_banner.dart';
 import 'tw_components.dart';
 
 /// Medidas de la cabecera fija de las pantallas-menú.
@@ -65,6 +66,7 @@ class TwDetailScaffold extends StatefulWidget {
     this.backIcon = Symbols.arrow_back_rounded,
     this.backTooltip = 'Volver',
     this.backKey,
+    this.leading,
   });
 
   /// Rótulo en reposo ("Detalle del evento").
@@ -75,11 +77,16 @@ class TwDetailScaffold extends StatefulWidget {
 
   final VoidCallback onBack;
 
-  /// El usuario externo no navega hacia atrás: su botón izquierdo cierra
-  /// sesión, así que el icono, el tooltip y la key son configurables.
+  /// El usuario externo no navega hacia atrás, así que el icono, el tooltip y
+  /// la key son configurables.
   final IconData backIcon;
   final String backTooltip;
   final Key? backKey;
+
+  /// Reemplaza el chip izquierdo por un widget propio. El externo pone ahí su
+  /// foto de perfil, igual que los internos en el home: su cabecera es de
+  /// cuenta, no de navegación, porque no tiene a dónde volver.
+  final Widget? leading;
 
   final List<Widget> actions;
   final List<Widget> children;
@@ -119,12 +126,20 @@ class _TwDetailScaffoldState extends State<TwDetailScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    final banner = widget.topBanner;
+    if (banner == null) return _contenido(context);
+    // El banner reserva la barra de estado y `_contenido` la recibe ya
+    // consumida: el alto de la cabecera se calcula desde ese inset y contarlo
+    // dos veces dejaba un hueco del alto de la barra.
+    return OfflineBannerHost(banner: banner, builder: _contenido);
+  }
+
+  Widget _contenido(BuildContext context) {
     final topInset = TwDetailBarMetrics.topInsetOf(context);
     final headerHeight = TwDetailBarMetrics.height(topInset);
 
     return Column(
       children: [
-        ?widget.topBanner,
         Expanded(
           child: Stack(
             children: [
@@ -168,6 +183,7 @@ class _TwDetailScaffoldState extends State<TwDetailScaffold> {
                       backIcon: widget.backIcon,
                       backTooltip: widget.backTooltip,
                       backKey: widget.backKey,
+                      leading: widget.leading,
                       actions: widget.actions,
                     ),
                   ),
@@ -191,6 +207,7 @@ class _TwDetailBar extends StatelessWidget {
     required this.backIcon,
     required this.backTooltip,
     required this.backKey,
+    required this.leading,
     required this.actions,
   });
 
@@ -202,6 +219,7 @@ class _TwDetailBar extends StatelessWidget {
   final IconData backIcon;
   final String backTooltip;
   final Key? backKey;
+  final Widget? leading;
   final List<Widget> actions;
 
   @override
@@ -248,13 +266,14 @@ class _TwDetailBar extends StatelessWidget {
             height: TwDetailBarMetrics.rowHeight,
             child: Row(
               children: [
-                TwIconButton(
-                  key: backKey,
-                  icon: backIcon,
-                  iconSize: 22,
-                  tooltip: backTooltip,
-                  onTap: onBack,
-                ),
+                leading ??
+                    TwIconButton(
+                      key: backKey,
+                      icon: backIcon,
+                      iconSize: 22,
+                      tooltip: backTooltip,
+                      onTap: onBack,
+                    ),
                 const SizedBox(width: 10),
                 // El eyebrow deja paso al título compacto con un cross-fade,
                 // sin mover ni ocultar los botones de los extremos.

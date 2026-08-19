@@ -12,6 +12,7 @@ import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/mascara_contacto.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
@@ -124,6 +125,40 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
     );
   }
 
+  List<Lead> _filtrarLeads(
+    List<Lead> leads, {
+    required bool canViewAllLeads,
+    required bool puedeVerContacto,
+    String? perfilId,
+  }) {
+    return leads.where((lead) {
+      if (!canViewAllLeads && lead.perfilId != perfilId) return false;
+      if (canViewAllLeads &&
+          _filtro == _FiltroLead.mios &&
+          (perfilId == null || lead.perfilId != perfilId)) {
+        return false;
+      }
+      if (canViewAllLeads &&
+          _filtro == _FiltroLead.deOtros &&
+          perfilId != null &&
+          lead.perfilId == perfilId) {
+        return false;
+      }
+      if (_busqueda.isEmpty) return true;
+
+      // Sin permiso para ver el contacto tampoco se busca por email: si no, el
+      // correo oculto se podría reconstruir por tanteo.
+      return lead.nombreCompleto.toLowerCase().contains(_busqueda) ||
+          (lead.empresa ?? '').toLowerCase().contains(_busqueda) ||
+          (puedeVerContacto &&
+              (lead.email ?? '').toLowerCase().contains(_busqueda));
+    }).toList();
+  }
+
+  void _actualizarLeads() {
+    ref.invalidate(leadsPorEventoProvider(widget.eventoId));
+  }
+
   Widget _buildPinnedControls({required bool canViewAllLeads}) {
     return Column(
       children: [
@@ -179,6 +214,18 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
     final leadsAsync = ref.watch(leadsPorEventoProvider(widget.eventoId));
     final perfilId = ref.watch(currentPerfilProvider).valueOrNull?.id;
     final canViewAllLeads = ref.watch(canViewAllLeadsProvider);
+    final puedeVerContacto = ref.watch(canViewLeadContactDataProvider);
+
+    final filtrados = leadsAsync.maybeWhen(
+      data: (leads) => _filtrarLeads(
+        leads,
+        canViewAllLeads: canViewAllLeads,
+        puedeVerContacto: puedeVerContacto,
+        perfilId: perfilId,
+      ),
+      orElse: () => const <Lead>[],
+    );
+    final listaVacia = leadsAsync.hasValue && filtrados.isEmpty;
 
     return CollapsingScrollScaffold(
       title: canViewAllLeads ? 'Leads' : 'Mis leads',
@@ -192,8 +239,8 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
       pinnedContent: _buildPinnedControls(canViewAllLeads: canViewAllLeads),
       pinnedContentHeight: canViewAllLeads ? 112 : 60,
       scrollResetToken: '$_busqueda|$_filtro',
-      onRefresh: () async =>
-          ref.invalidate(leadsPorEventoProvider(widget.eventoId)),
+      lockScroll: listaVacia,
+      onRefresh: () async => _actualizarLeads(),
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -225,42 +272,33 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
             ),
           ],
           data: (leads) {
-            final filtrados = leads.where((lead) {
-              if (!canViewAllLeads && lead.perfilId != perfilId) return false;
-              if (canViewAllLeads &&
-                  _filtro == _FiltroLead.mios &&
-                  (perfilId == null || lead.perfilId != perfilId)) {
-                return false;
-              }
-              if (canViewAllLeads &&
-                  _filtro == _FiltroLead.deOtros &&
-                  perfilId != null &&
-                  lead.perfilId == perfilId) {
-                return false;
-              }
-              if (_busqueda.isEmpty) return true;
-
-              return lead.nombreCompleto.toLowerCase().contains(_busqueda) ||
-                  (lead.empresa ?? '').toLowerCase().contains(_busqueda) ||
-                  (lead.email ?? '').toLowerCase().contains(_busqueda);
-            }).toList();
+            final filtrados = _filtrarLeads(
+              leads,
+              canViewAllLeads: canViewAllLeads,
+              puedeVerContacto: puedeVerContacto,
+              perfilId: perfilId,
+            );
 
             if (leads.isEmpty) {
               return [
-                const SliverFillRemaining(
+                SliverFillRemaining(
+                  hasScrollBody: false,
                   child: EmptyStateView(
                     icon: Icons.person_off_outlined,
                     message: 'Aún no hay leads capturados en este evento.',
+                    onRefresh: _actualizarLeads,
                   ),
                 ),
               ];
             }
             if (filtrados.isEmpty) {
               return [
-                const SliverFillRemaining(
+                SliverFillRemaining(
+                  hasScrollBody: false,
                   child: EmptyStateView(
                     icon: Symbols.search_off_rounded,
                     message: 'No hay leads con estos filtros.',
+                    onRefresh: _actualizarLeads,
                   ),
                 ),
               ];
@@ -277,6 +315,7 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
                     eventoId: widget.eventoId,
                     lead: filtrados[index],
                     index: index,
+                    puedeVerContacto: puedeVerContacto,
                   ),
                 ),
               ),
@@ -293,11 +332,13 @@ class _LeadTile extends StatelessWidget {
     required this.eventoId,
     required this.lead,
     required this.index,
+    required this.puedeVerContacto,
   });
 
   final String eventoId;
   final Lead lead;
   final int index;
+  final bool puedeVerContacto;
 
   @override
   Widget build(BuildContext context) {
@@ -305,7 +346,7 @@ class _LeadTile extends StatelessWidget {
     final pendiente = lead.pendienteDeSincronizar;
     final subtitulo = [
       lead.empresa,
-      lead.email,
+      puedeVerContacto ? lead.email : enmascararEmail(lead.email),
     ].where((s) => s != null && s.isNotEmpty).join(' · ');
 
     return Pressable(
@@ -381,6 +422,24 @@ class _LeadTile extends StatelessWidget {
   }
 }
 
+String? _sinVacios(String? valor) {
+  final texto = valor?.trim() ?? '';
+  return texto.isEmpty ? null : texto;
+}
+
+InputDecoration _decoracionProtegida(String label) {
+  return twReadOnlyDecoration(
+    labelText: label,
+    helperText: 'Solo visible para administradores y organizadores',
+    helperMaxLines: 2,
+    suffixIcon: const Icon(
+      Symbols.lock_rounded,
+      size: 18,
+      color: AppColors.textTertiary,
+    ),
+  );
+}
+
 class DetalleLeadScreen extends ConsumerStatefulWidget {
   const DetalleLeadScreen({
     super.key,
@@ -422,6 +481,12 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
   String _descripcion0 = '';
   List<String> _fotos0 = const [];
 
+  /// Contacto tal como está guardado. Quien no puede verlo edita el formulario
+  /// con la máscara a la vista, así que al guardar se reenvía este valor y no
+  /// el texto del campo.
+  String? _emailGuardado;
+  String? _telefonoGuardado;
+
   @override
   void dispose() {
     _nombreController.dispose();
@@ -433,14 +498,20 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     super.dispose();
   }
 
-  void _precargar(Lead lead) {
+  void _precargar(Lead lead, {required bool puedeVerContacto}) {
     if (_cargado) return;
     _cargado = true;
+    _emailGuardado = _sinVacios(lead.email);
+    _telefonoGuardado = _sinVacios(lead.telefono);
     _nombreController.text = lead.nombreCompleto;
     _empresaController.text = lead.empresa ?? '';
     _cargoController.text = lead.cargo ?? '';
-    _telefonoController.text = lead.telefono ?? '';
-    _emailController.text = lead.email ?? '';
+    _telefonoController.text = puedeVerContacto
+        ? (lead.telefono ?? '')
+        : enmascararTelefono(lead.telefono);
+    _emailController.text = puedeVerContacto
+        ? (lead.email ?? '')
+        : enmascararEmail(lead.email);
     _descripcionController.text = lead.descripcion ?? '';
     _fotos = lead.fotosUrls;
     _nombre0 = _nombreController.text;
@@ -524,12 +595,16 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _guardando = true);
 
-    String? valorOpcional(TextEditingController controller) {
-      final value = controller.text.trim();
-      return value.isEmpty ? null : value;
-    }
+    String? valorOpcional(TextEditingController controller) =>
+        _sinVacios(controller.text);
 
-    final email = valorOpcional(_emailController);
+    final puedeVerContacto = ref.read(canViewLeadContactDataProvider);
+    final email = puedeVerContacto
+        ? valorOpcional(_emailController)
+        : _emailGuardado;
+    final telefono = puedeVerContacto
+        ? valorOpcional(_telefonoController)
+        : _telefonoGuardado;
     final isOnline = ref.read(isOnlineProvider);
     var fotosPreparadas = const <String>[];
     Map<String, dynamic>? cambiosPreparados;
@@ -546,7 +621,7 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
         'nombre_completo': _nombreController.text.trim(),
         'empresa': valorOpcional(_empresaController),
         'cargo': valorOpcional(_cargoController),
-        'telefono': valorOpcional(_telefonoController),
+        'telefono': telefono,
         'email': email?.toLowerCase(),
         'descripcion': valorOpcional(_descripcionController),
         if (_fotoNueva != null &&
@@ -711,14 +786,28 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     // conexión y también sirve para leads que aún no se han sincronizado.
     final leadsAsync = ref.watch(leadsPorEventoProvider(widget.eventoId));
     final esAdmin = ref.watch(isAdminProvider);
+    final perfilId = ref.watch(currentPerfilProvider).valueOrNull?.id;
+    final puedeEditarCualquiera = ref.watch(canEditAnyLeadProvider);
+    final puedeVerContacto = ref.watch(canViewLeadContactDataProvider);
     final esPendiente = esIdSoloLocal(widget.leadId);
 
+    // El lead se resuelve antes del scaffold porque el título y el modo del
+    // formulario dependen de quién lo capturó.
+    final leadActual = leadsAsync.valueOrNull?.firstWhereOrNull(
+      (l) => l.id == widget.leadId,
+    );
+    final esPropio =
+        leadActual != null &&
+        perfilId != null &&
+        leadActual.perfilId == perfilId;
+    final puedeEditar = puedeEditarCualquiera || esPropio;
+
     return AppScaffold(
-      title: 'Editar lead',
+      title: puedeEditar ? 'Editar lead' : 'Detalle del lead',
       onWillPop: () => handleFormExit(
         context: context,
         isCreate: false,
-        isDirty: _hayCambios,
+        isDirty: puedeEditar && _hayCambios,
         save: _guardar,
       ),
       actions: [
@@ -747,7 +836,8 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
               message: 'No se encontró este lead.',
             );
           }
-          _precargar(lead);
+          _precargar(lead, puedeVerContacto: puedeVerContacto);
+          final editable = puedeEditar && !_guardando;
 
           // Una foto capturada sin conexión vive en disco, no en Storage: se
           // lee por provider para no golpear el archivo en cada rebuild.
@@ -779,7 +869,7 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
                         email: _emailController.text,
                         nombreController: _nombreController,
                         nombreHint: 'Ej. María González',
-                        nombreEnabled: !_guardando,
+                        nombreEnabled: editable,
                         nombreValidator: (value) =>
                             (value == null || value.trim().isEmpty)
                             ? 'Requerido'
@@ -787,9 +877,11 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
                         leading: FotoLeadAvatar(
                           bytes: _fotoNueva ?? bytesPendientes,
                           urlExistente: urlFotoGuardada,
-                          enabled: !_guardando,
+                          enabled: editable,
                           onElegir: _elegirFoto,
-                          onQuitar: (_fotoNueva == null && _fotos.isEmpty)
+                          onQuitar:
+                              (!puedeEditar ||
+                                  (_fotoNueva == null && _fotos.isEmpty))
                               ? null
                               : _quitarFoto,
                         ),
@@ -819,46 +911,54 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
                   const SizedBox(height: AppSpacing.lg),
                   TextFormField(
                     controller: _empresaController,
-                    enabled: !_guardando,
+                    enabled: editable,
                     decoration: const InputDecoration(labelText: 'Empresa'),
                   ),
                   AppSpacing.field,
                   TextFormField(
                     controller: _cargoController,
-                    enabled: !_guardando,
+                    enabled: editable,
                     decoration: const InputDecoration(labelText: 'Cargo'),
                   ),
                   AppSpacing.field,
                   TextFormField(
                     controller: _telefonoController,
-                    enabled: !_guardando,
+                    enabled: editable,
+                    readOnly: !puedeVerContacto,
                     keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(labelText: 'Teléfono'),
+                    decoration: puedeVerContacto
+                        ? const InputDecoration(labelText: 'Teléfono')
+                        : _decoracionProtegida('Teléfono'),
                   ),
                   AppSpacing.field,
                   TextFormField(
                     controller: _emailController,
-                    enabled: !_guardando,
+                    enabled: editable,
+                    readOnly: !puedeVerContacto,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    validator: _validarEmail,
+                    decoration: puedeVerContacto
+                        ? const InputDecoration(labelText: 'Email')
+                        : _decoracionProtegida('Email'),
+                    validator: puedeVerContacto ? _validarEmail : null,
                   ),
                   AppSpacing.field,
                   TextFormField(
                     controller: _descripcionController,
-                    enabled: !_guardando,
+                    enabled: editable,
                     maxLines: 4,
                     decoration: const InputDecoration(
                       labelText: 'Descripción',
                       alignLabelWithHint: true,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.xl),
-                  PrimaryGradientButton(
-                    label: 'Guardar cambios',
-                    loading: _guardando,
-                    onPressed: _guardando ? null : _guardar,
-                  ),
+                  if (puedeEditar) ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    PrimaryGradientButton(
+                      label: 'Guardar cambios',
+                      loading: _guardando,
+                      onPressed: _guardando ? null : _guardar,
+                    ),
+                  ],
                 ],
               ),
             ),

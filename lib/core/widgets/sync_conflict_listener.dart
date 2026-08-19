@@ -7,6 +7,7 @@ import '../../data/offline/sync_queue_item.dart';
 import '../../data/offline/sync_queue_service.dart';
 import '../theme/app_theme.dart';
 import 'tw_components.dart';
+import 'tw_toast.dart';
 
 /// Escucha conflictos terminales durante toda la sesión y presenta una sola
 /// alerta por ítem. Los conflictos permanecen en la bandeja hasta descartarse.
@@ -24,8 +25,29 @@ class _SyncConflictListenerState extends ConsumerState<SyncConflictListener> {
   String? _alertItemId;
   bool _showTray = false;
 
+  /// Capturas que la cola omitió por estar ya en el servidor.
+  ///
+  /// Un duplicado no necesita decisión del usuario —el dato existe— así que se
+  /// avisa con un toast y la fila de entrada no se detiene. Solo los
+  /// conflictos que sí exigen resolver siguen abriendo la hoja modal.
+  void _avisarDescartes() {
+    final descartes = ref.watch(syncDescartesProvider);
+    if (descartes.isEmpty) return;
+
+    final mensaje = descartes.length == 1
+        ? descartes.single
+        : '${descartes.length} capturas ya estaban registradas y se omitieron.';
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(syncQueueServiceProvider.notifier).limpiarDescartes();
+      TwToast.info(context, mensaje);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    _avisarDescartes();
     final conflicts = ref.watch(syncConflictsProvider);
     final alert = conflicts
         .where((item) => !item.conflictNotified)

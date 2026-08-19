@@ -1520,6 +1520,7 @@ DECLARE
   v_capturador_nombre text;
   v_email text := NULLIF(btrim(p_email), '');
   v_email_normalizado text := NULLIF(lower(btrim(p_email)), '');
+  v_telefono text := NULLIF(btrim(p_telefono), '');
   v_lead_id uuid := COALESCE(p_lead_id, gen_random_uuid());
   v_existente public.leads%ROWTYPE;
   v_duplicado public.leads%ROWTYPE;
@@ -1562,22 +1563,9 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El nombre es obligatorio';
   END IF;
 
-  IF v_email IS NULL THEN
-    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El email es obligatorio';
-  END IF;
-
-  IF v_email !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' THEN
-    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El email no es válido';
-  END IF;
-
-  -- Serializa por campaña+email. El índice único sigue siendo la última línea
-  -- de defensa para escrituras directas y clientes concurrentes.
-  IF v_email_normalizado IS NOT NULL THEN
-    PERFORM pg_advisory_xact_lock(
-      hashtextextended(p_evento_id::text || ':' || v_email_normalizado, 0)
-    );
-  END IF;
-
+  -- La fila se carga antes de validar el email porque quien no edita de forma
+  -- global tampoco puede cambiar el contacto: su email y teléfono se reemplazan
+  -- por los ya guardados, y son esos los que se validan y se buscan duplicados.
   IF p_lead_id IS NOT NULL THEN
     SELECT l.* INTO v_existente
     FROM public.leads l
@@ -1592,7 +1580,28 @@ BEGIN
          AND v_existente.perfil_id IS DISTINCT FROM v_usuario_id THEN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Solo puedes editar tus propios leads';
       END IF;
+      IF NOT v_puede_editar_global THEN
+        v_email := NULLIF(btrim(v_existente.email), '');
+        v_email_normalizado := NULLIF(lower(btrim(v_existente.email)), '');
+        v_telefono := NULLIF(btrim(v_existente.telefono), '');
+      END IF;
     END IF;
+  END IF;
+
+  IF v_email IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El email es obligatorio';
+  END IF;
+
+  IF v_email !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El email no es válido';
+  END IF;
+
+  -- Serializa por campaña+email. El índice único sigue siendo la última línea
+  -- de defensa para escrituras directas y clientes concurrentes.
+  IF v_email_normalizado IS NOT NULL THEN
+    PERFORM pg_advisory_xact_lock(
+      hashtextextended(p_evento_id::text || ':' || v_email_normalizado, 0)
+    );
   END IF;
 
   IF v_email_normalizado IS NOT NULL THEN
@@ -1619,7 +1628,7 @@ BEGIN
     SET nombre_completo = btrim(p_nombre_completo),
         empresa = NULLIF(btrim(p_empresa), ''),
         cargo = NULLIF(btrim(p_cargo), ''),
-        telefono = NULLIF(btrim(p_telefono), ''),
+        telefono = v_telefono,
         email = v_email,
         descripcion = NULLIF(btrim(p_descripcion), '')
     WHERE l.id = v_existente.id
@@ -1650,7 +1659,7 @@ BEGIN
     btrim(p_nombre_completo),
     NULLIF(btrim(p_empresa), ''),
     NULLIF(btrim(p_cargo), ''),
-    NULLIF(btrim(p_telefono), ''),
+    v_telefono,
     v_email,
     NULLIF(btrim(p_descripcion), ''),
     v_usuario_id,
@@ -2077,11 +2086,14 @@ CREATE POLICY cl_eventos_leads_delete ON public.eventos_leads
   FOR DELETE TO authenticated
   USING (public.rpe_is_admin());
 
+-- Los internos (admin/organizador/user) ven todos los leads de la campaña; el
+-- rol `user` solo los lee, y el email y el teléfono le llegan enmascarados en
+-- la app. El externo sigue acotado a los que capturó él.
 DROP POLICY IF EXISTS cl_leads_select ON public.leads;
 CREATE POLICY cl_leads_select ON public.leads
   FOR SELECT TO authenticated
   USING (
-    public.rpe_can_create_content()
+    public.rpe_is_internal_user()
     OR perfil_id = auth.uid()
   );
 

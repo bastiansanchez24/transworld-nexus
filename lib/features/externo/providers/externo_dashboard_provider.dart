@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
+import '../../../data/offline/offline_cache_tables.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/sync_queue_item.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/leads_repository.dart';
@@ -75,17 +77,32 @@ final externoDashboardProvider =
         queueItems,
         perfil.id,
       );
+      final cache = ref.watch(offlineReadCacheProvider);
       var leadsRemotos = 0;
       var esResumenParcial = !estaOnline;
 
       if (estaOnline) {
         try {
           leadsRemotos = await leadsRepository.contarPorPerfil(perfil.id);
+          await cache.guardarGlobal(OfflineCacheTables.externoResumen, [
+            {'leads': leadsRemotos},
+          ]);
         } catch (_) {
           // El dashboard sigue siendo útil sin red: muestra el mínimo conocido
           // por la cola local y señala que el resumen es parcial.
           esResumenParcial = true;
         }
+      }
+
+      if (leadsRemotos == 0) {
+        // Sin red, el último total conocido es mejor que un cero que parece
+        // "no has capturado nada". Sigue marcándose como parcial porque la
+        // cola local puede tener capturas que el servidor aún no vio.
+        final local = cache.leerGlobal(
+          tabla: OfflineCacheTables.externoResumen,
+          desdeFila: (fila) => (fila['leads'] as num?)?.toInt() ?? 0,
+        );
+        if (local != null && local.isNotEmpty) leadsRemotos = local.first;
       }
 
       final eventos = eventosAsync.valueOrNull ?? const [];

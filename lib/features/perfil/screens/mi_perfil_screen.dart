@@ -4,13 +4,13 @@ import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/password_policy.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/tw_components.dart';
-import '../../../core/widgets/require_permission.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/models/perfil.dart';
@@ -25,11 +25,10 @@ class MiPerfilScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RequirePermission(
-      allowed: (p) => p.usesFullShell,
-      deniedMessage: 'Mi Perfil solo está disponible para usuarios internos.',
-      builder: (context) => const _MiPerfilBody(),
-    );
+    // El externo llega aquí desde su foto en la cabecera: es su propia ficha,
+    // no una pantalla del shell interno. Lo que se recorta son los indicadores
+    // de operaciones que él no realiza (ver [_KpiSection]).
+    return const _MiPerfilBody();
   }
 }
 
@@ -59,8 +58,22 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
     super.dispose();
   }
 
+  /// Los datos de cuenta viven solo en el servidor: nombre, foto y contraseña
+  /// no tienen copia local ni cola. Guardarlos sin red dejaría al usuario
+  /// creyendo que cambió su contraseña cuando la vieja sigue siendo la válida.
+  bool _exigirRed() {
+    if (ref.read(isOnlineProvider)) return true;
+    showAppSnackBar(
+      context,
+      'Sin conexión: los datos de tu cuenta se actualizan solo con internet.',
+      isError: true,
+    );
+    return false;
+  }
+
   Future<void> _guardarDatos() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_exigirRed()) return;
 
     // En blanco significa "no cambiar la contraseña".
     final nuevaPassword = _passwordController.text;
@@ -105,6 +118,7 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
 
   Future<void> _cambiarFoto() async {
     if (_subiendoFoto) return;
+    if (!_exigirRed()) return;
 
     final bytes = await elegirImagenComprimida(
       context,
@@ -362,6 +376,11 @@ class _KpiSection extends ConsumerWidget {
         onRetry: () => ref.invalidate(miPerfilStatsProvider),
       ),
       data: (stats) {
+        // El externo no registra asistentes, no acredita y no crea eventos:
+        // mostrarle esos indicadores en cero parece un error suyo, no una
+        // capacidad que no tiene.
+        final soloLeads =
+            ref.watch(currentPerfilProvider).valueOrNull?.isExterno ?? false;
         final cards = [
           (
             '${stats.leadsCapturados}',
@@ -370,45 +389,52 @@ class _KpiSection extends ConsumerWidget {
             AppColors.tintNavy,
             AppColors.primary,
           ),
-          (
-            '${stats.asistentesRegistrados}',
-            'Asistentes registrados',
-            Symbols.group_rounded,
-            AppColors.successTint,
-            AppColors.success,
-          ),
-          (
-            '${stats.acreditaciones}',
-            'Acreditaciones',
-            Symbols.verified_rounded,
-            AppColors.successTint,
-            AppColors.success,
-          ),
-          (
-            '${stats.eventosCreados}',
-            'Eventos creados',
-            Symbols.calendar_month_rounded,
-            AppColors.warningTint,
-            AppColors.warning,
-          ),
+          if (!soloLeads) ...[
+            (
+              '${stats.asistentesRegistrados}',
+              'Asistentes registrados',
+              Symbols.group_rounded,
+              AppColors.successTint,
+              AppColors.success,
+            ),
+            (
+              '${stats.acreditaciones}',
+              'Acreditaciones',
+              Symbols.verified_rounded,
+              AppColors.successTint,
+              AppColors.success,
+            ),
+            (
+              '${stats.eventosCreados}',
+              'Eventos creados',
+              Symbols.calendar_month_rounded,
+              AppColors.warningTint,
+              AppColors.warning,
+            ),
+          ],
         ];
 
+        // Rejilla de dos columnas que tolera un número impar de tarjetas: el
+        // externo solo ve una y antes esto indexaba cuatro fijas.
+        final filas = (cards.length / 2).ceil();
         return Column(
           children: [
-            for (var row = 0; row < 2; row++) ...[
+            for (var row = 0; row < filas; row++) ...[
               if (row > 0) const SizedBox(height: 12),
               Row(
                 children: [
                   for (var col = 0; col < 2; col++) ...[
                     if (col > 0) const SizedBox(width: 12),
                     Expanded(
-                      child: StatCard(
-                        value: cards[row * 2 + col].$1,
-                        label: cards[row * 2 + col].$2,
-                        icon: cards[row * 2 + col].$3,
-                        tint: cards[row * 2 + col].$4,
-                        iconColor: cards[row * 2 + col].$5,
-                      ),
+                      child: row * 2 + col < cards.length
+                          ? StatCard(
+                              value: cards[row * 2 + col].$1,
+                              label: cards[row * 2 + col].$2,
+                              icon: cards[row * 2 + col].$3,
+                              tint: cards[row * 2 + col].$4,
+                              iconColor: cards[row * 2 + col].$5,
+                            )
+                          : const SizedBox.shrink(),
                     ),
                   ],
                 ],

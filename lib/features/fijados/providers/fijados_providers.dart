@@ -1,29 +1,73 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/connectivity_service.dart';
+import '../../../data/offline/offline_cache_tables.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/fijados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 
+/// Los fijados son un `Set<String>`; en disco se guardan como filas con una
+/// sola columna para poder reusar el mismo mecanismo que el resto del
+/// catálogo.
+const String _columnaId = 'id';
+
+Map<String, dynamic> _aFila(String id) => {_columnaId: id};
+
+String _desdeFila(Map<String, dynamic> fila) => '${fila[_columnaId]}';
+
+/// Ids de eventos fijados por el usuario, con respaldo en disco.
 final eventosFijadosProvider = FutureProvider.autoDispose<Set<String>>((
   ref,
 ) async {
   ref.watch(authStateChangesProvider);
+  final isOnline = ref.watch(isOnlineProvider);
+  final cache = ref.watch(offlineReadCacheProvider);
   final repo = ref.watch(fijadosRepositoryProvider);
-  final fijados = await repo.listarEventosFijados();
   final perfil = await ref.watch(currentPerfilProvider.future);
+
+  final fijados = (await cache.leerConRespaldoGlobal(
+    tabla: OfflineCacheTables.eventosFijados,
+    desdeServidor: () async => (await repo.listarEventosFijados()).toList(),
+    aFila: _aFila,
+    desdeFila: _desdeFila,
+    isOnline: isOnline,
+  )).toSet();
+
   if (perfil == null || !perfil.rol.isUsuario) return fijados;
 
-  // Una revocación no debe dejar fijados invisibles consumiendo el límite.
-  // Solo se limpia tras resolver exitosamente las asignaciones; un error de
-  // red no se interpreta como una revocación.
-  final autorizados = await ref.watch(usuarioEventosAutorizadosProvider.future);
+  // Una revocación no debe dejar fijados invisibles consumiendo el límite,
+  // pero un error de red tampoco puede leerse como revocación: sin
+  // autorizaciones resueltas se muestran los fijados tal cual.
+  final Set<String> autorizados;
+  try {
+    autorizados = await ref.watch(usuarioEventosAutorizadosProvider.future);
+  } catch (_) {
+    return fijados;
+  }
+
   final obsoletos = fijados.difference(autorizados);
-  for (final eventoId in obsoletos) {
-    await repo.desfijarEvento(eventoId);
+  if (isOnline) {
+    for (final eventoId in obsoletos) {
+      await repo.desfijarEvento(eventoId);
+    }
   }
   return fijados.intersection(autorizados);
 });
 
-final campanasFijadasProvider = FutureProvider.autoDispose<Set<String>>((ref) {
+final campanasFijadasProvider = FutureProvider.autoDispose<Set<String>>((
+  ref,
+) async {
   ref.watch(authStateChangesProvider);
-  return ref.watch(fijadosRepositoryProvider).listarCampanasFijadas();
+  final isOnline = ref.watch(isOnlineProvider);
+  final cache = ref.watch(offlineReadCacheProvider);
+  final repo = ref.watch(fijadosRepositoryProvider);
+
+  final fijadas = await cache.leerConRespaldoGlobal(
+    tabla: OfflineCacheTables.campanasFijadas,
+    desdeServidor: () async => (await repo.listarCampanasFijadas()).toList(),
+    aFila: _aFila,
+    desdeFila: _desdeFila,
+    isOnline: isOnline,
+  );
+  return fijadas.toSet();
 });

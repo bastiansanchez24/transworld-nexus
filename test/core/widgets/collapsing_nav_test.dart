@@ -99,8 +99,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final metricas = tester.element(find.byType(CollapsingScrollScaffold));
-    final overlayH = CollapsingNavMetrics(metricas)
-        .overlayHeight(conAcciones: true);
+    final overlayH = CollapsingNavMetrics(
+      metricas,
+    ).overlayHeight(conAcciones: true);
 
     expect(
       overlayH,
@@ -112,6 +113,44 @@ void main() {
       tester.getBottomLeft(find.byType(CollapsingNavButton)).dy,
       lessThanOrEqualTo(overlayH),
     );
+  });
+
+  testWidgets('con lockScroll no se puede desplazar la lista', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CollapsingScrollScaffold(
+          title: 'Leads',
+          lockScroll: true,
+          onRefresh: () async {},
+          slivers: const [
+            SliverToBoxAdapter(
+              child: SizedBox(height: 80, child: Text('0 leads')),
+            ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Text('Aún no hay leads capturados en este evento.'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RefreshIndicator), findsNothing);
+    expect(
+      tester.widget<CustomScrollView>(find.byType(CustomScrollView)).physics,
+      isA<NeverScrollableScrollPhysics>(),
+    );
+
+    final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+    expect(scrollable.position.pixels, 0);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -120));
+    await tester.pump();
+
+    expect(scrollable.position.pixels, 0);
   });
 
   test('el blur espera a que el header toque el borde superior', () {

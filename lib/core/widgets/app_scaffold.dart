@@ -61,25 +61,26 @@ class AppScaffold extends StatelessWidget {
           child: Scaffold(
             backgroundColor: TwColors.bg,
             floatingActionButton: floatingActionButton,
-            body: Column(
-              children: [
-                const OfflineBanner(),
-                _PushHeader(
-                  title: title,
-                  titleWidget: titleWidget,
-                  actions: actions,
-                  mostrarAtras: onWillPop != null || context.canPop(),
-                  onBack: () => _intentarVolver(context),
-                ),
-                if (headerBottom != null)
-                  _constrained(
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                      child: headerBottom!,
-                    ),
+            body: OfflineBannerHost(
+              builder: (context) => Column(
+                children: [
+                  _PushHeader(
+                    title: title,
+                    titleWidget: titleWidget,
+                    actions: actions,
+                    mostrarAtras: onWillPop != null || context.canPop(),
+                    onBack: () => _intentarVolver(context),
                   ),
-                Expanded(child: _constrained(body)),
-              ],
+                  if (headerBottom != null)
+                    _constrained(
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                        child: headerBottom!,
+                      ),
+                    ),
+                  Expanded(child: _constrained(body)),
+                ],
+              ),
             ),
           ),
         ),

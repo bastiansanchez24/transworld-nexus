@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transworld_nexus/data/models/lead.dart';
@@ -223,6 +226,165 @@ void main() {
         cache.leerLocal(
           tabla: tabla,
           eventoId: 'otro',
+          desdeFila: Lead.fromMap,
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('OfflineReadCache ámbito global', () {
+    test('guarda y lee tablas que no se particionan por evento', () async {
+      final cache = await nuevaCache();
+      await cache.guardarGlobal('perfil', [lead.toCacheMap()]);
+
+      final local = cache.leerGlobal(tabla: 'perfil', desdeFila: Lead.fromMap);
+      expect(local?.single.id, lead.id);
+    });
+
+    test('una purga de eventos revocados no toca el ámbito global', () async {
+      final cache = await nuevaCache();
+      await cache.guardarGlobal('perfil', [lead.toCacheMap()]);
+      await cache.guardar('perfil', eventoId, [lead.toCacheMap()]);
+
+      // El catálogo global no representa un evento y no está sujeto a la
+      // lista de autorizaciones: sobrevive aunque no quede ninguno.
+      await cache.retenerEventos('perfil', const {});
+
+      expect(
+        cache.leerGlobal(tabla: 'perfil', desdeFila: Lead.fromMap),
+        isNotNull,
+      );
+      expect(
+        cache.leerLocal(
+          tabla: 'perfil',
+          eventoId: eventoId,
+          desdeFila: Lead.fromMap,
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('OfflineReadCache espera acotada al servidor', () {
+    test('un servidor que nunca responde cae a la copia local', () async {
+      final cache = await nuevaCache();
+      await cache.guardar(tabla, eventoId, [lead.toCacheMap()]);
+
+      // Wifi cautivo: la petición no falla, simplemente no vuelve. Sin el
+      // timeout la pantalla se quedaría en `loading` con la copia buena
+      // esperando en disco.
+      final servido = await cache.leerConRespaldo<Lead>(
+        tabla: tabla,
+        eventoId: eventoId,
+        desdeServidor: () => Completer<List<Lead>>().future,
+        aFila: (l) => l.toCacheMap(),
+        desdeFila: Lead.fromMap,
+        isOnline: true,
+        esperaMaximaServidor: const Duration(milliseconds: 50),
+      );
+
+      expect(servido.single.id, lead.id);
+    });
+  });
+
+  group('OfflineReadCache credenciales', () {
+    Future<List<Lead>> leerConJwtVencido(
+      OfflineReadCache cache, {
+      required bool isOnline,
+    }) {
+      return cache.leerConRespaldo<Lead>(
+        tabla: tabla,
+        eventoId: eventoId,
+        desdeServidor: () async => throw Exception('JWT expired'),
+        aFila: (l) => l.toCacheMap(),
+        desdeFila: Lead.fromMap,
+        isOnline: isOnline,
+      );
+    }
+
+    test('un token vencido sin red conserva la copia de la feria', () async {
+      final cache = await nuevaCache();
+      await cache.guardar(tabla, eventoId, [lead.toCacheMap()]);
+
+      // Sin red, un fallo de credencial lo levanta el propio SDK y no prueba
+      // que el acceso haya sido revocado. Borrar aquí destruiría los datos
+      // justo cuando no hay red para volver a bajarlos.
+      final servido = await leerConJwtVencido(cache, isOnline: false);
+      expect(servido.single.id, lead.id);
+
+      expect(
+        cache.leerLocal(
+          tabla: tabla,
+          eventoId: eventoId,
+          desdeFila: Lead.fromMap,
+        ),
+        isNotNull,
+      );
+    });
+
+    test('con red, un token rechazado sí purga la copia', () async {
+      final cache = await nuevaCache();
+      await cache.guardar(tabla, eventoId, [lead.toCacheMap()]);
+
+      await expectLater(
+        leerConJwtVencido(cache, isOnline: true),
+        throwsA(isA<Exception>()),
+      );
+      expect(
+        cache.leerLocal(
+          tabla: tabla,
+          eventoId: eventoId,
+          desdeFila: Lead.fromMap,
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('OfflineReadCache migración v2', () {
+    test('el blob por tabla se reparte en una clave por evento', () async {
+      SharedPreferences.setMockInitialValues({
+        'offline_read_cache_v2_usuario-a_$tabla': jsonEncode({
+          eventoId: [lead.toCacheMap()],
+          'evento-2': [
+            {...lead.toCacheMap(), 'id': 'lead-2'},
+          ],
+        }),
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final cache = OfflineReadCache(prefs, ownerId: 'usuario-a');
+
+      expect(
+        cache
+            .leerLocal(
+              tabla: tabla,
+              eventoId: eventoId,
+              desdeFila: Lead.fromMap,
+            )
+            ?.single
+            .id,
+        lead.id,
+      );
+      expect(
+        cache
+            .leerLocal(
+              tabla: tabla,
+              eventoId: 'evento-2',
+              desdeFila: Lead.fromMap,
+            )
+            ?.single
+            .id,
+        'lead-2',
+      );
+
+      // El índice queda poblado, así que la purga por revocación sigue
+      // alcanzando a lo migrado.
+      await cache.retenerEventos(tabla, {eventoId});
+      expect(
+        cache.leerLocal(
+          tabla: tabla,
+          eventoId: 'evento-2',
           desdeFila: Lead.fromMap,
         ),
         isNull,

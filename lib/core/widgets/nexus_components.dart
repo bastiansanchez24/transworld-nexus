@@ -740,6 +740,7 @@ class NexusFormTextField extends StatelessWidget {
     this.readOnly = false,
     this.textInputAction,
     this.suffixIcon,
+    this.helperText,
   });
 
   final String label;
@@ -752,6 +753,7 @@ class NexusFormTextField extends StatelessWidget {
   final bool readOnly;
   final TextInputAction? textInputAction;
   final Widget? suffixIcon;
+  final String? helperText;
 
   @override
   Widget build(BuildContext context) {
@@ -774,6 +776,8 @@ class NexusFormTextField extends StatelessWidget {
                   .copyWith(
                     alignLabelWithHint: maxLines > 1,
                     suffixIcon: suffixIcon,
+                    helperText: helperText,
+                    helperMaxLines: 2,
                   ),
           validator: validator,
         ),
@@ -995,8 +999,9 @@ class PersonaIdentityBanner extends StatelessWidget {
         disabledBorder: _borde(0.14),
         focusedBorder: _borde(0.8, grosor: 1.5),
         // El rojo de error no se lee sobre el navy; la lima del brand sí.
-        errorBorder: _borde(0.5)
-            .copyWith(borderSide: const BorderSide(color: AppColors.accent)),
+        errorBorder: _borde(
+          0.5,
+        ).copyWith(borderSide: const BorderSide(color: AppColors.accent)),
         focusedErrorBorder: _borde(0.5).copyWith(
           borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
         ),

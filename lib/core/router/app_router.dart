@@ -31,12 +31,15 @@ import '../../features/registrados/screens/ver_registrados_screen.dart';
 import '../../features/registro/screens/registrar_confirmado_screen.dart';
 import '../../features/registro/screens/registro_por_cliente_screen.dart';
 import '../../features/registro_publico/screens/registro_publico_screen.dart';
+import '../../features/sincronizacion/screens/sincronizacion_screen.dart';
 import '../../features/externo/screens/evento_finalizado_screen.dart';
 import '../../features/externo/screens/usar_evento_externo_screen.dart';
 import '../../features/usar_app/screens/usar_evento_screen.dart';
 import '../../features/usuarios/screens/editar_usuario_screen.dart';
 import '../../features/usuarios/screens/gestionar_usuarios_screen.dart';
 import '../../features/usuarios/screens/nuevo_usuario_screen.dart';
+import '../../data/offline/snapshot_service.dart';
+import '../network/connectivity_service.dart';
 import 'external_route_policy.dart';
 import 'go_router_refresh_stream.dart';
 import 'page_transitions.dart';
@@ -93,6 +96,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     splashNavigationTimedOutProvider,
     (_, _) => refreshListenable.refresh(),
   );
+  // Varias decisiones del redirect (cerrar sesión, forzar cambio de clave)
+  // ahora dependen de si hay red: al recuperarla hay que re-evaluarlas.
+  ref.listen(connectivityStreamProvider, (_, _) => refreshListenable.refresh());
+  ref.listen(
+    esperandoPrimerSnapshotProvider,
+    (_, _) => refreshListenable.refresh(),
+  );
 
   return GoRouter(
     initialLocation: authClient.currentSession != null
@@ -115,6 +125,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final esPublica = _esRutaPublica(location);
       final enSplash = location == RoutePaths.splash;
       final splashTimedOut = ref.read(splashNavigationTimedOutProvider);
+      final hayRed = ref.read(isOnlineProvider);
 
       if (session == null && (!esPublica || enSplash)) {
         return RoutePaths.login;
@@ -131,7 +142,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (session != null && perfil == null) {
         final perfilFallido =
             (perfilAsync.hasError && !perfilAsync.isLoading) || splashTimedOut;
-        if (perfilFallido) {
+        // Sin red la sesión no se cierra jamás: el perfil puede estar en disco
+        // o llegar en el próximo intento, y un `signOut()` obliga a un login
+        // que offline es imposible. Este era el camino del bug de "abrir sin
+        // internet y aparecer en Login".
+        if (perfilFallido && hayRed) {
           Future.microtask(() => authClient.signOut());
         }
         return rutaMientrasCargaPerfil(
@@ -139,6 +154,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           esPublica: esPublica,
           perfilFallido: perfilFallido,
         );
+      }
+
+      // Primera instalación: sin ninguna copia en disco no hay nada que
+      // mostrar, así que el splash retiene hasta que baje el set completo.
+      // Solo la primera pasada; después se entra con caché y se refresca por
+      // detrás. Cada etapa va acotada por su propio timeout, de modo que la
+      // espera siempre termina.
+      if (session != null &&
+          perfil != null &&
+          enSplash &&
+          ref.read(esperandoPrimerSnapshotProvider)) {
+        return null;
       }
 
       if (session != null &&
@@ -154,14 +181,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return RoutePaths.home;
       }
 
-      if (session != null && perfil != null && !perfil.activo) {
+      // `activo = false` solo se acata cuando viene confirmado con red: offline
+      // el perfil puede ser una copia de disco y no hay forma de volver a
+      // entrar si se cierra la sesión por error.
+      if (session != null && perfil != null && !perfil.activo && hayRed) {
         authClient.signOut();
         return RoutePaths.login;
       }
 
+      // El cambio obligatorio de contraseña necesita red para completarse: sin
+      // ella se opera con la clave vieja en vez de encerrar al usuario en una
+      // pantalla que no puede enviar nada.
       if (session != null &&
           perfil != null &&
           perfil.cambiarPass &&
+          hayRed &&
           !esPublica &&
           location != RoutePaths.recrearPass) {
         return RoutePaths.recrearPass;
@@ -170,8 +204,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (session != null && perfil != null && perfil.isExterno) {
         // El cambio obligatorio es una ruta técnica y debe sobrevivir a la
         // allowlist operativa del externo, incluso si venía desde una ruta
-        // pública como `eventoFinalizado`.
-        if (perfil.cambiarPass) {
+        // pública como `eventoFinalizado`. Sin red se omite: no se puede
+        // guardar la clave nueva y el externo quedaría sin poder capturar.
+        if (perfil.cambiarPass && hayRed) {
           return location == RoutePaths.recrearPass
               ? null
               : RoutePaths.recrearPass;
@@ -537,6 +572,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.perfil,
         pageBuilder: (context, state) =>
             sharedAxisPage(key: state.pageKey, child: const MiPerfilScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.sincronizacion,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: const SincronizacionScreen(),
+        ),
       ),
       GoRoute(
         path: RoutePaths.actualizaciones,

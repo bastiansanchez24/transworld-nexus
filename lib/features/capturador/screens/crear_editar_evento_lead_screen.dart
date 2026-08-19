@@ -197,7 +197,8 @@ class _CrearEditarEventoLeadFormState
     final confirmado = await confirmDialog(
       context,
       title: 'Eliminar actividad',
-      message: 'Esta acción no se puede deshacer. ¿Eliminar la actividad de captura?',
+      message:
+          'Esta acción no se puede deshacer. ¿Eliminar la actividad de captura?',
       confirmLabel: 'Eliminar',
     );
     if (!confirmado) return;

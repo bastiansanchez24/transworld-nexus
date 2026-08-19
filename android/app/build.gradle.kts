@@ -48,13 +48,17 @@ android {
 
     buildTypes {
         release {
-            // Prefer the release keystore when android/key.properties exists;
-            // otherwise fall back to debug so local `flutter run --release` still works.
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // Obligatorio: un APK "release" firmado con el keystore debug no
+            // puede actualizar instalaciones de producción (Android responde
+            // INSTALL_FAILED_UPDATE_INCOMPATIBLE / "paquete no compatible").
+            if (!keystorePropertiesFile.exists()) {
+                throw GradleException(
+                    "Falta android/key.properties. Sin el keystore de " +
+                        "producción Gradle firmaría con debug y las " +
+                        "actualizaciones OTA fallarían.",
+                )
             }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

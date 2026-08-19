@@ -39,12 +39,13 @@ object ApkSessionInstaller {
         activityRef = WeakReference(activity)
 
         val file = File(apkPath)
+        val diag = apkInstallDiagnostics(activity, file)
         // #region agent log
         debugOtaLog(
-            hypothesisId = "H-B",
+            hypothesisId = "H-A",
             location = "ApkSessionInstaller.kt:install",
             message = "session install start",
-            data = """{"pathLen":${apkPath.length},"fileLen":${file.length()},"exists":${file.exists()},"packageName":${jsonString(activity.packageName)}}""",
+            data = diag,
         )
         // #endregion
         if (!file.exists() || file.length() == 0L) {
@@ -55,6 +56,27 @@ object ApkSessionInstaller {
                 message = "No se encontró el APK descargado.",
             )
             return
+        }
+
+        when (signaturesMatch(activity.packageManager, activity.packageName, apkPath)) {
+            false -> {
+                // #region agent log
+                debugOtaLog(
+                    hypothesisId = "H-C",
+                    location = "ApkSessionInstaller.kt:install",
+                    message = "signature mismatch precheck",
+                    data = """{"signMatch":false}""",
+                )
+                // #endregion
+                complete(
+                    ok = false,
+                    status = 4,
+                    legacyStatus = -7,
+                    message = "INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match",
+                )
+                return
+            }
+            else -> Unit
         }
 
         try {
@@ -127,15 +149,19 @@ object ApkSessionInstaller {
         // #region agent log
         debugOtaLog(
             hypothesisId = when {
-                status == PackageInstaller.STATUS_PENDING_USER_ACTION -> "H-A"
+                status == PackageInstaller.STATUS_PENDING_USER_ACTION -> "H-C"
                 status == PackageInstaller.STATUS_SUCCESS -> "H-A"
-                status == 4 || legacyStatus == -7 -> "H-A"
-                legacyStatus == -25 -> "H-C"
+                status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE ||
+                    status == 5 ||
+                    legacyStatus == -25 ||
+                    legacyStatus == -9 ||
+                    legacyStatus == -113 -> "H-A"
+                status == 4 || legacyStatus == -7 -> "H-C"
                 else -> "H-B"
             },
             location = "ApkSessionInstaller.kt:handleStatus",
             message = "PackageInstaller status",
-            data = """{"status":$status,"legacyStatus":$legacyStatus,"systemMessage":${jsonString(statusMessage)},"hasConfirmIntent":${confirmIntent != null}}""",
+            data = """{"status":$status,"legacyStatus":$legacyStatus,"systemMessage":${jsonString(statusMessage)},"hasConfirmIntent":${confirmIntent != null},"sdk":${Build.VERSION.SDK_INT},"abis":${jsonString(Build.SUPPORTED_ABIS.joinToString())}}""",
         )
         // #endregion
         when (status) {
@@ -189,6 +215,90 @@ object ApkSessionInstaller {
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
     }
 
+    private fun apkInstallDiagnostics(context: Context, file: File): String {
+        val pm = context.packageManager
+        var apkPkg = ""
+        var apkVersionName = ""
+        var apkVersionCode = -1L
+        var installedVersionName = ""
+        var installedVersionCode = -1L
+        var minSdk = -1
+        var signMatch = "unknown"
+        try {
+            val apkInfo = pm.getPackageArchiveInfo(file.absolutePath, 0)
+            if (apkInfo != null) {
+                apkPkg = apkInfo.packageName ?: ""
+                apkVersionName = apkInfo.versionName ?: ""
+                apkVersionCode = packageVersionCode(apkInfo)
+                apkInfo.applicationInfo?.minSdkVersion?.let { minSdk = it }
+            }
+        } catch (_: Exception) {
+        }
+        try {
+            val installed = pm.getPackageInfo(context.packageName, 0)
+            installedVersionName = installed.versionName ?: ""
+            installedVersionCode = packageVersionCode(installed)
+        } catch (_: Exception) {
+        }
+        try {
+            signMatch = signaturesMatch(pm, context.packageName, file.absolutePath).toString()
+        } catch (_: Exception) {
+        }
+        val header = try {
+            file.inputStream().use { ins ->
+                val buf = ByteArray(4)
+                val n = ins.read(buf)
+                if (n < 4) "short" else buf.joinToString("") { b -> "%02x".format(b) }
+            }
+        } catch (_: Exception) {
+            "err"
+        }
+        return """{"fileLen":${file.length()},"exists":${file.exists()},"magic":"$header","apkPkg":${jsonString(apkPkg)},"apkVersionName":${jsonString(apkVersionName)},"apkVersionCode":$apkVersionCode,"installedVersionName":${jsonString(installedVersionName)},"installedVersionCode":$installedVersionCode,"minSdk":$minSdk,"signMatch":${jsonString(signMatch)},"sdk":${Build.VERSION.SDK_INT},"abis":${jsonString(Build.SUPPORTED_ABIS.joinToString())},"selfPkg":${jsonString(context.packageName)}}"""
+    }
+
+    @Suppress("DEPRECATION")
+    private fun packageVersionCode(info: android.content.pm.PackageInfo): Long {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            info.versionCode.toLong()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun signaturesMatch(pm: android.content.pm.PackageManager, packageName: String, apkPath: String): Boolean? {
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            android.content.pm.PackageManager.GET_SIGNATURES
+        }
+        val apkInfo = pm.getPackageArchiveInfo(apkPath, flags) ?: return null
+        apkInfo.applicationInfo?.apply {
+            sourceDir = apkPath
+            publicSourceDir = apkPath
+        }
+        val installed = try {
+            pm.getPackageInfo(packageName, flags)
+        } catch (_: Exception) {
+            return null
+        }
+        val apkSigs = signerBytes(apkInfo)
+        val instSigs = signerBytes(installed)
+        if (apkSigs.isEmpty() || instSigs.isEmpty()) return null
+        return apkSigs.any { a -> instSigs.any { b -> a.contentEquals(b) } }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun signerBytes(info: android.content.pm.PackageInfo): List<ByteArray> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val si = info.signingInfo ?: return emptyList()
+            val signers = if (si.hasMultipleSigners()) si.apkContentsSigners else si.signingCertificateHistory
+            signers?.map { it.toByteArray() } ?: emptyList()
+        } else {
+            info.signatures?.map { it.toByteArray() } ?: emptyList()
+        }
+    }
+
     private fun debugOtaLog(
         hypothesisId: String,
         location: String,
@@ -196,26 +306,40 @@ object ApkSessionInstaller {
         data: String,
     ) {
         Thread {
+            val payload =
+                """{"sessionId":"23a43f","runId":"pre-fix","hypothesisId":"$hypothesisId","location":"$location","message":"$message","data":$data,"timestamp":${System.currentTimeMillis()}}"""
             try {
-                val payload =
-                    """{"sessionId":"0b9d45","runId":"pre-fix","hypothesisId":"$hypothesisId","location":"$location","message":"$message","data":$data,"timestamp":${System.currentTimeMillis()}}"""
                 Log.i("OTADebug", payload)
-                val url = java.net.URL(
-                    "http://127.0.0.1:7305/ingest/02f03f94-db5d-49ad-bd74-d663fc657326",
-                )
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("X-Debug-Session-Id", "0b9d45")
-                conn.connectTimeout = 800
-                conn.readTimeout = 800
-                conn.doOutput = true
-                conn.outputStream.use { it.write(payload.toByteArray()) }
+            } catch (_: Exception) {
+            }
+            val hosts = arrayOf(
+                "http://127.0.0.1:7917/ingest/9fa0e09b-80df-4c81-86c4-f4966a429947",
+                "http://10.0.2.2:7917/ingest/9fa0e09b-80df-4c81-86c4-f4966a429947",
+            )
+            for (host in hosts) {
                 try {
-                    conn.inputStream.close()
+                    val url = java.net.URL(host)
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.setRequestProperty("X-Debug-Session-Id", "23a43f")
+                    conn.connectTimeout = 800
+                    conn.readTimeout = 800
+                    conn.doOutput = true
+                    conn.outputStream.use { it.write(payload.toByteArray()) }
+                    try {
+                        conn.inputStream.close()
+                    } catch (_: Exception) {
+                    }
+                    conn.disconnect()
                 } catch (_: Exception) {
                 }
-                conn.disconnect()
+            }
+            try {
+                val dir = activityRef?.get()?.filesDir
+                if (dir != null) {
+                    java.io.File(dir, "debug-23a43f.log").appendText(payload + "\n")
+                }
             } catch (_: Exception) {
             }
         }.start()

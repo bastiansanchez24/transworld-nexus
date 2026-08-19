@@ -11,13 +11,16 @@ import 'core/theme/app_scroll_behavior.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/browser_theme_color.dart';
 import 'core/widgets/app_widgets.dart';
+import 'core/widgets/offline_blocking_overlay.dart';
 import 'core/widgets/sync_conflict_listener.dart';
 import 'core/widgets/windows_mouse_gestures.dart';
+import 'data/offline/snapshot_service.dart';
 import 'data/offline/sync_coordinator.dart';
 import 'features/auth/providers/auth_providers.dart';
 import 'features/auth/screens/splash_screen.dart';
 import 'features/notificaciones/providers/notificaciones_providers.dart';
 import 'features/notificaciones/services/push_notification_service.dart';
+import 'features/updates/widgets/windows_update_gate.dart';
 
 /// Router mínimo del splash de bootstrap.
 ///
@@ -102,6 +105,7 @@ class _ReadyApp extends ConsumerWidget {
     // Mantiene vivo el listener de conectividad -> sincronización offline
     // durante toda la vida de la app (ver data/offline/sync_coordinator.dart).
     ref.watch(syncCoordinatorInitializerProvider);
+    ref.watch(snapshotAutoStartProvider);
     ref.watch(notificacionesRealtimeSubscriptionProvider);
     ref.watch(pushNotificationsBootstrapProvider);
 
@@ -122,8 +126,13 @@ class _ReadyApp extends ConsumerWidget {
         builder: (context, child) => DesktopWindowFrame(
           child: WindowsMouseGestures(
             router: router,
-            child: SyncConflictListener(
-              child: child ?? const SizedBox.shrink(),
+            child: OfflineBlockingOverlay(
+              router: router,
+              child: SyncConflictListener(
+                child: WindowsUpdateGate(
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              ),
             ),
           ),
         ),

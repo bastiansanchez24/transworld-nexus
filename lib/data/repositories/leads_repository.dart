@@ -226,17 +226,9 @@ class LeadsRepository implements SyncExecutor {
 
     final result = await _guardarConRpc(lead, leadId: requestedId);
     if (result.esDuplicado) {
-      throw TerminalSyncConflictException(
-        SyncConflict(
-          code: result.esPropio
-              ? 'lead_duplicate_self'
-              : 'lead_duplicate_other',
-          message: result.mensajeDuplicado,
-          entityId: result.leadId,
-          primerCapturadorNombre: result.primerCapturadorNombre,
-          esPropio: result.esPropio,
-        ),
-      );
+      // El lead ya existe en el servidor: no hay nada que resolver, se omite
+      // esta captura y la cola sigue con el resto.
+      throw SyncDiscardedException(result.mensajeDuplicado);
     }
 
     try {
@@ -265,17 +257,7 @@ class LeadsRepository implements SyncExecutor {
     final changes = Map<String, dynamic>.from(payload['changes'] as Map);
     final result = await actualizar(id, changes);
     if (result.esDuplicado) {
-      throw TerminalSyncConflictException(
-        SyncConflict(
-          code: result.esPropio
-              ? 'lead_duplicate_self'
-              : 'lead_duplicate_other',
-          message: result.mensajeDuplicado,
-          entityId: result.leadId,
-          primerCapturadorNombre: result.primerCapturadorNombre,
-          esPropio: result.esPropio,
-        ),
-      );
+      throw SyncDiscardedException(result.mensajeDuplicado);
     }
   }
 

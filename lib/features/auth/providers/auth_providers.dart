@@ -1,12 +1,20 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/supabase_tables.dart';
+import '../../../core/network/connectivity_service.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/models/perfil.dart';
+import '../../../data/offline/offline_cache_tables.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/eventos_repository.dart';
+
+/// Tabla de caché del perfil de negocio. No se particiona por evento: vive en
+/// el ámbito global del namespace del usuario.
+const String perfilCacheTabla = 'perfil';
 
 /// Emite cada cambio de sesión (login, logout, refresh de token). El router
 /// (`core/router/app_router.dart`) escucha esto para decidir a qué pantalla
@@ -14,6 +22,52 @@ import '../../../data/repositories/eventos_repository.dart';
 final authStateChangesProvider = StreamProvider<AuthState>((ref) {
   return ref.watch(authRepositoryProvider).onAuthStateChange;
 });
+
+/// Resuelve el perfil pidiéndolo al servidor y, si la red falla, sirviéndolo
+/// desde disco.
+///
+/// La petición va acotada por [esperaMaximaServidorPorDefecto]: tiene que
+/// resolverse antes que el timeout de navegación del splash, porque hasta que
+/// este future no completa el router ve `perfil == null` y considera fallida
+/// la sesión. Un wifi cautivo que nunca responde era exactamente el camino que
+/// terminaba en `signOut()` con el usuario en plena feria.
+Future<Perfil> _perfilConRespaldo(Ref ref) async {
+  final cache = ref.read(offlineReadCacheProvider);
+
+  Future<void> recortarLeadsAjenos(Perfil perfil) async {
+    if (perfil.canViewAllLeads) return;
+    await cache.retenerFilasPropias('${SupabaseTables.leads}__own', perfil.id);
+  }
+
+  try {
+    final perfil = await ref
+        .read(authRepositoryProvider)
+        .obtenerPerfilActual()
+        .timeout(esperaMaximaServidorPorDefecto);
+    // El servidor respondió que no existe: eso es autoritativo y no se tapa
+    // con la copia local.
+    if (perfil == null) {
+      throw Exception('No se encontró el perfil del usuario.');
+    }
+    await cache.guardarGlobal(perfilCacheTabla, [perfil.toCacheMap()]);
+    await recortarLeadsAjenos(perfil);
+    return perfil;
+  } catch (error) {
+    if (!isNetworkTransportError(error)) rethrow;
+    final local = cache.leerGlobal(
+      tabla: perfilCacheTabla,
+      desdeFila: Perfil.fromMap,
+    );
+    if (local == null || local.isEmpty) rethrow;
+    developer.log(
+      'Perfil servido desde la caché offline: $error',
+      name: 'currentPerfilProvider',
+    );
+    final perfil = local.first;
+    await recortarLeadsAjenos(perfil);
+    return perfil;
+  }
+}
 
 /// Perfil de negocio (tabla `perfiles`) del usuario autenticado, con su rol
 /// ya resuelto. `null` si no hay sesión activa.
@@ -32,32 +86,12 @@ final currentPerfilProvider = FutureProvider<Perfil?>((ref) async {
     if (!authAsync.hasValue && !authAsync.hasError) {
       final authState = await ref.watch(authStateChangesProvider.future);
       if (authState.session == null) return null;
-      final perfil = await ref
-          .read(authRepositoryProvider)
-          .obtenerPerfilActual();
-      if (perfil == null) {
-        throw Exception('No se encontró el perfil del usuario.');
-      }
-      if (!perfil.canViewAllLeads) {
-        await ref
-            .read(offlineReadCacheProvider)
-            .retenerFilasPropias('${SupabaseTables.leads}__own', perfil.id);
-      }
-      return perfil;
+      return _perfilConRespaldo(ref);
     }
     return null;
   }
 
-  final perfil = await ref.read(authRepositoryProvider).obtenerPerfilActual();
-  if (perfil == null) {
-    throw Exception('No se encontró el perfil del usuario.');
-  }
-  if (!perfil.canViewAllLeads) {
-    await ref
-        .read(offlineReadCacheProvider)
-        .retenerFilasPropias('${SupabaseTables.leads}__own', perfil.id);
-  }
-  return perfil;
+  return _perfilConRespaldo(ref);
 });
 
 final isAdminProvider = Provider<bool>((ref) {
@@ -81,6 +115,15 @@ final canViewAllLeadsProvider = Provider<bool>((ref) {
   return ref.watch(currentPerfilProvider).valueOrNull?.canViewAllLeads ?? false;
 });
 
+final canEditAnyLeadProvider = Provider<bool>((ref) {
+  return ref.watch(currentPerfilProvider).valueOrNull?.canEditAnyLead ?? false;
+});
+
+final canViewLeadContactDataProvider = Provider<bool>((ref) {
+  return ref.watch(currentPerfilProvider).valueOrNull?.canViewLeadContactData ??
+      false;
+});
+
 /// IDs de eventos que el rol interno `user` puede operar. Admin y organizador
 /// no usan este provider porque conservan alcance global por RLS.
 final usuarioEventosAutorizadosProvider = FutureProvider<Set<String>>((
@@ -90,14 +133,30 @@ final usuarioEventosAutorizadosProvider = FutureProvider<Set<String>>((
   final perfil = await ref.watch(currentPerfilProvider.future);
   if (perfil == null || !perfil.rol.isUsuario) return const {};
 
-  final ids = await ref
-      .watch(authRepositoryProvider)
-      .listarEventosAutorizadosUsuario(perfil.id);
-  final autorizados = ids.toSet();
-  await ref
-      .read(offlineReadCacheProvider)
-      .retenerEventos(SupabaseTables.registrados, autorizados);
-  return autorizados;
+  final cache = ref.read(offlineReadCacheProvider);
+  final Set<String> autorizados;
+  try {
+    final ids = await ref
+        .watch(authRepositoryProvider)
+        .listarEventosAutorizadosUsuario(perfil.id)
+        .timeout(esperaMaximaServidorPorDefecto);
+    autorizados = ids.toSet();
+    await cache.guardarGlobal(
+      OfflineCacheTables.usuarioEventosAutorizados,
+      autorizados.map((id) => {'id': id}).toList(),
+    );
+    // La purga solo puede nacer de una lista resuelta por el servidor.
+    await cache.retenerEventos(SupabaseTables.registrados, autorizados);
+    return autorizados;
+  } catch (error) {
+    if (!isNetworkTransportError(error)) rethrow;
+    final local = cache.leerGlobal(
+      tabla: OfflineCacheTables.usuarioEventosAutorizados,
+      desdeFila: (fila) => '${fila['id']}',
+    );
+    if (local == null) rethrow;
+    return local.toSet();
+  }
 });
 
 /// `null` mientras carga; ante error queda vacío para que el router falle
@@ -133,25 +192,54 @@ final externoEventosAutorizadosProvider = FutureProvider<List<Evento>>((
   final perfil = await ref.watch(currentPerfilProvider.future);
   if (perfil == null || !perfil.isExterno) return const [];
 
-  final ids = await ref
-      .watch(authRepositoryProvider)
-      .listarEventosAutorizadosUsuario(perfil.id);
-  await ref
-      .read(offlineReadCacheProvider)
-      .retenerEventos(SupabaseTables.registrados, ids.toSet());
-  if (ids.isEmpty) return const [];
-
-  final eventosRepo = ref.watch(eventosRepositoryProvider);
-  final eventos = <Evento>[];
-  for (final id in ids) {
-    try {
-      eventos.add(await eventosRepo.obtenerPorId(id));
-    } catch (_) {
-      // Evento borrado o inaccesible: omitir.
+  final cache = ref.read(offlineReadCacheProvider);
+  try {
+    final ids = await ref
+        .watch(authRepositoryProvider)
+        .listarEventosAutorizadosUsuario(perfil.id)
+        .timeout(esperaMaximaServidorPorDefecto);
+    await cache.retenerEventos(SupabaseTables.registrados, ids.toSet());
+    if (ids.isEmpty) {
+      await cache.guardarGlobal(
+        OfflineCacheTables.externoEventosAutorizados,
+        const [],
+      );
+      return const [];
     }
+
+    final eventosRepo = ref.watch(eventosRepositoryProvider);
+    final eventos = <Evento>[];
+    var falloDeRed = false;
+    for (final id in ids) {
+      try {
+        eventos.add(await eventosRepo.obtenerPorId(id));
+      } catch (error) {
+        // Evento borrado o inaccesible: omitir. Pero un fallo de red no es
+        // una revocación y no puede acabar guardando una lista recortada:
+        // eso dejaría al externo "sin eventos operables".
+        if (isNetworkTransportError(error)) falloDeRed = true;
+      }
+    }
+    eventos.sort((a, b) => a.nombre.compareTo(b.nombre));
+    if (falloDeRed && eventos.isEmpty) {
+      throw Exception('SocketException: no se pudieron cargar los eventos');
+    }
+    if (!falloDeRed) {
+      await cache.guardarGlobal(
+        OfflineCacheTables.externoEventosAutorizados,
+        eventos.map((evento) => evento.toCacheMap()).toList(),
+      );
+    }
+    return eventos;
+  } catch (error) {
+    if (!isNetworkTransportError(error)) rethrow;
+    final local = cache.leerGlobal(
+      tabla: OfflineCacheTables.externoEventosAutorizados,
+      desdeFila: Evento.fromMap,
+    );
+    if (local == null) rethrow;
+    return local;
   }
-  eventos.sort((a, b) => a.nombre.compareTo(b.nombre));
-  return eventos;
 });
 
 /// IDs autorizados (para comprobaciones rápidas en el router).
@@ -223,7 +311,13 @@ final externoSinEventosOperablesProvider = Provider<bool?>((ref) {
 
   final authAsync = ref.watch(externoEventosAutorizadosProvider);
   if (authAsync.isLoading && !authAsync.hasValue) return null;
-  if (authAsync.hasError) return true;
+  // Un fallo de transporte no prueba nada sobre las autorizaciones: se trata
+  // como "todavía no se sabe", nunca como bloqueo. Leerlo como `true` es lo
+  // que hoy cierra la sesión de un externo por un simple timeout, y en feria
+  // eso lo deja fuera de la app sin red para volver a entrar.
+  if (authAsync.hasError) {
+    return isNetworkTransportError(authAsync.error!) ? null : true;
+  }
 
   final lista = authAsync.valueOrNull ?? const <Evento>[];
   if (lista.isEmpty) {
@@ -232,7 +326,9 @@ final externoSinEventosOperablesProvider = Provider<bool?>((ref) {
     if (preferido == null || preferido.isEmpty) return true;
     final eventoAsync = ref.watch(externoEventoProvider);
     if (eventoAsync.isLoading) return null;
-    if (eventoAsync.hasError) return true;
+    if (eventoAsync.hasError) {
+      return isNetworkTransportError(eventoAsync.error!) ? null : true;
+    }
     final e = eventoAsync.valueOrNull;
     if (e == null) return true;
     return !eventoExternoOperable(e);

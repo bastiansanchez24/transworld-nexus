@@ -216,7 +216,8 @@ class _CrearEditarEventoFormState
     final confirmado = await confirmDialog(
       context,
       title: 'Eliminar evento',
-      message: 'Esta acción no se puede deshacer. ¿Eliminar el evento y sus registrados?',
+      message:
+          'Esta acción no se puede deshacer. ¿Eliminar el evento y sus registrados?',
       confirmLabel: 'Eliminar',
     );
     if (!confirmado) return;
@@ -392,7 +393,8 @@ class _CrearEditarEventoFormState
                       const SizedBox(height: 14),
                       _ToggleCard(
                         title: 'Evento activo',
-                        subtitle: 'Los eventos inactivos no reciben autoregistro público',
+                        subtitle:
+                            'Los eventos inactivos no reciben autoregistro público',
                         value: _activo,
                         onChanged: (v) => setState(() => _activo = v),
                       ),

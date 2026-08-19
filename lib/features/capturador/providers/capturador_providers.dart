@@ -4,6 +4,7 @@ import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../data/models/evento_lead.dart';
 import '../../../data/models/lead.dart';
+import '../../../data/offline/offline_cache_tables.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/sync_queue_item.dart';
 import '../../../data/offline/sync_queue_service.dart';
@@ -11,24 +12,78 @@ import '../../../data/repositories/eventos_leads_repository.dart';
 import '../../../data/repositories/leads_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 
+/// Catálogo de actividades de captura, con respaldo en disco.
 final eventosLeadsListProvider = FutureProvider.autoDispose<List<EventoLead>>((
   ref,
-) {
-  return ref.watch(eventosLeadsRepositoryProvider).listarTodos();
+) async {
+  final isOnline = ref.watch(isOnlineProvider);
+  final cache = ref.watch(offlineReadCacheProvider);
+  final repo = ref.watch(eventosLeadsRepositoryProvider);
+
+  final actividades = await cache.leerConRespaldoGlobal(
+    tabla: OfflineCacheTables.eventosLeads,
+    desdeServidor: repo.listarTodos,
+    aFila: (actividad) => actividad.toCacheMap(),
+    desdeFila: EventoLead.fromMap,
+    isOnline: isOnline,
+  );
+
+  for (final actividad in actividades) {
+    await cache.guardar(OfflineCacheTables.eventoLeadDetalle, actividad.id, [
+      actividad.toCacheMap(),
+    ]);
+    final origen = actividad.eventoOrigenId;
+    if (origen != null && origen.isNotEmpty) {
+      await cache.guardar(OfflineCacheTables.eventoLeadPorOrigen, origen, [
+        actividad.toCacheMap(),
+      ]);
+    }
+  }
+  return actividades;
 });
 
 final eventoLeadByIdProvider = FutureProvider.autoDispose
-    .family<EventoLead, String>((ref, id) {
-      return ref.watch(eventosLeadsRepositoryProvider).obtenerPorId(id);
+    .family<EventoLead, String>((ref, id) async {
+      final isOnline = ref.watch(isOnlineProvider);
+      final cache = ref.watch(offlineReadCacheProvider);
+      final repo = ref.watch(eventosLeadsRepositoryProvider);
+
+      final filas = await cache.leerConRespaldo(
+        tabla: OfflineCacheTables.eventoLeadDetalle,
+        eventoId: id,
+        desdeServidor: () async => [await repo.obtenerPorId(id)],
+        aFila: (actividad) => actividad.toCacheMap(),
+        desdeFila: EventoLead.fromMap,
+        isOnline: isOnline,
+      );
+      if (filas.isEmpty) throw Exception('No se pudo cargar la actividad.');
+      return filas.first;
     });
 
 /// Evento de leads interno de un evento de registro, o `null` si todavía no se
 /// ha creado. El menú de Evento lo usa para ofrecer crearlo o abrirlo.
+///
+/// El vínculo se cachea porque sin red **no se puede crear** la actividad: si
+/// el snapshot no la guardó, capturar un lead desde ese evento es imposible y
+/// hay que decirlo, no fallar en silencio.
 final eventoLeadInternoProvider = FutureProvider.autoDispose
-    .family<EventoLead?, String>((ref, eventoOrigenId) {
-      return ref
-          .watch(eventosLeadsRepositoryProvider)
-          .buscarPorEventoOrigen(eventoOrigenId);
+    .family<EventoLead?, String>((ref, eventoOrigenId) async {
+      final isOnline = ref.watch(isOnlineProvider);
+      final cache = ref.watch(offlineReadCacheProvider);
+      final repo = ref.watch(eventosLeadsRepositoryProvider);
+
+      final filas = await cache.leerConRespaldo(
+        tabla: OfflineCacheTables.eventoLeadPorOrigen,
+        eventoId: eventoOrigenId,
+        desdeServidor: () async {
+          final actividad = await repo.buscarPorEventoOrigen(eventoOrigenId);
+          return actividad == null ? <EventoLead>[] : [actividad];
+        },
+        aFila: (actividad) => actividad.toCacheMap(),
+        desdeFila: EventoLead.fromMap,
+        isOnline: isOnline,
+      );
+      return filas.isEmpty ? null : filas.first;
     });
 
 Iterable<SyncQueueItem> leadQueueItemsForOverlay(

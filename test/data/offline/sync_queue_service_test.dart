@@ -45,6 +45,28 @@ class _BlockingExecutor implements SyncExecutor {
   Future<void> onUpdate(Map<String, dynamic> payload) => onInsert(payload);
 }
 
+/// Rechaza como duplicado el primer ítem y acepta el resto.
+class _DuplicadoLuegoExitoExecutor implements SyncExecutor {
+  final procesados = <String>[];
+
+  @override
+  String get table => 'leads';
+
+  @override
+  Future<void> onInsert(Map<String, dynamic> payload) async {
+    final nombre = payload['nombre_completo'] as String;
+    procesados.add(nombre);
+    if (nombre == 'Duplicada') {
+      throw const SyncDiscardedException(
+        'Este lead ya fue registrado por Ana Pérez',
+      );
+    }
+  }
+
+  @override
+  Future<void> onUpdate(Map<String, dynamic> payload) => onInsert(payload);
+}
+
 void main() {
   group('esIdSoloLocal', () {
     test('reconoce el id temporal de un insert encolado', () {
@@ -164,5 +186,44 @@ void main() {
         expect(prefs.getString('sync_queue_v1'), isNull);
       },
     );
+  });
+
+  group('duplicados del servidor', () {
+    Future<SyncQueueService> colaCon(List<String> nombres) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cola = SyncQueueService(prefs, 'usuario-a');
+      for (final nombre in nombres) {
+        await cola.enqueueInsert(
+          table: 'leads',
+          payload: {'nombre_completo': nombre},
+        );
+      }
+      return cola;
+    }
+
+    test('un duplicado se omite y la cola sigue con el resto', () async {
+      final cola = await colaCon(['Duplicada', 'Nueva']);
+      final executor = _DuplicadoLuegoExitoExecutor();
+
+      final sincronizados = await cola.processPending({'leads': executor});
+
+      // El duplicado no cuenta como sincronizado, pero tampoco frena la fila:
+      // en feria una hoja modal por cada repetido detiene la entrada.
+      expect(sincronizados, 1);
+      expect(executor.procesados, ['Duplicada', 'Nueva']);
+      expect(cola.state, isEmpty);
+      expect(cola.pendingCount, 0);
+      expect(cola.conflicts, isEmpty);
+    });
+
+    test('el motivo queda disponible para avisar una sola vez', () async {
+      final cola = await colaCon(['Duplicada']);
+      await cola.processPending({'leads': _DuplicadoLuegoExitoExecutor()});
+
+      expect(cola.descartes, ['Este lead ya fue registrado por Ana Pérez']);
+      cola.limpiarDescartes();
+      expect(cola.descartes, isEmpty);
+    });
   });
 }

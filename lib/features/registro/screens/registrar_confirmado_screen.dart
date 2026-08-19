@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/registro_asistente.dart';
@@ -10,17 +9,17 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/registrado.dart';
-import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
 
-/// Registro manual de un asistente. Funciona igual online u offline: si no
-/// hay conexión, la operación se encola con
-/// `SyncQueueService.enqueueInsert` (única cola, ver Sección 17.3 de la
-/// auditoría) y se sincroniza sola apenas vuelve la red — a diferencia del
-/// proyecto legado, donde esto último nunca ocurría en la app móvil.
+/// Registro manual de un asistente. **Requiere conexión**, a diferencia de
+/// acreditar o capturar un lead, que sí se encolan.
+///
+/// El alta comprueba el duplicado de correo contra la base y dispara el envío
+/// del QR: encolarla daría por registrada a una persona que quizá ya existe y
+/// que además se quedaría sin su QR. Sin red se avisa y no se guarda nada.
 class RegistrarConfirmadoScreen extends ConsumerStatefulWidget {
   const RegistrarConfirmadoScreen({super.key, required this.eventoId});
 
@@ -92,21 +91,28 @@ class _RegistrarConfirmadoScreenState
     final isOnline = ref.read(isOnlineProvider);
     final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
 
+    // Dar de alta a un asistente nuevo exige red: el registro dispara el envío
+    // del QR por correo y necesita comprobar el duplicado contra la base, no
+    // solo contra la cola local. Encolarlo daría por registrada a una persona
+    // que quizá ya existe y que además no recibiría su QR.
+    if (!isOnline) {
+      _guardando = false;
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Sin conexión: registrar un asistente nuevo requiere internet.',
+          isError: true,
+        );
+      }
+      return;
+    }
+
     try {
-      if (!isOnline) {
-        final cola = ref.read(syncQueueServiceProvider);
-        if (existeEmailPendienteODuplicado(cola, widget.eventoId, email)) {
-          throw Exception(
-            'Ese correo ya está en la cola local de este evento.',
-          );
-        }
-      } else {
-        final yaExiste = await ref
-            .read(registradosRepositoryProvider)
-            .existeEmailEnEvento(widget.eventoId, email);
-        if (yaExiste) {
-          throw Exception(kMensajeEmailDuplicado);
-        }
+      final yaExiste = await ref
+          .read(registradosRepositoryProvider)
+          .existeEmailEnEvento(widget.eventoId, email);
+      if (yaExiste) {
+        throw Exception(kMensajeEmailDuplicado);
       }
 
       final registrado = Registrado(
@@ -126,33 +132,22 @@ class _RegistrarConfirmadoScreenState
       );
 
       var correoEnviado = false;
-      if (isOnline) {
-        final repo = ref.read(registradosRepositoryProvider);
-        final creado = await repo.crear(registrado);
-        try {
-          await repo.enviarQrPorEmail(creado, nombreEvento: nombreEvento);
-          correoEnviado = true;
-        } catch (e) {
-          debugPrint('enviar-qr tras registro manual falló: $e');
-        }
-      } else {
-        await ref
-            .read(syncQueueServiceProvider.notifier)
-            .enqueueInsert(
-              table: SupabaseTables.registrados,
-              payload: registrado.toInsertMap(),
-            );
+      final repo = ref.read(registradosRepositoryProvider);
+      final creado = await repo.crear(registrado);
+      try {
+        await repo.enviarQrPorEmail(creado, nombreEvento: nombreEvento);
+        correoEnviado = true;
+      } catch (e) {
+        debugPrint('enviar-qr tras registro manual falló: $e');
       }
 
       ref.invalidate(registradosPorEventoProvider(widget.eventoId));
 
       if (mounted) {
-        final mensaje = !isOnline
-            ? 'Guardado en modo local. Se subirá solo. El QR se podrá enviar al sincronizar.'
-            : correoEnviado
+        final mensaje = correoEnviado
             ? 'Registrado con éxito. QR enviado a $email.'
             : 'Registrado con éxito, pero no se pudo enviar el QR por email.';
-        showAppSnackBar(context, mensaje, isError: isOnline && !correoEnviado);
+        showAppSnackBar(context, mensaje, isError: !correoEnviado);
         _formKey.currentState!.reset();
         _nombreController.clear();
         _emailController.clear();

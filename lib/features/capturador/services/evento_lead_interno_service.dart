@@ -1,19 +1,20 @@
-import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/connectivity_service.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/models/evento_lead.dart';
+import '../../../data/offline/offline_cache_tables.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
 import '../providers/capturador_providers.dart';
 
-/// Resuelve o crea la actividad de captura interna de un evento de registro.
+/// Actividad de captura interna de [evento]: la existente, o una nueva.
 ///
-/// El vínculo es por id (`evento_origen_id`), no por nombre: dos eventos
-/// homónimos ya no comparten sus leads y renombrar uno no rompe la relación.
-///
-/// La creación vía QR está permitida a `user`/`externo` por RLS; el botón
-/// "Nuevo evento" de la UI sigue oculto si `!canCreateContent`.
+/// Crear una actividad **nunca** ocurre sin red. El id lo asigna el servidor y
+/// todos los leads capturados cuelgan de él: inventar uno local dejaría las
+/// capturas huérfanas y sin forma de reconciliarlas. Por eso sin conexión solo
+/// se resuelve contra lo que el snapshot ya guardó, y si no está se dice
+/// claramente en vez de fallar de forma opaca.
 Future<EventoLead> obtenerOCrearEventoLeadInterno(
   WidgetRef ref,
   Evento evento,
@@ -25,15 +26,28 @@ Future<EventoLead> obtenerOCrearEventoLeadInterno(
   if (isOnline) {
     existente = await repo.buscarPorEventoOrigen(evento.id);
   } else {
-    final cache = ref.read(eventosLeadsListProvider).valueOrNull ?? [];
-    existente = cache.where((e) => e.eventoOrigenId == evento.id).firstOrNull;
+    // Se lee el disco directamente y no `eventosLeadsListProvider`: ese
+    // provider es autoDispose y puede no haberse construido en esta pantalla.
+    final vinculo = ref
+        .read(offlineReadCacheProvider)
+        .leerLocal(
+          tabla: OfflineCacheTables.eventoLeadPorOrigen,
+          eventoId: evento.id,
+          desdeFila: EventoLead.fromMap,
+        );
+    existente = vinculo?.firstOrNull;
+    existente ??= (ref.read(eventosLeadsListProvider).valueOrNull ?? [])
+        .where((e) => e.eventoOrigenId == evento.id)
+        .firstOrNull;
   }
 
   if (existente != null) return existente;
 
   if (!isOnline) {
     throw Exception(
-      'Se necesita conexión para crear la actividad de captura de "${evento.nombre}".',
+      'Sin conexión no se puede crear la actividad de captura de '
+      '"${evento.nombre}". Sincroniza con internet una vez y luego podrás '
+      'capturar leads sin red.',
     );
   }
 

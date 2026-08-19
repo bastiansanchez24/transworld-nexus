@@ -50,6 +50,33 @@ class UpdateController extends StateNotifier<UpdateState> {
   /// Check automático post-login (Android/Windows + online + debounce).
   Future<void> checkOnLaunch() => _checkAutomatic(onResume: false);
 
+  /// Check al abrir la app en Windows, antes del login (actualizador visible).
+  Future<void> checkOnColdStart() async {
+    if (!otaResolvesWindowsAsset) return;
+    if (!(_ref.read(isOnlineProvider))) return;
+    if (state.isBusy) return;
+
+    state = state.copyWith(status: UpdateStatus.checking, clearError: true);
+
+    try {
+      final outcome = await _service.checkForUpdates(force: true);
+      if (!mounted) return;
+      if (!outcome.performed || outcome.info == null) {
+        state = state.copyWith(status: UpdateStatus.upToDate, clearInfo: true);
+        return;
+      }
+      state = state.copyWith(
+        status: UpdateStatus.available,
+        info: outcome.info,
+        clearError: true,
+        clearDownloaded: true,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      state = const UpdateState();
+    }
+  }
+
   /// Check al volver del segundo plano (ignora debounce de sesión/6h).
   Future<void> checkOnResume() => _checkAutomatic(onResume: true);
 
@@ -172,12 +199,14 @@ class UpdateController extends StateNotifier<UpdateState> {
       otaDebugLog(
         location: 'update_providers.dart:downloadAndInstall',
         message: 'download finished',
-        hypothesisId: 'H-B',
+        hypothesisId: Platform.isWindows ? 'H-E' : 'H-B',
         data: {
           'assetName': info.asset.name,
           'assetSize': info.asset.size,
           'fileLen': await file.length(),
           'hasDigest': info.asset.sha256Hex != null,
+          'installed': info.installedVersion,
+          'remote': info.remoteVersion,
         },
       );
       // #endregion

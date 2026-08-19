@@ -44,7 +44,14 @@ enum AppRole {
   bool get canRegisterAttendees => !isExterno;
   bool get canAccessNotifications => !isExterno;
   bool get canExportData => isAdmin || isOrganizador;
-  bool get canViewAllLeads => isAdmin || isOrganizador;
+  bool get canViewAllLeads => !isExterno;
+
+  /// Editar leads de cualquier capturador. Sin esto solo se editan los propios.
+  bool get canEditAnyLead => isAdmin || isOrganizador;
+
+  /// Ver el email y el teléfono del lead sin enmascarar.
+  bool get canViewLeadContactData => isAdmin || isOrganizador;
+
   bool get usesFullShell => !isExterno;
 
   String get label => switch (this) {

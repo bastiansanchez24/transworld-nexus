@@ -15,6 +15,7 @@ class RoutePaths {
   static const home = '/';
   static const perfil = '/perfil';
   static const actualizaciones = '/actualizaciones';
+  static const sincronizacion = '/sincronizacion';
   static const notificaciones = '/notificaciones';
 
   static const eventos = '/eventos';

@@ -28,6 +28,8 @@ class Perfil {
   bool get canAccessNotifications => rol.canAccessNotifications;
   bool get canExportData => rol.canExportData;
   bool get canViewAllLeads => rol.canViewAllLeads;
+  bool get canEditAnyLead => rol.canEditAnyLead;
+  bool get canViewLeadContactData => rol.canViewLeadContactData;
   bool get isExterno => rol.isExterno;
   bool get requiresEventAssignment => rol.requiresEventAssignment;
   bool get usesFullShell => rol.usesFullShell;
@@ -46,6 +48,20 @@ class Perfil {
           : null,
     );
   }
+
+  /// Copia serializable para la caché offline. Usa las mismas claves que
+  /// [Perfil.fromMap] para que el perfil guardado en disco se rehidrate por el
+  /// mismo camino que el que llega de `perfiles`.
+  Map<String, dynamic> toCacheMap() => {
+    'id': id,
+    'nombre_completo': nombreCompleto,
+    'rol': rol.value,
+    'evento_asignado_id': eventoAsignadoId,
+    'foto_url': fotoUrl,
+    'cambiar_pass': cambiarPass,
+    'activo': activo,
+    'created_at': createdAt?.toIso8601String(),
+  };
 
   Perfil copyWith({
     String? nombreCompleto,

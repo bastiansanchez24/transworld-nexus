@@ -21,6 +21,11 @@ void main() {
     nombreCompleto: 'Admin',
     rol: AppRole.admin,
   );
+  const perfilExterno = Perfil(
+    id: 'externo-1',
+    nombreCompleto: 'Usuario Externo',
+    rol: AppRole.externo,
+  );
 
   late SharedPreferences preferences;
 
@@ -89,8 +94,9 @@ void main() {
   test(
     'sin resumen del servidor no se pasa el conteo propio como total de la campaña',
     () async {
+      // El externo es el único rol cuya caché contiene solo sus propios leads.
       final container = await contenedor(
-        perfil: perfilUser,
+        perfil: perfilExterno,
         enCache: [
           lead('propio-1'),
           lead('propio-2', empresa: 'Acme'),
@@ -115,5 +121,20 @@ void main() {
 
     expect(resumen?.total, 2);
     expect(resumen?.empresas, 1);
+  });
+
+  test('el usuario interno también cuenta desde la caché completa', () async {
+    final container = await contenedor(
+      perfil: perfilUser,
+      enCache: [
+        lead('propio', empresa: 'Acme'),
+        lead('ajeno', empresa: 'Globex'),
+      ],
+    );
+
+    final resumen = container.read(leadsResumenLocalProvider(eventoId));
+
+    expect(resumen?.total, 2);
+    expect(resumen?.empresas, 2);
   });
 }

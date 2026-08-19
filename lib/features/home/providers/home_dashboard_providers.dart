@@ -1,8 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/connectivity_service.dart';
 import '../../../data/models/evento.dart';
-import '../../../data/repositories/eventos_repository.dart';
+import '../../../data/offline/offline_cache_tables.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/registrados_repository.dart';
+import '../../eventos/providers/eventos_providers.dart';
 
 class HomeDashboardData {
   const HomeDashboardData({
@@ -59,13 +62,59 @@ class HomeDashboardData {
   }
 }
 
+/// Conteos globales de registrados/acreditados, cacheados aparte del catálogo.
+class _ResumenGlobal {
+  const _ResumenGlobal({required this.total, required this.acreditados});
+
+  final int total;
+  final int acreditados;
+
+  factory _ResumenGlobal.fromMap(Map<String, dynamic> map) {
+    return _ResumenGlobal(
+      total: (map['total'] as num?)?.toInt() ?? 0,
+      acreditados: (map['acreditados'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toCacheMap() => {
+    'total': total,
+    'acreditados': acreditados,
+  };
+}
+
+/// Home del interno. Reutiliza [eventosListProvider] —que ya respalda el
+/// catálogo en disco— en vez de repetir la llamada, y cachea aparte el
+/// resumen global. Sin esto el home mostraba error sin red aunque el catálogo
+/// estuviera guardado.
 final homeDashboardProvider = FutureProvider.autoDispose<HomeDashboardData>((
   ref,
 ) async {
-  final eventos = await ref.watch(eventosRepositoryProvider).listarTodos();
-  final resumen = await ref
-      .watch(registradosRepositoryProvider)
-      .obtenerResumenGlobal();
+  final eventos = await ref.watch(eventosListProvider.future);
+  final isOnline = ref.watch(isOnlineProvider);
+  final cache = ref.watch(offlineReadCacheProvider);
+  final repo = ref.watch(registradosRepositoryProvider);
+
+  var resumen = const _ResumenGlobal(total: 0, acreditados: 0);
+  try {
+    final filas = await cache.leerConRespaldoGlobal(
+      tabla: OfflineCacheTables.homeResumen,
+      desdeServidor: () async {
+        final remoto = await repo.obtenerResumenGlobal();
+        return [
+          _ResumenGlobal(total: remoto.total, acreditados: remoto.acreditados),
+        ];
+      },
+      aFila: (r) => r.toCacheMap(),
+      desdeFila: _ResumenGlobal.fromMap,
+      isOnline: isOnline,
+    );
+    if (filas.isNotEmpty) resumen = filas.first;
+  } catch (error) {
+    // El catálogo ya se resolvió: mejor un home con eventos y contadores en
+    // cero que una pantalla de error entera.
+    if (isOnline && !isNetworkTransportError(error)) rethrow;
+  }
+
   return HomeDashboardData(
     eventos: eventos,
     totalRegistrados: resumen.total,

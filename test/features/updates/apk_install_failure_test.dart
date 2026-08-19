@@ -13,6 +13,15 @@ void main() {
         mapApkInstallFailure(status: 1, legacyStatus: -7),
         contains('otra clave'),
       );
+      expect(
+        mapApkInstallFailure(
+          status: 5,
+          legacyStatus: -7,
+          message:
+              'INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match',
+        ),
+        contains('otra clave'),
+      );
     });
 
     test('build de depuración (testOnly)', () {

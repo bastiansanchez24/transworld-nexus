@@ -65,6 +65,26 @@ class Evento {
     );
   }
 
+  /// Copia serializable para la caché offline. Usa las claves de
+  /// [Evento.fromMap] para rehidratar por el mismo camino que la fila de
+  /// `eventos` (a diferencia de [toInsertMap], que omite el id).
+  Map<String, dynamic> toCacheMap() {
+    return {
+      'id': id,
+      'nombre': nombre,
+      'fecha': fecha.toIso8601String(),
+      'pais': pais,
+      'tematica': tematica,
+      'creado_por': creadoPor,
+      'direccion': direccion,
+      'lugar': lugar,
+      'certificacion_capacitacion': certificacionCapacitacion,
+      'activo': activo,
+      'imagen_url': imagenUrl,
+      'tipo_registro': tipoRegistro.name,
+    };
+  }
+
   Map<String, dynamic> toInsertMap() {
     return {
       'nombre': nombre,

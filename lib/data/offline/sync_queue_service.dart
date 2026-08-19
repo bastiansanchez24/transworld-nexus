@@ -71,6 +71,16 @@ class SyncQueueService extends StateNotifier<List<SyncQueueItem>> {
   final String? ownerId;
   bool _processing = false;
 
+  /// Ítems que el servidor rechazó por duplicados y se retiraron de la cola.
+  ///
+  /// Vive solo en memoria: es material de un aviso, no un pendiente. Si la app
+  /// se cierra, el dato ya está en el servidor y no hay nada que recordar.
+  final List<String> _descartes = [];
+
+  List<String> get descartes => List.unmodifiable(_descartes);
+
+  void limpiarDescartes() => _descartes.clear();
+
   String? get _prefsKey {
     final owner = ownerId?.trim();
     if (owner == null || owner.isEmpty) return null;
@@ -339,6 +349,13 @@ class SyncQueueService extends StateNotifier<List<SyncQueueItem>> {
         state = state.where((i) => i.id != item.id).toList();
         syncedCount++;
         await _persist();
+      } on SyncDiscardedException catch (e) {
+        // El dato ya existe en el servidor: se retira igual que un éxito para
+        // no dejar la cola atascada, pero no cuenta como sincronizado y se
+        // guarda el motivo para avisar una sola vez.
+        state = state.where((i) => i.id != item.id).toList();
+        _descartes.add(e.message);
+        await _persist();
       } on TerminalSyncConflictException catch (e) {
         _updateItem(
           item.copyWith(
@@ -455,6 +472,16 @@ final pendingSyncCountProvider = Provider<int>((ref) {
             i.status == SyncStatus.failed,
       )
       .length;
+});
+
+/// Avisos de capturas omitidas por estar ya en el servidor.
+final syncDescartesProvider = Provider<List<String>>((ref) {
+  try {
+    ref.watch(syncQueueServiceProvider);
+    return ref.read(syncQueueServiceProvider.notifier).descartes;
+  } catch (_) {
+    return const [];
+  }
 });
 
 final syncConflictsProvider = Provider<List<SyncQueueItem>>((ref) {

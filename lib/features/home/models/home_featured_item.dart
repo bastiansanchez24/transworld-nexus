@@ -72,6 +72,40 @@ class HomeFeaturedItem {
     HomeFeaturedKind.campanaFijada => RoutePaths.usarEventoLead(id),
   };
 
+  /// Copia serializable para la caché offline.
+  ///
+  /// Se guarda el ítem ya ensamblado —con sus métricas— y no sus fuentes: el
+  /// slider nace de media docena de consultas encadenadas y rehacerlas sin red
+  /// solo produce una pantalla de error.
+  Map<String, dynamic> toCacheMap() => {
+    'kind': kind.name,
+    'id': id,
+    'nombre': nombre,
+    'fecha': fecha.toIso8601String(),
+    'lugar': lugar,
+    'registrados': registrados,
+    'acreditados': acreditados,
+    'leads': leads,
+    'imagen_url': imagenUrl,
+  };
+
+  factory HomeFeaturedItem.fromCacheMap(Map<String, dynamic> map) {
+    return HomeFeaturedItem(
+      kind: HomeFeaturedKind.values.firstWhere(
+        (k) => k.name == map['kind'],
+        orElse: () => HomeFeaturedKind.proximoEvento,
+      ),
+      id: map['id'] as String,
+      nombre: map['nombre'] as String,
+      fecha: DateTime.parse(map['fecha'] as String),
+      lugar: (map['lugar'] as String?) ?? '',
+      registrados: (map['registrados'] as num?)?.toInt() ?? 0,
+      acreditados: (map['acreditados'] as num?)?.toInt() ?? 0,
+      leads: (map['leads'] as num?)?.toInt() ?? 0,
+      imagenUrl: map['imagen_url'] as String?,
+    );
+  }
+
   HomeFeaturedItem copyWith({int? registrados, int? acreditados, int? leads}) {
     return HomeFeaturedItem(
       kind: kind,

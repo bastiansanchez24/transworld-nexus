@@ -179,6 +179,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 setState(() => _menuCuentaAbierto = false);
                                 context.push(RoutePaths.perfil);
                               },
+                              onSincronizacion: () {
+                                setState(() => _menuCuentaAbierto = false);
+                                context.push(RoutePaths.sincronizacion);
+                              },
                               onActualizaciones: () {
                                 setState(() => _menuCuentaAbierto = false);
                                 context.push(RoutePaths.actualizaciones);
@@ -235,9 +239,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         child: UpdateChecker(
           child: Scaffold(
             backgroundColor: TwColors.bg,
-            body: Column(
+            body: OfflineBannerColumn(
               children: [
-                const OfflineBanner(),
                 Expanded(
                   child: Stack(
                     children: [
@@ -584,12 +587,14 @@ class _HeaderRoleChip extends StatelessWidget {
 class _MenuCuenta extends StatelessWidget {
   const _MenuCuenta({
     required this.onMiPerfil,
+    required this.onSincronizacion,
     required this.onActualizaciones,
     this.onDesinstalar,
     required this.onCerrarSesion,
   });
 
   final VoidCallback onMiPerfil;
+  final VoidCallback onSincronizacion;
   final VoidCallback onActualizaciones;
   final VoidCallback? onDesinstalar;
   final VoidCallback onCerrarSesion;
@@ -610,6 +615,12 @@ class _MenuCuenta extends StatelessWidget {
             icon: Symbols.person_rounded,
             label: 'Mi perfil',
             onTap: onMiPerfil,
+          ),
+          const _CuentaDivider(),
+          _CuentaTile(
+            icon: Symbols.sync_rounded,
+            label: 'Sincronización',
+            onTap: onSincronizacion,
           ),
           const _CuentaDivider(),
           _CuentaTile(

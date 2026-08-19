@@ -116,11 +116,29 @@ class _AcreditarConfirmadoScreenState
     );
   }
 
+  List<Registrado> _filtrarRegistrados(List<Registrado> registrados) {
+    return registrados.where((r) {
+      if (_busqueda.isEmpty) return true;
+      return r.nombreCompleto.toLowerCase().contains(_busqueda) ||
+          r.email.toLowerCase().contains(_busqueda);
+    }).toList();
+  }
+
+  void _actualizarRegistrados() {
+    ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+  }
+
   @override
   Widget build(BuildContext context) {
     final registradosAsync = ref.watch(
       registradosPorEventoProvider(widget.eventoId),
     );
+
+    final filtrados = registradosAsync.maybeWhen(
+      data: _filtrarRegistrados,
+      orElse: () => const <Registrado>[],
+    );
+    final listaVacia = registradosAsync.hasValue && filtrados.isEmpty;
 
     return CollapsingScrollScaffold(
       title: 'Acreditar asistente',
@@ -134,8 +152,8 @@ class _AcreditarConfirmadoScreenState
       pinnedContent: _buildSearchField(),
       pinnedContentHeight: 60,
       scrollResetToken: _busqueda,
-      onRefresh: () async =>
-          ref.invalidate(registradosPorEventoProvider(widget.eventoId)),
+      lockScroll: listaVacia,
+      onRefresh: () async => _actualizarRegistrados(),
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -163,28 +181,28 @@ class _AcreditarConfirmadoScreenState
             ),
           ],
           data: (registrados) {
-            final filtrados = registrados.where((r) {
-              if (_busqueda.isEmpty) return true;
-              return r.nombreCompleto.toLowerCase().contains(_busqueda) ||
-                  r.email.toLowerCase().contains(_busqueda);
-            }).toList();
+            final filtrados = _filtrarRegistrados(registrados);
 
             if (registrados.isEmpty) {
               return [
-                const SliverFillRemaining(
+                SliverFillRemaining(
+                  hasScrollBody: false,
                   child: EmptyStateView(
                     icon: Symbols.group_off_rounded,
                     message: 'Aún no hay asistentes registrados.',
+                    onRefresh: _actualizarRegistrados,
                   ),
                 ),
               ];
             }
             if (filtrados.isEmpty) {
               return [
-                const SliverFillRemaining(
+                SliverFillRemaining(
+                  hasScrollBody: false,
                   child: EmptyStateView(
                     icon: Symbols.search_off_rounded,
                     message: 'No se encontraron resultados.',
+                    onRefresh: _actualizarRegistrados,
                   ),
                 ),
               ];

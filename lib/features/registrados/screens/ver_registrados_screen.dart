@@ -119,6 +119,22 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
     );
   }
 
+  List<Registrado> _filtrarRegistrados(List<Registrado> registrados) {
+    return registrados.where((r) {
+      if (_filtro == _Filtro.acreditados && !r.acreditado) {
+        return false;
+      }
+      if (_filtro == _Filtro.pendientes && r.acreditado) return false;
+      if (_busqueda.isEmpty) return true;
+      return r.nombreCompleto.toLowerCase().contains(_busqueda) ||
+          r.email.toLowerCase().contains(_busqueda);
+    }).toList();
+  }
+
+  void _actualizarRegistrados() {
+    ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+  }
+
   Widget _buildPinnedControls() {
     return Column(
       children: [
@@ -152,6 +168,12 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
       registradosPorEventoProvider(widget.eventoId),
     );
 
+    final filtrados = registradosAsync.maybeWhen(
+      data: _filtrarRegistrados,
+      orElse: () => const <Registrado>[],
+    );
+    final listaVacia = registradosAsync.hasValue && filtrados.isEmpty;
+
     return CollapsingScrollScaffold(
       title: 'Registrados',
       topBanner: const OfflineBanner(),
@@ -164,8 +186,8 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
       pinnedContent: _buildPinnedControls(),
       pinnedContentHeight: 112,
       scrollResetToken: '$_busqueda|$_filtro',
-      onRefresh: () async =>
-          ref.invalidate(registradosPorEventoProvider(widget.eventoId)),
+      lockScroll: listaVacia,
+      onRefresh: () async => _actualizarRegistrados(),
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -195,32 +217,28 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
             ),
           ],
           data: (registrados) {
-            final filtrados = registrados.where((r) {
-              if (_filtro == _Filtro.acreditados && !r.acreditado) {
-                return false;
-              }
-              if (_filtro == _Filtro.pendientes && r.acreditado) return false;
-              if (_busqueda.isEmpty) return true;
-              return r.nombreCompleto.toLowerCase().contains(_busqueda) ||
-                  r.email.toLowerCase().contains(_busqueda);
-            }).toList();
+            final filtrados = _filtrarRegistrados(registrados);
 
             if (registrados.isEmpty) {
               return [
-                const SliverFillRemaining(
+                SliverFillRemaining(
+                  hasScrollBody: false,
                   child: EmptyStateView(
                     icon: Symbols.group_off_rounded,
                     message: 'Aún no hay asistentes registrados.',
+                    onRefresh: _actualizarRegistrados,
                   ),
                 ),
               ];
             }
             if (filtrados.isEmpty) {
               return [
-                const SliverFillRemaining(
+                SliverFillRemaining(
+                  hasScrollBody: false,
                   child: EmptyStateView(
                     icon: Symbols.search_off_rounded,
                     message: 'No hay registrados con estos filtros.',
+                    onRefresh: _actualizarRegistrados,
                   ),
                 ),
               ];

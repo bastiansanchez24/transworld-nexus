@@ -1,5 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/connectivity_service.dart';
+import '../../../data/offline/offline_cache_tables.dart';
+import '../../../data/offline/offline_read_cache.dart';
+
 import '../../../data/repositories/eventos_leads_repository.dart';
 import '../../../data/repositories/eventos_repository.dart';
 import '../../../data/repositories/fijados_repository.dart';
@@ -11,65 +15,82 @@ import '../models/home_featured_item.dart';
 import 'home_dashboard_providers.dart';
 
 /// Ítems del header del home: fijados primero; el próximo evento al final.
+///
+/// El resultado ya ensamblado se respalda en disco: son media docena de
+/// consultas encadenadas y sin red no hay forma de rehacerlas, así que el
+/// slider se serviría vacío justo en la pantalla de entrada.
 final homeFeaturedItemsProvider =
     FutureProvider.autoDispose<List<HomeFeaturedItem>>((ref) async {
-      ref.watch(authStateChangesProvider);
-      // Dependencias para refrescar al fijar/desfijar.
-      await ref.watch(eventosFijadosProvider.future);
-      await ref.watch(campanasFijadasProvider.future);
-
-      final fijadosRepo = ref.watch(fijadosRepositoryProvider);
-      final eventoIds = await fijadosRepo.listarEventosFijadosOrdenados();
-      final campanaIds = await fijadosRepo.listarCampanasFijadasOrdenadas();
-      final dashboard = await ref.watch(homeDashboardProvider.future);
-      final proximo = dashboard.proximoEvento;
-      final fijados = <HomeFeaturedItem>[];
-
-      if (eventoIds.isNotEmpty || campanaIds.isNotEmpty) {
-        final eventosRepo = ref.watch(eventosRepositoryProvider);
-        final campanasRepo = ref.watch(eventosLeadsRepositoryProvider);
-
-        for (final id in eventoIds) {
-          try {
-            final evento = await eventosRepo.obtenerPorId(id);
-            fijados.add(HomeFeaturedItem.eventoFijado(evento));
-          } catch (_) {
-            // Evento borrado o inaccesible: omitir.
-          }
-        }
-        for (final id in campanaIds) {
-          try {
-            final campana = await campanasRepo.obtenerPorId(id);
-            fijados.add(HomeFeaturedItem.campanaFijada(campana));
-          } catch (_) {
-            // Evento de leads borrado o inaccesible: omitir.
-          }
-        }
-      }
-
-      final items = ensamblarHomeFeaturedItems(
-        fijados: fijados,
-        proximo: proximo == null
-            ? null
-            : HomeFeaturedItem.proximoEvento(proximo),
-      );
-
-      if (items.isEmpty) return items;
-
-      final registradosRepo = ref.watch(registradosRepositoryProvider);
-      final campanasRepo = ref.watch(eventosLeadsRepositoryProvider);
-      final leadsRepo = ref.watch(leadsRepositoryProvider);
-      return Future.wait(
-        items.map(
-          (item) => _conMetricas(
-            item: item,
-            registradosRepo: registradosRepo,
-            campanasRepo: campanasRepo,
-            leadsRepo: leadsRepo,
-          ),
-        ),
+      final isOnline = ref.watch(isOnlineProvider);
+      final cache = ref.watch(offlineReadCacheProvider);
+      return cache.leerConRespaldoGlobal(
+        tabla: OfflineCacheTables.homeDestacados,
+        desdeServidor: () => _construirDestacados(ref),
+        aFila: (item) => item.toCacheMap(),
+        desdeFila: HomeFeaturedItem.fromCacheMap,
+        isOnline: isOnline,
+        // Presupuesto propio: encadena varias consultas y el corte por defecto
+        // lo mandaría a la copia local incluso con red buena.
+        esperaMaximaServidor: const Duration(seconds: 20),
       );
     });
+
+Future<List<HomeFeaturedItem>> _construirDestacados(Ref ref) async {
+  ref.watch(authStateChangesProvider);
+  // Dependencias para refrescar al fijar/desfijar.
+  await ref.watch(eventosFijadosProvider.future);
+  await ref.watch(campanasFijadasProvider.future);
+
+  final fijadosRepo = ref.watch(fijadosRepositoryProvider);
+  final eventoIds = await fijadosRepo.listarEventosFijadosOrdenados();
+  final campanaIds = await fijadosRepo.listarCampanasFijadasOrdenadas();
+  final dashboard = await ref.watch(homeDashboardProvider.future);
+  final proximo = dashboard.proximoEvento;
+  final fijados = <HomeFeaturedItem>[];
+
+  if (eventoIds.isNotEmpty || campanaIds.isNotEmpty) {
+    final eventosRepo = ref.watch(eventosRepositoryProvider);
+    final campanasRepo = ref.watch(eventosLeadsRepositoryProvider);
+
+    for (final id in eventoIds) {
+      try {
+        final evento = await eventosRepo.obtenerPorId(id);
+        fijados.add(HomeFeaturedItem.eventoFijado(evento));
+      } catch (_) {
+        // Evento borrado o inaccesible: omitir.
+      }
+    }
+    for (final id in campanaIds) {
+      try {
+        final campana = await campanasRepo.obtenerPorId(id);
+        fijados.add(HomeFeaturedItem.campanaFijada(campana));
+      } catch (_) {
+        // Evento de leads borrado o inaccesible: omitir.
+      }
+    }
+  }
+
+  final items = ensamblarHomeFeaturedItems(
+    fijados: fijados,
+    proximo: proximo == null ? null : HomeFeaturedItem.proximoEvento(proximo),
+  );
+
+  if (items.isEmpty) return items;
+
+  final registradosRepo = ref.watch(registradosRepositoryProvider);
+  final campanasRepo = ref.watch(eventosLeadsRepositoryProvider);
+  final leadsRepo = ref.watch(leadsRepositoryProvider);
+  return Future.wait(
+    items.map(
+      (item) => _conMetricas(
+        item: item,
+        registradosRepo: registradosRepo,
+        campanasRepo: campanasRepo,
+        leadsRepo: leadsRepo,
+      ),
+    ),
+  );
+}
 
 Future<HomeFeaturedItem> _conMetricas({
   required HomeFeaturedItem item,

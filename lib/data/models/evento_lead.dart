@@ -99,6 +99,25 @@ class EventoLead {
     );
   }
 
+  /// Copia serializable para la caché offline, con las claves de
+  /// [EventoLead.fromMap]. Conserva `evento_origen_id`, que es lo que permite
+  /// capturar un lead sin red sobre una actividad ya sincronizada.
+  Map<String, dynamic> toCacheMap() {
+    return {
+      'id': id,
+      'nombre': nombre,
+      'fecha': fecha.toIso8601String(),
+      'pais': pais,
+      'tematica': tematica,
+      'certificacion_capacitacion': certificacionCapacitacion,
+      'perfil_id': perfilId,
+      'evento_origen_id': eventoOrigenId,
+      'tipo_evento_lead': tipo.name,
+      'imagen_url': imagenUrl,
+      'created_at': createdAt?.toIso8601String(),
+    };
+  }
+
   Map<String, dynamic> toInsertMap() {
     return {
       'nombre': nombre,

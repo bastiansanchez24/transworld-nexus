@@ -113,14 +113,28 @@ class _EditarRegistradoScreenState
       'acreditado': _acreditado,
     };
 
-    try {
-      final isOnline = ref.read(isOnlineProvider);
+    // Editar la ficha de un registrado no es una operación de feria: se hace
+    // desde la oficina y toca datos que otros pueden estar cambiando a la vez.
+    // Encolarla sin red arriesga pisar cambios ajenos sin que nadie lo vea, así
+    // que se corta. Acreditar —que sí es de feria— sigue yendo a la cola.
+    if (!ref.read(isOnlineProvider)) {
+      setState(() => _guardando = false);
+      showAppSnackBar(
+        context,
+        'Sin conexión: editar la ficha requiere internet.',
+        isError: true,
+      );
+      return;
+    }
 
-      if (isOnline && !_esPendiente) {
+    try {
+      if (!_esPendiente) {
         await ref
             .read(registradosRepositoryProvider)
             .actualizar(widget.registradoId, cambios);
       } else {
+        // La fila solo existe en la cola local: el cambio se fusiona con su
+        // insert pendiente, no crea una operación nueva.
         await ref
             .read(syncQueueServiceProvider.notifier)
             .enqueueUpdate(

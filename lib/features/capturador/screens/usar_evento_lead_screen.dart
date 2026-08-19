@@ -59,9 +59,8 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
         value: SystemUiOverlayStyle.dark,
         child: Scaffold(
           backgroundColor: TwColors.bg,
-          body: Column(
+          body: OfflineBannerColumn(
             children: [
-              const OfflineBanner(),
               Expanded(
                 child: eventoAsync.when(
                   skipLoadingOnReload: true,

@@ -378,6 +378,7 @@ class CollapsingScrollScaffold extends StatefulWidget {
     this.alwaysShowActions = false,
     this.topBanner,
     this.onRefresh,
+    this.lockScroll = false,
 
     /// Si cambia (p. ej. query/filtro), el scroll vuelve arriba para no dejar
     /// filas “volando” con el offset anterior.
@@ -404,6 +405,9 @@ class CollapsingScrollScaffold extends StatefulWidget {
   final bool alwaysShowActions;
   final Widget? topBanner;
   final Future<void> Function()? onRefresh;
+
+  /// Sin bounce ni pull-to-refresh: el aviso de lista vacía no se mueve.
+  final bool lockScroll;
   final Object? scrollResetToken;
 
   Widget? get effectivePinnedContent => pinnedContent ?? pinnedSearch;
@@ -436,7 +440,8 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
   @override
   void didUpdateWidget(covariant CollapsingScrollScaffold oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.scrollResetToken != widget.scrollResetToken) {
+    if (oldWidget.scrollResetToken != widget.scrollResetToken ||
+        (!oldWidget.lockScroll && widget.lockScroll)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _resetScroll();
@@ -549,11 +554,13 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
 
     final scrollView = CustomScrollView(
       controller: _scrollController,
-      physics: _scrollPhysics,
+      physics: widget.lockScroll
+          ? const NeverScrollableScrollPhysics()
+          : _scrollPhysics,
       slivers: [...topSpacer, ...contentSlivers, ...bottomSpacer],
     );
 
-    if (widget.onRefresh != null) {
+    if (!widget.lockScroll && widget.onRefresh != null) {
       return RefreshIndicator(
         color: AppColors.primary,
         edgeOffset: metrics.overlayHeight(conAcciones: _tieneAccionesFijas),

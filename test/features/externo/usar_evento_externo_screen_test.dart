@@ -97,15 +97,45 @@ void main() {
     expect(find.text('Registrar Asistente'), findsNothing);
     expect(find.text('Acreditados'), findsNothing);
     expect(find.text('Pendientes'), findsNothing);
-    expect(find.byKey(const Key('externo_logout_button')), findsOneWidget);
+    // Su operación es capturar leads; el escáner es el atajo para prellenar.
+    expect(
+      find.byKey(const Key('externo_capturar_lead_button')),
+      findsOneWidget,
+    );
+    // Cerrar sesión dejó de colgar del "atrás" de la cabecera: ahí ahora está
+    // su foto, y el logout vive en el menú de ajustes.
+    expect(find.byKey(const Key('externo_logout_button')), findsNothing);
+    expect(find.byKey(const Key('externo_ajustes_button')), findsOneWidget);
     // Sin foto el hero se pinta solo con el degradado del rediseño.
     expect(find.byType(EventoHeroFoto), findsNothing);
     expect(find.text('EVENTO ACTIVO'), findsOneWidget);
 
-    final logoutRect = tester.getRect(
-      find.byKey(const Key('externo_logout_button')),
+    final ajustesRect = tester.getRect(
+      find.byKey(const Key('externo_ajustes_button')),
     );
-    expect(logoutRect.right, lessThanOrEqualTo(320));
+    expect(ajustesRect.right, lessThanOrEqualTo(320));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('el menú de ajustes ofrece perfil, sincronización y salir', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await montar(tester);
+
+    await tester.tap(find.byKey(const Key('externo_ajustes_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mi perfil'), findsOneWidget);
+    expect(find.text('Sincronización'), findsOneWidget);
+    expect(find.byKey(const Key('externo_logout_button')), findsOneWidget);
+    // El externo no recibe notificaciones: una campana siempre vacía solo
+    // genera dudas.
+    expect(find.text('Notificaciones'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
