@@ -79,7 +79,7 @@ void main() {
       expect(find.text('EMPRESAS'), findsOneWidget);
       expect(find.text('12'), findsOneWidget);
       expect(find.text('5'), findsOneWidget);
-      expect(find.text('Detalle de la actividad'), findsOneWidget);
+      expect(find.text('DETALLE DE LA ACTIVIDAD'), findsOneWidget);
       expect(find.byType(EventoHeroFoto), findsNothing);
       expect(find.text('Mis leads'), findsNothing);
       expect(tester.takeException(), isNull);
