@@ -3,7 +3,7 @@
     <!-- Same branded splash in dark mode (API 31+). -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowSplashScreenBackground">@color/splash_background</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_logo_inset</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_background</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>

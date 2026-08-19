@@ -387,18 +387,20 @@ class AppTheme {
           TargetPlatform.linux: ZoomPageTransitionsBuilder(),
         },
       ),
-      // Mismo campo que `TwTextField`: relleno `fieldBg`, borde `fieldBorder`
-      // y radio 12, para que los formularios Material y los del rediseño no se
-      // vean como dos sistemas distintos.
+      // Campos editables: blanco + marco navy. Deshabilitados: fondo de
+      // pantalla y borde hairline, para que no se confundan con un input.
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: TwColors.fieldBg,
+        fillColor: WidgetStateColor.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) return TwColors.bg;
+          return TwColors.fieldBg;
+        }),
         hintStyle: TwText.input.copyWith(color: TwColors.muted),
         labelStyle: TwText.input.copyWith(color: TwColors.secondary),
-        border: _twFieldBorder(TwColors.fieldBorder),
-        enabledBorder: _twFieldBorder(TwColors.fieldBorder),
+        border: _twFieldBorder(TwColors.fieldBorderActive),
+        enabledBorder: _twFieldBorder(TwColors.fieldBorderActive),
         disabledBorder: _twFieldBorder(TwColors.fieldBorder),
-        focusedBorder: _twFieldBorder(TwColors.fieldBorder),
+        focusedBorder: _twFieldBorder(TwColors.fieldBorderActive, width: 1.5),
         errorBorder: _twFieldBorder(TwColors.danger),
         focusedErrorBorder: _twFieldBorder(TwColors.danger, width: 1.5),
         errorStyle: TwText.errorText,
@@ -502,4 +504,32 @@ class AppTheme {
       ),
     );
   }
+}
+
+/// Decoración para campos `readOnly`: se funden con el fondo. Material no
+/// tiene `WidgetState` para solo-lectura, así que hay que aplicarla a mano.
+InputDecoration twReadOnlyDecoration({
+  String? hintText,
+  String? helperText,
+  int? helperMaxLines,
+  Widget? suffixIcon,
+  String? labelText,
+}) {
+  const border = OutlineInputBorder(
+    borderRadius: TwRadii.field,
+    borderSide: BorderSide(color: TwColors.fieldBorder),
+  );
+  return InputDecoration(
+    hintText: hintText,
+    helperText: helperText,
+    helperMaxLines: helperMaxLines,
+    suffixIcon: suffixIcon,
+    labelText: labelText,
+    filled: true,
+    fillColor: TwColors.bg,
+    border: border,
+    enabledBorder: border,
+    disabledBorder: border,
+    focusedBorder: border,
+  );
 }

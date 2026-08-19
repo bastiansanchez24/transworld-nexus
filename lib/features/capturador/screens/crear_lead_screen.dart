@@ -531,6 +531,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
         loading: () => const Text('Capturar lead'),
         error: (_, _) => const Text('Capturar lead'),
       ),
+      onWillPop: () => confirmDiscardCreate(context),
       body: SingleChildScrollView(
         padding: AppSpacing.form,
         child: Form(

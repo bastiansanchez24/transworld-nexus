@@ -767,14 +767,75 @@ class NexusFormTextField extends StatelessWidget {
           keyboardType: keyboardType,
           maxLines: maxLines,
           textInputAction: textInputAction,
-          decoration: InputDecoration(
-            hintText: hintText,
-            alignLabelWithHint: maxLines > 1,
-            suffixIcon: suffixIcon,
-          ),
+          decoration:
+              (readOnly
+                      ? twReadOnlyDecoration(hintText: hintText)
+                      : InputDecoration(hintText: hintText))
+                  .copyWith(
+                    alignLabelWithHint: maxLines > 1,
+                    suffixIcon: suffixIcon,
+                  ),
           validator: validator,
         ),
       ],
+    );
+  }
+}
+
+/// Campo de fecha alineado con los [TextFormField]: blanco + marco navy si
+/// se puede editar; fondo de pantalla si no.
+class FechaPickerField extends StatelessWidget {
+  const FechaPickerField({
+    super.key,
+    required this.fecha,
+    this.onTap,
+    this.enabled = true,
+  });
+
+  final DateTime fecha;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final editable = enabled && onTap != null;
+    return Material(
+      color: editable ? TwColors.surface : TwColors.bg,
+      borderRadius: TwRadii.field,
+      child: InkWell(
+        onTap: editable ? onTap : null,
+        borderRadius: TwRadii.field,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: TwRadii.field,
+            border: Border.all(
+              color: editable
+                  ? TwColors.fieldBorderActive
+                  : TwColors.fieldBorder,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  DateFormat('dd/MM/yyyy').format(fecha),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: editable ? AppColors.ink : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              Icon(
+                Symbols.calendar_today_rounded,
+                size: 19,
+                color: editable ? AppColors.primary : AppColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -934,9 +995,8 @@ class PersonaIdentityBanner extends StatelessWidget {
         disabledBorder: _borde(0.14),
         focusedBorder: _borde(0.8, grosor: 1.5),
         // El rojo de error no se lee sobre el navy; la lima del brand sí.
-        errorBorder: _borde(
-          0.5,
-        ).copyWith(borderSide: const BorderSide(color: AppColors.accent)),
+        errorBorder: _borde(0.5)
+            .copyWith(borderSide: const BorderSide(color: AppColors.accent)),
         focusedErrorBorder: _borde(0.5).copyWith(
           borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
         ),

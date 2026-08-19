@@ -414,6 +414,14 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
   /// [_fotos] al pintar y al guardar.
   Uint8List? _fotoNueva;
 
+  String _nombre0 = '';
+  String _empresa0 = '';
+  String _cargo0 = '';
+  String _telefono0 = '';
+  String _email0 = '';
+  String _descripcion0 = '';
+  List<String> _fotos0 = const [];
+
   @override
   void dispose() {
     _nombreController.dispose();
@@ -435,6 +443,25 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     _emailController.text = lead.email ?? '';
     _descripcionController.text = lead.descripcion ?? '';
     _fotos = lead.fotosUrls;
+    _nombre0 = _nombreController.text;
+    _empresa0 = _empresaController.text;
+    _cargo0 = _cargoController.text;
+    _telefono0 = _telefonoController.text;
+    _email0 = _emailController.text;
+    _descripcion0 = _descripcionController.text;
+    _fotos0 = List<String>.from(_fotos);
+  }
+
+  bool get _hayCambios {
+    if (!_cargado) return false;
+    return _nombreController.text != _nombre0 ||
+        _empresaController.text != _empresa0 ||
+        _cargoController.text != _cargo0 ||
+        _telefonoController.text != _telefono0 ||
+        _emailController.text != _email0 ||
+        _descripcionController.text != _descripcion0 ||
+        _fotoNueva != null ||
+        !const ListEquality<String>().equals(_fotos, _fotos0);
   }
 
   String? get _fotoGuardada => _fotos.firstWhereOrNull((u) => !esFotoLocal(u));
@@ -688,6 +715,12 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
 
     return AppScaffold(
       title: 'Editar lead',
+      onWillPop: () => handleFormExit(
+        context: context,
+        isCreate: false,
+        isDirty: _hayCambios,
+        save: _guardar,
+      ),
       actions: [
         // Un insert encolado no existe en el servidor: borrarlo desde acá lo
         // dejaría en la cola y reaparecería al sincronizar.

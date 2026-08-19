@@ -485,9 +485,11 @@ class TwTextField extends StatelessWidget {
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: TwColors.fieldBg,
+        color: enabled ? TwColors.fieldBg : TwColors.bg,
         borderRadius: TwRadii.field,
-        border: Border.all(color: TwColors.fieldBorder),
+        border: Border.all(
+          color: enabled ? TwColors.fieldBorderActive : TwColors.fieldBorder,
+        ),
       ),
       child: Row(
         children: [

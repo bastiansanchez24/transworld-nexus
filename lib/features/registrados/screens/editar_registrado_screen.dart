@@ -46,6 +46,14 @@ class _EditarRegistradoScreenState
   bool _cargado = false;
   bool _guardando = false;
 
+  String _nombre0 = '';
+  String _empresa0 = '';
+  String _cargo0 = '';
+  String _telefono0 = '';
+  String _rut0 = '';
+  String _patente0 = '';
+  bool _acreditado0 = false;
+
   /// Un insert todavía en la cola no tiene fila en el servidor: su id es el
   /// temporal que generó [SyncQueueService], no un uuid real.
   bool get _esPendiente => esIdSoloLocal(widget.registradoId);
@@ -71,6 +79,24 @@ class _EditarRegistradoScreenState
     _rutController.text = r.rut ?? '';
     _patenteController.text = r.patente ?? '';
     _acreditado = r.acreditado;
+    _nombre0 = _nombreController.text;
+    _empresa0 = _empresaController.text;
+    _cargo0 = _cargoController.text;
+    _telefono0 = _telefonoController.text;
+    _rut0 = _rutController.text;
+    _patente0 = _patenteController.text;
+    _acreditado0 = _acreditado;
+  }
+
+  bool get _hayCambios {
+    if (!_cargado) return false;
+    return _nombreController.text != _nombre0 ||
+        _empresaController.text != _empresa0 ||
+        _cargoController.text != _cargo0 ||
+        _telefonoController.text != _telefono0 ||
+        _rutController.text != _rut0 ||
+        _patenteController.text != _patente0 ||
+        _acreditado != _acreditado0;
   }
 
   Future<void> _guardar() async {
@@ -149,6 +175,12 @@ class _EditarRegistradoScreenState
 
     return AppScaffold(
       title: 'Editar registrado',
+      onWillPop: () => handleFormExit(
+        context: context,
+        isCreate: false,
+        isDirty: _hayCambios,
+        save: _guardar,
+      ),
       actions: [
         // Borrar un insert encolado no lo saca de la cola: reaparecería al
         // sincronizar, así que ni se ofrece.

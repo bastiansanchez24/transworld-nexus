@@ -47,7 +47,8 @@ class CollapsingNavMetrics {
 
   double get barWithSearch => barHeight + 56;
 
-  /// Fade del blur/título compacto una vez el header toca el borde superior.
+  /// Fade del blur/título compacto una vez el header toca el borde superior
+  /// o, con acciones fijas, el botón atrás.
   static const double collapseFadeRange = 20;
 
   /// Aire reservado sobre el contenido scrollable.
@@ -59,9 +60,10 @@ class CollapsingNavMetrics {
   double contentTop({required bool conAcciones}) =>
       conAcciones ? overlayHeight(conAcciones: true) : topInset + gapTop;
 
-  /// Scroll hasta que el header toca el borde superior (bajo el safe area).
+  /// Scroll hasta que el título grande toca el botón atrás (si hay acciones)
+  /// o el borde superior (si no las hay). Ambos umbrales miden 14.
   double collapseStart({required bool conAcciones}) =>
-      contentTop(conAcciones: conAcciones) - topInset;
+      conAcciones ? gapActionsBottom : gapTop;
 }
 
 /// Overlay sticky con blur scroll-driven (HANDOFF §4.1).
@@ -76,8 +78,9 @@ class CollapsingNavOverlay extends StatelessWidget {
     this.trailing,
     this.alwaysShowActions = false,
 
-    /// Scroll en el que el header toca el borde superior. Hasta entonces
-    /// el blur y el título compacto no aparecen.
+    /// Scroll en el que el título grande toca el atrás (o el borde
+    /// superior, si no hay acciones). Hasta entonces el blur y el
+    /// título compacto no aparecen.
     this.collapseStart = 0,
   });
 

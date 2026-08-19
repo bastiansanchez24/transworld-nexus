@@ -22,6 +22,7 @@ class AppScaffold extends StatelessWidget {
     this.headerBottom,
     this.floatingActionButton,
     this.maxContentWidth = 760,
+    this.onWillPop,
   });
 
   final Widget body;
@@ -32,32 +33,54 @@ class AppScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
   final double maxContentWidth;
 
+  /// Si no es null, intercepta atrás (cabecera, sistema y `maybePop`).
+  /// Devuelve `true` para salir.
+  final Future<bool> Function()? onWillPop;
+
+  Future<void> _intentarVolver(BuildContext context) async {
+    if (onWillPop != null) {
+      final salir = await onWillPop!();
+      if (!salir || !context.mounted) return;
+    }
+    if (context.mounted) context.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return BrowserThemeColor(
-      color: TwColors.bg,
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark,
-        child: Scaffold(
-          backgroundColor: TwColors.bg,
-          floatingActionButton: floatingActionButton,
-          body: Column(
-            children: [
-              const OfflineBanner(),
-              _PushHeader(
-                title: title,
-                titleWidget: titleWidget,
-                actions: actions,
-              ),
-              if (headerBottom != null)
-                _constrained(
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                    child: headerBottom!,
-                  ),
+    return PopScope(
+      canPop: onWillPop == null,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop || onWillPop == null) return;
+        final salir = await onWillPop!();
+        if (salir && context.mounted) context.pop();
+      },
+      child: BrowserThemeColor(
+        color: TwColors.bg,
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle.dark,
+          child: Scaffold(
+            backgroundColor: TwColors.bg,
+            floatingActionButton: floatingActionButton,
+            body: Column(
+              children: [
+                const OfflineBanner(),
+                _PushHeader(
+                  title: title,
+                  titleWidget: titleWidget,
+                  actions: actions,
+                  mostrarAtras: onWillPop != null || context.canPop(),
+                  onBack: () => _intentarVolver(context),
                 ),
-              Expanded(child: _constrained(body)),
-            ],
+                if (headerBottom != null)
+                  _constrained(
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                      child: headerBottom!,
+                    ),
+                  ),
+                Expanded(child: _constrained(body)),
+              ],
+            ),
           ),
         ),
       ),
@@ -115,15 +138,22 @@ class NexusHeaderAction extends StatelessWidget {
 }
 
 class _PushHeader extends StatelessWidget {
-  const _PushHeader({this.title, this.titleWidget, this.actions});
+  const _PushHeader({
+    this.title,
+    this.titleWidget,
+    this.actions,
+    required this.mostrarAtras,
+    required this.onBack,
+  });
 
   final String? title;
   final Widget? titleWidget;
   final List<Widget>? actions;
+  final bool mostrarAtras;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    final puedeVolver = context.canPop();
     final top = MediaQuery.paddingOf(context).top;
 
     return ClipRect(
@@ -144,11 +174,11 @@ class _PushHeader extends StatelessWidget {
           ),
           child: Row(
             children: [
-              if (puedeVolver)
+              if (mostrarAtras)
                 NexusHeaderAction(
                   icon: Symbols.arrow_back_rounded,
                   tooltip: 'Volver',
-                  onTap: () => context.pop(),
+                  onTap: onBack,
                 )
               else
                 const SizedBox(width: NexusHeaderAction.size),

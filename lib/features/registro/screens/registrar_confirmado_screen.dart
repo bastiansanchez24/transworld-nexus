@@ -186,6 +186,7 @@ class _RegistrarConfirmadoScreenState
 
     return AppScaffold(
       title: 'Registrar asistente',
+      onWillPop: () => confirmDiscardCreate(context),
       body: eventoAsync.when(
         loading: () => const LoadingView(),
         error: (e, _) =>

@@ -171,3 +171,68 @@ Future<bool> confirmDialog(
   );
   return result ?? false;
 }
+
+/// Resultado del modal de salida con cambios en un formulario de edición.
+enum FormExitAction { stay, discard, save }
+
+/// Crear: al ir atrás, ¿descartar lo que se estaba creando?
+Future<bool> confirmDiscardCreate(BuildContext context) {
+  return confirmDialog(
+    context,
+    title: '¿Descartar?',
+    message: 'Si sales ahora se perderá lo que estabas creando.',
+    confirmLabel: 'Descartar',
+  );
+}
+
+/// Editar: hay cambios. Seguir, descartar o guardar.
+Future<FormExitAction> confirmSaveEdits(BuildContext context) async {
+  final result = await showDialog<FormExitAction>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('¿Guardar los cambios?'),
+      content: const Text('Hay cambios sin guardar.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(FormExitAction.stay),
+          child: const Text('Seguir editando'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(FormExitAction.discard),
+          child: const Text('Descartar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(FormExitAction.save),
+          child: const Text('Guardar'),
+        ),
+      ],
+    ),
+  );
+  return result ?? FormExitAction.stay;
+}
+
+/// Intercepta atrás en formularios de crear/editar.
+///
+/// En edición, [save] debe navegar por su cuenta si el guardado funciona
+/// (pop / go a la lista). Este helper entonces devuelve `false` para no
+/// hacer un segundo pop.
+Future<bool> handleFormExit({
+  required BuildContext context,
+  required bool isCreate,
+  bool isDirty = false,
+  bool readOnly = false,
+  Future<void> Function()? save,
+}) async {
+  if (isCreate) return confirmDiscardCreate(context);
+  if (readOnly || !isDirty) return true;
+  final action = await confirmSaveEdits(context);
+  switch (action) {
+    case FormExitAction.stay:
+      return false;
+    case FormExitAction.discard:
+      return true;
+    case FormExitAction.save:
+      await save?.call();
+      return false;
+  }
+}

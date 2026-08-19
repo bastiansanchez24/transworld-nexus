@@ -16,6 +16,7 @@ Future<void> _montarPantallaPush(
   List<Widget>? actions,
   Widget body = const SizedBox.shrink(),
   bool settle = true,
+  Future<bool> Function()? onWillPop,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
@@ -29,8 +30,12 @@ Future<void> _montarPantallaPush(
         routes: [
           GoRoute(
             path: 'editar',
-            builder: (_, _) =>
-                AppScaffold(title: 'Editar algo', actions: actions, body: body),
+            builder: (_, _) => AppScaffold(
+              title: 'Editar algo',
+              actions: actions,
+              body: body,
+              onWillPop: onWillPop,
+            ),
           ),
         ],
       ),
@@ -178,5 +183,33 @@ void main() {
         .bottom;
     final bodyTop = tester.getRect(find.byKey(cuerpo)).top;
     expect(bodyTop, closeTo(headerBottom, 0.5));
+  });
+
+  testWidgets('onWillPop false no cierra la pantalla', (tester) async {
+    var consultas = 0;
+    await _montarPantallaPush(
+      tester,
+      onWillPop: () async {
+        consultas += 1;
+        return false;
+      },
+    );
+
+    expect(find.text('Editar algo'), findsOneWidget);
+    await tester.tap(find.byTooltip('Volver'));
+    await tester.pumpAndSettle();
+
+    expect(consultas, 1);
+    expect(find.text('Editar algo'), findsOneWidget);
+  });
+
+  testWidgets('onWillPop true cierra la pantalla', (tester) async {
+    await _montarPantallaPush(tester, onWillPop: () async => true);
+
+    expect(find.text('Editar algo'), findsOneWidget);
+    await tester.tap(find.byTooltip('Volver'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Editar algo'), findsNothing);
   });
 }

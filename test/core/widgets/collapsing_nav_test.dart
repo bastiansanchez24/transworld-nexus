@@ -99,9 +99,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final metricas = tester.element(find.byType(CollapsingScrollScaffold));
-    final overlayH = CollapsingNavMetrics(
-      metricas,
-    ).overlayHeight(conAcciones: true);
+    final overlayH = CollapsingNavMetrics(metricas)
+        .overlayHeight(conAcciones: true);
 
     expect(
       overlayH,
@@ -146,5 +145,30 @@ void main() {
     );
     expect(opaco.bgOpacity, 1);
     expect(opaco.titleOpacity, 1);
+  });
+
+  testWidgets('con acciones el colapso arranca al tocar el atrás', (
+    tester,
+  ) async {
+    late CollapsingNavMetrics metricas;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            metricas = CollapsingNavMetrics(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    expect(
+      metricas.collapseStart(conAcciones: false),
+      CollapsingNavMetrics.gapTop,
+    );
+    expect(
+      metricas.collapseStart(conAcciones: true),
+      CollapsingNavMetrics.gapActionsBottom,
+    );
   });
 }
