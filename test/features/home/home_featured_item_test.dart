@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transworld_nexus/data/models/evento.dart';
+import 'package:transworld_nexus/data/models/evento_lead.dart';
 import 'package:transworld_nexus/features/home/models/home_featured_item.dart';
 
 HomeFeaturedItem _item({required HomeFeaturedKind kind, required String id}) {
@@ -65,5 +66,23 @@ void main() {
       HomeFeaturedItem.proximoEvento(evento).copyWith(registrados: 3).imagenUrl,
       url,
     );
+  });
+
+  test('la actividad fijada copia la imagen y ofrece capturar lead', () {
+    final campana = EventoLead(
+      id: 'c1',
+      nombre: 'Feria',
+      fecha: DateTime(2026, 9, 12),
+      imagenUrl: 'https://cdn.example/feria.jpg',
+    );
+    final item = HomeFeaturedItem.campanaFijada(campana);
+
+    expect(item.etiqueta, 'ACTIVIDAD FIJADA');
+    expect(item.ctaLabel, 'Capturar lead');
+    expect(item.ctaRoutePath, '/capturador/c1/capturar');
+    expect(item.secondaryCtaLabel, 'Ver actividad');
+    expect(item.qrRoutePath, isNull);
+    expect(item.tieneImagen, isTrue);
+    expect(item.imagenUrl, 'https://cdn.example/feria.jpg');
   });
 }

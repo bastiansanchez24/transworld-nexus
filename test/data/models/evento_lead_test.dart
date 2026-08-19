@@ -53,6 +53,19 @@ void main() {
     expect(insert['tipo_evento_lead'], 'interno');
     expect(insert['evento_origen_id'], 'evento-1');
     expect(insert['pais'], 'Chile');
+    expect(insert['imagen_url'], isNull);
+  });
+
+  test('internoDesdeEvento copia la imagen del evento de origen', () {
+    final evento = EventoLead.internoDesdeEvento(
+      eventoOrigenId: 'evento-1',
+      nombre: 'Transworld Connect',
+      fecha: DateTime(2026, 9, 12),
+      imagenUrl: 'https://cdn.example/evento.jpg',
+    );
+
+    expect(evento.tieneImagen, isTrue);
+    expect(evento.toInsertMap()['imagen_url'], 'https://cdn.example/evento.jpg');
   });
 
   test('el alta manual viaja como externa y sin evento de origen', () {
@@ -79,7 +92,20 @@ void main() {
 
     expect(update.containsKey('tipo_evento_lead'), isFalse);
     expect(update.containsKey('evento_origen_id'), isFalse);
-    expect(update['nombre'], 'Otro nombre');
+    expect(update.containsKey('nombre'), isFalse);
+    expect(update, isEmpty);
+  });
+
+  test('fromMap lee la imagen de portada', () {
+    final evento = EventoLead.fromMap({
+      'id': 'el-1',
+      'nombre': 'Feria retail',
+      'fecha': '2026-09-12',
+      'imagen_url': 'https://cdn.example/feria.jpg',
+    });
+
+    expect(evento.imagenUrl, 'https://cdn.example/feria.jpg');
+    expect(evento.tieneImagen, isTrue);
   });
 
   test('copyWith conserva el vínculo con el evento de origen', () {
@@ -93,5 +119,19 @@ void main() {
 
     expect(editado.esInterno, isTrue);
     expect(editado.eventoOrigenId, 'evento-1');
+  });
+
+  test('una actividad externa sí persiste los campos del formulario', () {
+    final update = EventoLead(
+      id: 'el-1',
+      nombre: 'Feria retail',
+      fecha: DateTime(2026, 9, 12),
+      pais: 'Chile',
+      tematica: 'Retail',
+    ).toUpdateMap();
+
+    expect(update['nombre'], 'Feria retail');
+    expect(update['pais'], 'Chile');
+    expect(update.containsKey('tipo_evento_lead'), isFalse);
   });
 }

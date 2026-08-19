@@ -86,20 +86,21 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('sin evento de leads se ofrece crearlo', (tester) async {
+  testWidgets('sin actividad de captura se ofrece crearla', (tester) async {
     await montar(tester, perfil: admin, vinculado: null);
 
-    expect(find.text('Crear evento de leads'), findsOneWidget);
-    expect(find.text('Ver evento de leads'), findsNothing);
+    expect(find.text('Crear actividad de captura'), findsOneWidget);
+    expect(find.text('Ver actividad de captura'), findsNothing);
+    expect(find.text('ACCIONES DEL EVENTO'), findsOneWidget);
   });
 
-  testWidgets('con evento de leads se abre el existente, no se crea otro', (
+  testWidgets('con actividad de captura se abre la existente, no se crea otra', (
     tester,
   ) async {
     await montar(tester, perfil: admin, vinculado: eventoLead);
 
-    expect(find.text('Ver evento de leads'), findsOneWidget);
-    expect(find.text('Crear evento de leads'), findsNothing);
+    expect(find.text('Ver actividad de captura'), findsOneWidget);
+    expect(find.text('Crear actividad de captura'), findsNothing);
   });
 
   testWidgets('quien no crea contenido no ve el botón de creación', (
@@ -107,14 +108,14 @@ void main() {
   ) async {
     await montar(tester, perfil: usuario, vinculado: null);
 
-    expect(find.text('Crear evento de leads'), findsNothing);
+    expect(find.text('Crear actividad de captura'), findsNothing);
   });
 
-  testWidgets('quien no crea contenido sí puede abrir el ya creado', (
+  testWidgets('quien no crea contenido sí puede abrir la ya creada', (
     tester,
   ) async {
     await montar(tester, perfil: usuario, vinculado: eventoLead);
 
-    expect(find.text('Ver evento de leads'), findsOneWidget);
+    expect(find.text('Ver actividad de captura'), findsOneWidget);
   });
 }

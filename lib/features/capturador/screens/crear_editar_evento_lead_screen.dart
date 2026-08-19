@@ -25,7 +25,8 @@ class CrearEditarEventoLeadScreen extends StatelessWidget {
     return RequirePermission(
       allowed: (p) => p.canCreateContent,
       deniedMessage:
-          'Solo administradores y organizadores pueden crear o editar eventos.',
+          'Solo administradores y organizadores pueden crear o editar '
+          'actividades de captura.',
       builder: (context) => _CrearEditarEventoLeadForm(eventoId: eventoId),
     );
   }
@@ -51,8 +52,10 @@ class _CrearEditarEventoLeadFormState
   DateTime _fecha = DateTime.now();
   bool _guardando = false;
   bool _cargado = false;
+  bool _heredada = false;
 
   bool get _esEdicion => widget.eventoId != null;
+  bool get _soloLectura => _heredada;
 
   @override
   void dispose() {
@@ -69,9 +72,14 @@ class _CrearEditarEventoLeadFormState
     _paisController.text = evento.pais ?? '';
     _tematicaController.text = evento.tematica ?? '';
     _fecha = evento.fecha;
+    _heredada = evento.esInterno;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _elegirFecha() async {
+    if (_soloLectura) return;
     final seleccionada = await showDatePicker(
       context: context,
       initialDate: _fecha,
@@ -82,6 +90,7 @@ class _CrearEditarEventoLeadFormState
   }
 
   Future<void> _guardar() async {
+    if (_soloLectura) return;
     if (!_formKey.currentState!.validate()) return;
     setState(() => _guardando = true);
 
@@ -113,7 +122,7 @@ class _CrearEditarEventoLeadFormState
       if (mounted) {
         showAppSnackBar(
           context,
-          _esEdicion ? 'Evento actualizado.' : 'Evento creado.',
+          _esEdicion ? 'Actividad actualizada.' : 'Actividad creada.',
         );
         context.pop();
       }
@@ -121,7 +130,7 @@ class _CrearEditarEventoLeadFormState
       if (mounted) {
         showAppSnackBar(
           context,
-          'No se pudo guardar el evento.',
+          'No se pudo guardar la actividad.',
           isError: true,
         );
       }
@@ -133,9 +142,9 @@ class _CrearEditarEventoLeadFormState
   Future<void> _eliminar() async {
     final confirmado = await confirmDialog(
       context,
-      title: 'Eliminar evento',
+      title: 'Eliminar actividad',
       message:
-          'Esta acción no se puede deshacer. ¿Eliminar el evento de captura?',
+          'Esta acción no se puede deshacer. ¿Eliminar la actividad de captura?',
       confirmLabel: 'Eliminar',
     );
     if (!confirmado) return;
@@ -151,7 +160,7 @@ class _CrearEditarEventoLeadFormState
       if (mounted) {
         showAppSnackBar(
           context,
-          'No se pudo eliminar el evento.',
+          'No se pudo eliminar la actividad.',
           isError: true,
         );
       }
@@ -170,12 +179,14 @@ class _CrearEditarEventoLeadFormState
     }
 
     return AppScaffold(
-      title: _esEdicion ? 'Editar evento' : 'Nuevo evento',
+      title: _esEdicion
+          ? (_soloLectura ? 'Actividad de captura' : 'Editar actividad')
+          : 'Nueva actividad',
       actions: [
         if (_esEdicion && esAdmin)
           NexusHeaderAction(
             icon: Symbols.delete_outline_rounded,
-            tooltip: 'Eliminar evento',
+            tooltip: 'Eliminar actividad',
             danger: true,
             onTap: _guardando ? null : _eliminar,
           ),
@@ -189,10 +200,15 @@ class _CrearEditarEventoLeadFormState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const _FieldLabel('Nombre del evento'),
+                    if (_soloLectura) ...[
+                      const _HerenciaBanner(),
+                      const SizedBox(height: 16),
+                    ],
+                    const _FieldLabel('Nombre de la actividad'),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _nombreController,
+                      enabled: !_soloLectura,
                       decoration: const InputDecoration(
                         hintText: 'Ej. Feria retail 2026',
                       ),
@@ -206,7 +222,7 @@ class _CrearEditarEventoLeadFormState
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(AppRadius.input),
                       child: InkWell(
-                        onTap: _elegirFecha,
+                        onTap: _soloLectura ? null : _elegirFecha,
                         borderRadius: BorderRadius.circular(AppRadius.input),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -221,16 +237,20 @@ class _CrearEditarEventoLeadFormState
                               Expanded(
                                 child: Text(
                                   DateFormat('dd/MM/yyyy').format(_fecha),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.ink,
+                                    color: _soloLectura
+                                        ? AppColors.textSecondary
+                                        : AppColors.ink,
                                   ),
                                 ),
                               ),
-                              const Icon(
+                              Icon(
                                 Icons.calendar_today_outlined,
-                                color: AppColors.primary,
+                                color: _soloLectura
+                                    ? AppColors.textSecondary
+                                    : AppColors.primary,
                                 size: 20,
                               ),
                             ],
@@ -243,6 +263,7 @@ class _CrearEditarEventoLeadFormState
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _paisController,
+                      enabled: !_soloLectura,
                       decoration: const InputDecoration(hintText: 'Chile'),
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Requerido' : null,
@@ -252,22 +273,52 @@ class _CrearEditarEventoLeadFormState
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _tematicaController,
+                      enabled: !_soloLectura,
                       decoration: const InputDecoration(
                         hintText: 'Ej. Telecomunicaciones',
                       ),
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                     ),
-                    const SizedBox(height: 24),
-                    PrimaryGradientButton(
-                      label: _esEdicion ? 'Guardar cambios' : 'Crear evento',
-                      loading: _guardando,
-                      onPressed: _guardando ? null : _guardar,
-                    ),
+                    if (!_soloLectura) ...[
+                      const SizedBox(height: 24),
+                      PrimaryGradientButton(
+                        label: _esEdicion
+                            ? 'Guardar cambios'
+                            : 'Crear actividad',
+                        loading: _guardando,
+                        onPressed: _guardando ? null : _guardar,
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _HerenciaBanner extends StatelessWidget {
+  const _HerenciaBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.tintNavy,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Text(
+        'Estos datos vienen del evento ligado y cambian con él. '
+        'Para actualizarlos, edita el evento de registro.',
+        style: TextStyle(
+          fontSize: 13,
+          height: 1.4,
+          color: AppColors.textSecondary,
+        ),
+      ),
     );
   }
 }

@@ -16,7 +16,7 @@ void main() {
     );
 
     expect(error, isA<EventoConEventoLeadException>());
-    expect(error.toString(), contains('evento de leads'));
+    expect(error.toString(), contains('actividad de captura'));
   });
 
   test('otros fallos de borrado se propagan tal cual', () {

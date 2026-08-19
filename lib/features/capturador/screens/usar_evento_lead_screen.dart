@@ -9,6 +9,7 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/evento_hero_banner.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/sync_conflict_listener.dart';
 import '../../../core/widgets/tw_components.dart';
@@ -66,20 +67,22 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
                   skipLoadingOnReload: true,
                   loading: () => const LoadingView(),
                   error: (e, _) => const ErrorView(
-                    message: 'No se pudo cargar el evento.',
+                    message: 'No se pudo cargar la actividad.',
                   ),
                   data: (evento) => TwDetailScaffold(
-                    eyebrow: 'Detalle del evento',
+                    eyebrow: 'Detalle de la actividad',
                     title: evento.nombre,
                     onBack: () => context.pop(),
                     actions: [
-                      // Sin botón compartir: el evento de leads no tiene
+                      // Sin botón compartir: la actividad de captura no tiene
                       // formulario público que enlazar (§9).
                       if (puedeEditar)
                         TwIconButton(
                           icon: Symbols.edit_rounded,
                           iconSize: 19,
-                          tooltip: 'Editar evento',
+                          tooltip: evento.esInterno
+                              ? 'Ver datos de la actividad'
+                              : 'Editar actividad',
                           onTap: () => context.push(
                             RoutePaths.editarEventoLead(widget.eventoId),
                           ),
@@ -153,6 +156,9 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
       title: evento.nombre,
       titleHeight: 1.22,
       location: meta,
+      photo: evento.tieneImagen
+          ? EventoHeroFoto(imagenUrl: evento.imagenUrl!, velo: 0)
+          : null,
       stats: [
         TwStat(_valor(resumen?.total), 'Leads capturados'),
         TwStat(_valor(resumen?.empresas), 'Empresas'),
@@ -166,8 +172,8 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
   static String _valor(int? n) => n?.toString() ?? '—';
 
   static String _subtituloExcel(int? total) {
-    if (total == null) return 'Leads del evento';
+    if (total == null) return 'Leads de la actividad';
     final filas = total == 1 ? '1 fila' : '$total filas';
-    return 'Leads del evento · $filas';
+    return 'Leads de la actividad · $filas';
   }
 }

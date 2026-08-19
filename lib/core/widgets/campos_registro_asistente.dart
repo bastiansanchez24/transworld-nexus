@@ -50,8 +50,12 @@ void aplicarFormatosRegistroAsistente({
   empresa.text = formatearEmpresa(empresa.text);
   cargo.text = formatearCargo(cargo.text);
   telefono.text = formatearTelefonoNacional(telefono.text, pais);
-  if (rut != null) rut.text = rut.text.trim();
-  if (patente != null) patente.text = patente.text.trim().toUpperCase();
+  if (rut != null) {
+    rut.text = pais.iso == 'CL'
+        ? formatearRut(rut.text)
+        : rut.text.trim();
+  }
+  if (patente != null) patente.text = formatearPatente(patente.text);
 }
 
 /// Campos compartidos del alta de un asistente (registro interno y público).
@@ -152,25 +156,31 @@ class CamposRegistroAsistente extends StatelessWidget {
           AppSpacing.field,
           FormatoAlSalir(
             controller: rutController!,
-            formatear: (v) => v.trim(),
+            formatear: (v) =>
+                pais.iso == 'CL' ? formatearRut(v) : v.trim(),
             child: TextFormField(
               controller: rutController,
               enabled: enabled,
               textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(labelText: 'RUT / RUC'),
-              validator: validarCampoRequerido,
+              decoration: InputDecoration(
+                labelText: pais.iso == 'CL' ? 'RUT' : 'RUT / RUC',
+              ),
+              validator: (v) => validarRut(
+                v,
+                esChile: pais.iso == 'CL',
+              ),
             ),
           ),
           AppSpacing.field,
           FormatoAlSalir(
             controller: patenteController!,
-            formatear: (v) => v.trim().toUpperCase(),
+            formatear: formatearPatente,
             child: TextFormField(
               controller: patenteController,
               enabled: enabled,
               textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(labelText: 'Patente'),
-              validator: validarCampoRequerido,
+              validator: validarPatente,
             ),
           ),
         ],

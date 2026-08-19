@@ -113,8 +113,9 @@ class _RegistrarConfirmadoScreenState
         nombreCompleto: formatearNombreCompleto(_nombreController.text),
         email: email,
         acreditado: _acreditarAhora,
-        rut: requiereCertificacion ? _rutController.text.trim() : null,
-        patente: requiereCertificacion ? _patenteController.text.trim() : null,
+        rut: requiereCertificacion ? formatearRut(_rutController.text) : null,
+        patente:
+            requiereCertificacion ? formatearPatente(_patenteController.text) : null,
         empresa: formatearEmpresa(_empresaController.text),
         cargo: formatearCargo(_cargoController.text),
         telefono: telefonoInternacional(_telefonoController.text, _pais),

@@ -12,8 +12,8 @@ class EventoConEventoLeadException implements Exception {
 
   @override
   String toString() =>
-      'Este evento tiene un evento de leads asociado. Elimina primero el '
-      'evento de leads desde el menú Leads.';
+      'Este evento tiene una actividad de captura asociada. Elimina primero '
+      'la actividad desde el menú de captura de leads.';
 }
 
 /// CRUD de eventos.

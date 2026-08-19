@@ -397,5 +397,93 @@ String? validarCampoRequerido(String? value) {
   return null;
 }
 
+/// Cuerpo + dígito verificador, sin puntos ni guion. Acepta `k`/`K`.
+String compactarRut(String raw) {
+  return raw.replaceAll(RegExp(r'[^0-9kK]'), '').toUpperCase();
+}
+
+/// Formato chileno `12.345.678-5`. Si no hay cuerpo+DV, deja el recorte.
+String formatearRut(String raw) {
+  final compacto = compactarRut(raw);
+  if (compacto.length < 2) return raw.trim();
+  final cuerpo = compacto.substring(0, compacto.length - 1);
+  final dv = compacto.substring(compacto.length - 1);
+  final conMiles = _conSeparadorMiles(cuerpo);
+  return '$conMiles-$dv';
+}
+
+String _conSeparadorMiles(String digitos) {
+  final buf = StringBuffer();
+  for (var i = 0; i < digitos.length; i++) {
+    final desdeElFinal = digitos.length - i;
+    if (i > 0 && desdeElFinal % 3 == 0) buf.write('.');
+    buf.write(digitos[i]);
+  }
+  return buf.toString();
+}
+
+String? _digitoVerificadorRut(String cuerpo) {
+  if (cuerpo.isEmpty || !RegExp(r'^\d+$').hasMatch(cuerpo)) return null;
+  var suma = 0;
+  var mul = 2;
+  for (var i = cuerpo.length - 1; i >= 0; i--) {
+    suma += int.parse(cuerpo[i]) * mul;
+    mul = mul == 7 ? 2 : mul + 1;
+  }
+  final resto = 11 - (suma % 11);
+  if (resto == 11) return '0';
+  if (resto == 10) return 'K';
+  return '$resto';
+}
+
+/// RUT chileno (módulo 11). [requerido] false: vacío pasa; valor inválido no.
+///
+/// Fuera de Chile el campo es un RUC/tax id: no vacío si [requerido], y si
+/// hay texto, entre 5 y 20 caracteres alfanuméricos.
+String? validarRut(
+  String? value, {
+  bool requerido = true,
+  bool esChile = true,
+}) {
+  final recortado = (value ?? '').trim();
+  if (recortado.isEmpty) return requerido ? 'Requerido' : null;
+  if (!esChile) {
+    final compacto = recortado.replaceAll(RegExp(r'[\s.\-]'), '');
+    if (compacto.length < 5 || compacto.length > 20) {
+      return 'RUC inválido';
+    }
+    if (!RegExp(r'^[A-Za-z0-9]+$').hasMatch(compacto)) {
+      return 'RUC inválido';
+    }
+    return null;
+  }
+  final compacto = compactarRut(recortado);
+  if (compacto.length < 8 || compacto.length > 10) return 'RUT inválido';
+  final cuerpo = compacto.substring(0, compacto.length - 1);
+  final dv = compacto.substring(compacto.length - 1);
+  final esperado = _digitoVerificadorRut(cuerpo);
+  if (esperado == null || dv != esperado) return 'RUT inválido';
+  return null;
+}
+
+String compactarPatente(String raw) {
+  return raw.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
+}
+
+/// Mayúsculas, sin espacios. Conserva un formato compacto de 6 caracteres.
+String formatearPatente(String raw) => compactarPatente(raw);
+
+/// Patente chilena: vigente `ABCD12` (4 letras + 2 dígitos) o antigua
+/// `AB1234` (2 letras + 4 dígitos). Acepta guiones.
+String? validarPatente(String? value, {bool requerido = true}) {
+  final recortado = (value ?? '').trim();
+  if (recortado.isEmpty) return requerido ? 'Requerido' : null;
+  final compacto = compactarPatente(recortado);
+  final vigente = RegExp(r'^[A-Z]{4}\d{2}$').hasMatch(compacto);
+  final antigua = RegExp(r'^[A-Z]{2}\d{4}$').hasMatch(compacto);
+  if (!vigente && !antigua) return 'Patente inválida';
+  return null;
+}
+
 const kMensajeEmailDuplicado =
     'Ese correo ya está registrado en este evento.';
