@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/supabase_tables.dart';
-import '../../../core/network/connectivity_service.dart';
 import '../../../data/models/evento_lead.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/offline/offline_cache_tables.dart';
@@ -16,45 +15,44 @@ import '../../auth/providers/auth_providers.dart';
 final eventosLeadsListProvider = FutureProvider.autoDispose<List<EventoLead>>((
   ref,
 ) async {
-  final isOnline = ref.watch(isOnlineProvider);
   final cache = ref.watch(offlineReadCacheProvider);
   final repo = ref.watch(eventosLeadsRepositoryProvider);
 
-  final actividades = await cache.leerConRespaldoGlobal(
+  return leerCacheFirstConRef(
+    ref: ref,
     tabla: OfflineCacheTables.eventosLeads,
-    desdeServidor: repo.listarTodos,
+    desdeServidor: () async {
+      final actividades = await repo.listarTodos();
+      for (final actividad in actividades) {
+        await cache
+            .guardar(OfflineCacheTables.eventoLeadDetalle, actividad.id, [
+              actividad.toCacheMap(),
+            ]);
+        final origen = actividad.eventoOrigenId;
+        if (origen != null && origen.isNotEmpty) {
+          await cache.guardar(OfflineCacheTables.eventoLeadPorOrigen, origen, [
+            actividad.toCacheMap(),
+          ]);
+        }
+      }
+      return actividades;
+    },
     aFila: (actividad) => actividad.toCacheMap(),
     desdeFila: EventoLead.fromMap,
-    isOnline: isOnline,
   );
-
-  for (final actividad in actividades) {
-    await cache.guardar(OfflineCacheTables.eventoLeadDetalle, actividad.id, [
-      actividad.toCacheMap(),
-    ]);
-    final origen = actividad.eventoOrigenId;
-    if (origen != null && origen.isNotEmpty) {
-      await cache.guardar(OfflineCacheTables.eventoLeadPorOrigen, origen, [
-        actividad.toCacheMap(),
-      ]);
-    }
-  }
-  return actividades;
 });
 
 final eventoLeadByIdProvider = FutureProvider.autoDispose
     .family<EventoLead, String>((ref, id) async {
-      final isOnline = ref.watch(isOnlineProvider);
-      final cache = ref.watch(offlineReadCacheProvider);
       final repo = ref.watch(eventosLeadsRepositoryProvider);
 
-      final filas = await cache.leerConRespaldo(
+      final filas = await leerCacheFirstConRef(
+        ref: ref,
         tabla: OfflineCacheTables.eventoLeadDetalle,
         eventoId: id,
         desdeServidor: () async => [await repo.obtenerPorId(id)],
         aFila: (actividad) => actividad.toCacheMap(),
         desdeFila: EventoLead.fromMap,
-        isOnline: isOnline,
       );
       if (filas.isEmpty) throw Exception('No se pudo cargar la actividad.');
       return filas.first;
@@ -68,11 +66,10 @@ final eventoLeadByIdProvider = FutureProvider.autoDispose
 /// hay que decirlo, no fallar en silencio.
 final eventoLeadInternoProvider = FutureProvider.autoDispose
     .family<EventoLead?, String>((ref, eventoOrigenId) async {
-      final isOnline = ref.watch(isOnlineProvider);
-      final cache = ref.watch(offlineReadCacheProvider);
       final repo = ref.watch(eventosLeadsRepositoryProvider);
 
-      final filas = await cache.leerConRespaldo(
+      final filas = await leerCacheFirstConRef(
+        ref: ref,
         tabla: OfflineCacheTables.eventoLeadPorOrigen,
         eventoId: eventoOrigenId,
         desdeServidor: () async {
@@ -81,7 +78,6 @@ final eventoLeadInternoProvider = FutureProvider.autoDispose
         },
         aFila: (actividad) => actividad.toCacheMap(),
         desdeFila: EventoLead.fromMap,
-        isOnline: isOnline,
       );
       return filas.isEmpty ? null : filas.first;
     });
@@ -198,20 +194,17 @@ final leadsResumenRemotoProvider = FutureProvider.autoDispose
       if (perfil == null) {
         return const LeadsResumen(total: 0, empresas: 0);
       }
-      final isOnline = ref.watch(isOnlineProvider);
-      final cache = ref.watch(offlineReadCacheProvider);
-      final filas = await cache.leerConRespaldo(
+      final repo = ref.watch(leadsRepositoryProvider);
+      final filas = await leerCacheFirstConRef(
+        ref: ref,
         tabla: leadsResumenCacheTabla,
         eventoId: eventoId,
         desdeServidor: () async {
-          final remoto = await ref
-              .watch(leadsRepositoryProvider)
-              .obtenerResumenCampana(eventoId);
+          final remoto = await repo.obtenerResumenCampana(eventoId);
           return [LeadsResumen(total: remoto.total, empresas: remoto.empresas)];
         },
         aFila: (resumen) => resumen.toCacheMap(),
         desdeFila: LeadsResumen.fromMap,
-        isOnline: isOnline,
       );
       return filas.isEmpty
           ? const LeadsResumen(total: 0, empresas: 0)
@@ -273,11 +266,11 @@ final leadsPorEventoProvider = FutureProvider.autoDispose
       final repo = ref.watch(leadsRepositoryProvider);
       final perfil = await ref.watch(currentPerfilProvider.future);
       if (perfil == null) return const [];
-      final isOnline = ref.watch(isOnlineProvider);
       final cacheTabla = leadsCacheTabla(perfil.canViewAllLeads);
 
       final cache = ref.watch(offlineReadCacheProvider);
-      final servidor = await cache.leerConRespaldo(
+      final servidor = await leerCacheFirstConRef(
+        ref: ref,
         tabla: cacheTabla,
         eventoId: eventoId,
         desdeServidor: () => perfil.canViewAllLeads
@@ -285,7 +278,6 @@ final leadsPorEventoProvider = FutureProvider.autoDispose
             : repo.listarPorEventoYPerfil(eventoId, perfil.id),
         aFila: (lead) => lead.toCacheMap(),
         desdeFila: Lead.fromMap,
-        isOnline: isOnline,
       );
       final servidorVisible = perfil.canViewAllLeads
           ? servidor

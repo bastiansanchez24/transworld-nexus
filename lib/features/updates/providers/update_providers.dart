@@ -40,6 +40,7 @@ class UpdateController extends StateNotifier<UpdateState> {
 
   final Ref _ref;
   bool _dialogVisible = false;
+  bool _downloadInFlight = false;
 
   bool get isDialogVisible => _dialogVisible;
 
@@ -79,6 +80,21 @@ class UpdateController extends StateNotifier<UpdateState> {
 
   /// Check al volver del segundo plano (ignora debounce de sesión/6h).
   Future<void> checkOnResume() => _checkAutomatic(onResume: true);
+
+  /// Vuelve de Configuración: si el usuario acaba de conceder el permiso de
+  /// instalar, arranca la descarga sin otro tap.
+  Future<void> onAppResumed() async {
+    final waiting =
+        state.status == UpdateStatus.awaitingInstallPermission ||
+        (state.status == UpdateStatus.failed && state.needsInstallPermission);
+    if (waiting && Platform.isAndroid) {
+      if (await _service.hasInstallPermission()) {
+        await downloadAndInstall();
+      }
+      return;
+    }
+    await checkOnResume();
+  }
 
   Future<void> _checkAutomatic({required bool onResume}) async {
     if (!otaUpdatesSupported) return;
@@ -161,96 +177,116 @@ class UpdateController extends StateNotifier<UpdateState> {
   Future<void> downloadAndInstall() async {
     final info = state.info;
     if (info == null) return;
-
-    // Android: avisar antes de descargar si no puede instalar APKs.
-    if (Platform.isAndroid && !await _service.hasInstallPermission()) {
-      if (!mounted) return;
-      state = state.copyWith(
-        status: UpdateStatus.failed,
-        needsInstallPermission: true,
-        errorMessage: ApkInstaller.installPermissionMessage,
-      );
+    if (_downloadInFlight) return;
+    if (state.status == UpdateStatus.downloading ||
+        state.status == UpdateStatus.verifying ||
+        state.status == UpdateStatus.installing) {
       return;
     }
 
-    state = state.copyWith(
-      status: UpdateStatus.downloading,
-      progress: 0,
-      clearError: true,
-      needsInstallPermission: false,
-    );
-
+    _downloadInFlight = true;
     try {
-      final file = await _service.downloadUpdate(
-        info,
-        onProgress: (p) {
-          if (mounted) {
-            state = state.copyWith(
-              status: UpdateStatus.downloading,
-              progress: p,
-            );
-          }
-        },
-      );
-
-      if (!mounted) return;
-
-      // #region agent log
-      otaDebugLog(
-        location: 'update_providers.dart:downloadAndInstall',
-        message: 'download finished',
-        hypothesisId: Platform.isWindows ? 'H-E' : 'H-B',
-        data: {
-          'assetName': info.asset.name,
-          'assetSize': info.asset.size,
-          'fileLen': await file.length(),
-          'hasDigest': info.asset.sha256Hex != null,
-          'installed': info.installedVersion,
-          'remote': info.remoteVersion,
-        },
-      );
-      // #endregion
-
-      state = state.copyWith(status: UpdateStatus.verifying, progress: 1);
-      final ok = await _service.verifyDownload(file, info);
-      if (!ok) {
+      // Android: pedir el permiso de instalar apps externas ANTES de bajar.
+      if (Platform.isAndroid && !await _service.hasInstallPermission()) {
+        if (!mounted) return;
         state = state.copyWith(
-          status: UpdateStatus.failed,
-          errorMessage:
-              'Descarga inválida (checksum). Vuelve a intentar la actualización.',
-          clearDownloaded: true,
+          status: UpdateStatus.awaitingInstallPermission,
+          needsInstallPermission: true,
+          clearError: true,
         );
-        return;
+        final granted = await _service.ensureInstallPermission();
+        if (!mounted) return;
+        if (!granted) {
+          state = state.copyWith(
+            status: UpdateStatus.failed,
+            needsInstallPermission: true,
+            errorMessage: ApkInstaller.installPermissionMessage,
+          );
+          return;
+        }
       }
 
       state = state.copyWith(
-        status: UpdateStatus.installing,
-        downloadedFilePath: file.path,
-      );
-
-      final result = await _service.install(file, info: info);
-      if (!mounted) return;
-
-      _applyInstallResult(result, file.path);
-    } on ApkDownloadCancelled {
-      if (!mounted) return;
-      state = state.copyWith(
-        status: UpdateStatus.available,
+        status: UpdateStatus.downloading,
         progress: 0,
         clearError: true,
+        needsInstallPermission: false,
       );
-    } on ApkDownloadException catch (e) {
-      if (!mounted) return;
-      state = state.copyWith(
-        status: UpdateStatus.failed,
-        errorMessage: e.message,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      state = state.copyWith(
-        status: UpdateStatus.failed,
-        errorMessage: e.toString().replaceFirst('Exception: ', ''),
-      );
+
+      try {
+        final file = await _service.downloadUpdate(
+          info,
+          onProgress: (p) {
+            if (mounted) {
+              state = state.copyWith(
+                status: UpdateStatus.downloading,
+                progress: p,
+              );
+            }
+          },
+        );
+
+        if (!mounted) return;
+
+        // #region agent log
+        otaDebugLog(
+          location: 'update_providers.dart:downloadAndInstall',
+          message: 'download finished',
+          hypothesisId: Platform.isWindows ? 'H-E' : 'H-B',
+          data: {
+            'assetName': info.asset.name,
+            'assetSize': info.asset.size,
+            'fileLen': await file.length(),
+            'hasDigest': info.asset.sha256Hex != null,
+            'installed': info.installedVersion,
+            'remote': info.remoteVersion,
+          },
+        );
+        // #endregion
+
+        state = state.copyWith(status: UpdateStatus.verifying, progress: 1);
+        final ok = await _service.verifyDownload(file, info);
+        if (!ok) {
+          state = state.copyWith(
+            status: UpdateStatus.failed,
+            errorMessage:
+                'Descarga inválida (checksum). Vuelve a intentar la actualización.',
+            clearDownloaded: true,
+          );
+          return;
+        }
+
+        state = state.copyWith(
+          status: UpdateStatus.installing,
+          downloadedFilePath: file.path,
+        );
+
+        final result = await _service.install(file, info: info);
+        if (!mounted) return;
+
+        _applyInstallResult(result, file.path);
+      } on ApkDownloadCancelled {
+        if (!mounted) return;
+        state = state.copyWith(
+          status: UpdateStatus.available,
+          progress: 0,
+          clearError: true,
+        );
+      } on ApkDownloadException catch (e) {
+        if (!mounted) return;
+        state = state.copyWith(
+          status: UpdateStatus.failed,
+          errorMessage: e.message,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        state = state.copyWith(
+          status: UpdateStatus.failed,
+          errorMessage: e.toString().replaceFirst('Exception: ', ''),
+        );
+      }
+    } finally {
+      _downloadInFlight = false;
     }
   }
 

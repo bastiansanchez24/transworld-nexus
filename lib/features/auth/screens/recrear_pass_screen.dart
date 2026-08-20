@@ -66,44 +66,49 @@ class _RecrearPassScreenState extends ConsumerState<RecrearPassScreen> {
       title: 'Nueva contraseña',
       body: SingleChildScrollView(
         padding: AppSpacing.form,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Por seguridad, define una nueva contraseña.',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Nueva contraseña',
-                  helperText: kPasswordHelperText,
-                  helperMaxLines: 3,
+        child: AbsorbPointer(
+          absorbing: _loading,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Por seguridad, define una nueva contraseña.',
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
-                validator: validarContrasenaFuerte,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _confirmController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Confirmar contraseña',
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passwordController,
+                  enabled: !_loading,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Nueva contraseña',
+                    helperText: kPasswordHelperText,
+                    helperMaxLines: 3,
+                  ),
+                  validator: validarContrasenaFuerte,
                 ),
-                validator: (value) => value != _passwordController.text
-                    ? 'Las contraseñas no coinciden'
-                    : null,
-              ),
-              const SizedBox(height: 24),
-              PrimaryGradientButton(
-                label: 'Guardar',
-                loading: _loading,
-                onPressed: _loading ? null : _guardar,
-              ),
-            ],
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _confirmController,
+                  enabled: !_loading,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Confirmar contraseña',
+                  ),
+                  validator: (value) => value != _passwordController.text
+                      ? 'Las contraseñas no coinciden'
+                      : null,
+                ),
+                const SizedBox(height: 24),
+                PrimaryGradientButton(
+                  label: 'Guardar',
+                  loading: _loading,
+                  onPressed: _loading ? null : _guardar,
+                ),
+              ],
+            ),
           ),
         ),
       ),

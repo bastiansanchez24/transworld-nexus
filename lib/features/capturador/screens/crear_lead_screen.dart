@@ -107,7 +107,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     super.initState();
     _aplicarPrefill();
     _sincronizarMascaraContacto(
-      puedeVerContacto: ref.read(canViewLeadContactDataProvider),
+      puedeVerContacto: ref.read(canViewContactDataProvider),
     );
     _initSpeech();
     WidgetsBinding.instance.addPostFrameCallback(
@@ -333,7 +333,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     final isOnline = ref.read(isOnlineProvider);
     final perfil = ref.read(currentPerfilProvider).valueOrNull;
     final userId = perfil?.id;
-    final puedeVerContacto = perfil?.canViewLeadContactData ?? false;
+    final puedeVerContacto = perfil?.canViewContactData ?? false;
     Lead? leadPreparado;
     List<String> fotosPreparadas = const [];
 
@@ -587,7 +587,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     });
     // El perfil puede resolverse después del primer frame: al llegar el rol se
     // repinta el contacto precargado con o sin máscara.
-    ref.listen(canViewLeadContactDataProvider, (_, puedeVerContacto) {
+    ref.listen(canViewContactDataProvider, (_, puedeVerContacto) {
       if (!mounted) return;
       setState(
         () => _sincronizarMascaraContacto(puedeVerContacto: puedeVerContacto),
@@ -595,7 +595,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     });
 
     final eventoAsync = ref.watch(eventoLeadByIdProvider(widget.eventoId));
-    final puedeVerContacto = ref.watch(canViewLeadContactDataProvider);
+    final puedeVerContacto = ref.watch(canViewContactDataProvider);
     final emailBloqueado = _contactoBloqueado(_emailPrefill, puedeVerContacto);
     final telefonoBloqueado = _contactoBloqueado(
       _telefonoPrefill,

@@ -514,8 +514,8 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
     return widget.slivers.sublist(1);
   }
 
-  static const _scrollPhysics = BouncingScrollPhysics(
-    parent: AlwaysScrollableScrollPhysics(),
+  static const _scrollPhysics = AlwaysScrollableScrollPhysics(
+    parent: ClampingScrollPhysics(),
   );
 
   /// Botones que ocupan la barra desde el primer frame, sin esperar al scroll.

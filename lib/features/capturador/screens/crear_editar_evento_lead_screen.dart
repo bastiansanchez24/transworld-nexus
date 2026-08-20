@@ -254,87 +254,93 @@ class _CrearEditarEventoLeadFormState
       ],
       body: eventoAsync != null && eventoAsync.isLoading && !_cargado
           ? const LoadingView()
-          : SingleChildScrollView(
-              padding: AppSpacing.form,
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_soloLectura) ...[
-                      const _HerenciaBanner(),
-                      const SizedBox(height: 16),
+          : AbsorbPointer(
+              absorbing: _guardando,
+              child: SingleChildScrollView(
+                padding: AppSpacing.form,
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_soloLectura) ...[
+                        const _HerenciaBanner(),
+                        const SizedBox(height: 16),
+                      ],
+                      const _FieldLabel('Foto'),
+                      const SizedBox(height: 6),
+                      SelectorImagen(
+                        bytes: _imagenBytes,
+                        urlExistente: _imagenUrlExistente,
+                        enabled: !_guardando && !_soloLectura,
+                        aspectRatio: 16 / 9,
+                        anchoMaximo: kAnchoSelectorImagenEvento,
+                        etiquetaVacio: 'Agregar imagen de la actividad',
+                        onElegir: _elegirImagen,
+                        onQuitar:
+                            _soloLectura ||
+                                (_imagenBytes == null &&
+                                    _imagenUrlExistente == null)
+                            ? null
+                            : _quitarImagen,
+                      ),
+                      const SizedBox(height: 14),
+                      const _FieldLabel('Nombre de la actividad'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _nombreController,
+                        enabled: !_guardando && !_soloLectura,
+                        decoration: const InputDecoration(
+                          hintText: 'Ej. Feria retail 2026',
+                        ),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Requerido'
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+                      const _FieldLabel('Fecha'),
+                      const SizedBox(height: 6),
+                      FechaPickerField(
+                        fecha: _fecha,
+                        onTap: _elegirFecha,
+                        enabled: !_guardando && !_soloLectura,
+                      ),
+                      const SizedBox(height: 14),
+                      const _FieldLabel('País'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _paisController,
+                        enabled: !_guardando && !_soloLectura,
+                        decoration: const InputDecoration(hintText: 'Chile'),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Requerido'
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+                      const _FieldLabel('Temática'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _tematicaController,
+                        enabled: !_guardando && !_soloLectura,
+                        decoration: const InputDecoration(
+                          hintText: 'Ej. Telecomunicaciones',
+                        ),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Requerido'
+                            : null,
+                      ),
+                      if (!_soloLectura) ...[
+                        const SizedBox(height: 24),
+                        PrimaryGradientButton(
+                          label: _esEdicion
+                              ? 'Guardar cambios'
+                              : 'Crear actividad',
+                          loading: _guardando,
+                          onPressed: _guardando ? null : _guardar,
+                        ),
+                      ],
                     ],
-                    const _FieldLabel('Foto'),
-                    const SizedBox(height: 6),
-                    SelectorImagen(
-                      bytes: _imagenBytes,
-                      urlExistente: _imagenUrlExistente,
-                      enabled: !_guardando && !_soloLectura,
-                      aspectRatio: 16 / 9,
-                      anchoMaximo: kAnchoSelectorImagenEvento,
-                      etiquetaVacio: 'Agregar imagen de la actividad',
-                      onElegir: _elegirImagen,
-                      onQuitar:
-                          _soloLectura ||
-                              (_imagenBytes == null &&
-                                  _imagenUrlExistente == null)
-                          ? null
-                          : _quitarImagen,
-                    ),
-                    const SizedBox(height: 14),
-                    const _FieldLabel('Nombre de la actividad'),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _nombreController,
-                      enabled: !_soloLectura,
-                      decoration: const InputDecoration(
-                        hintText: 'Ej. Feria retail 2026',
-                      ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                    ),
-                    const SizedBox(height: 14),
-                    const _FieldLabel('Fecha'),
-                    const SizedBox(height: 6),
-                    FechaPickerField(
-                      fecha: _fecha,
-                      onTap: _elegirFecha,
-                      enabled: !_soloLectura,
-                    ),
-                    const SizedBox(height: 14),
-                    const _FieldLabel('País'),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _paisController,
-                      enabled: !_soloLectura,
-                      decoration: const InputDecoration(hintText: 'Chile'),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                    ),
-                    const SizedBox(height: 14),
-                    const _FieldLabel('Temática'),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _tematicaController,
-                      enabled: !_soloLectura,
-                      decoration: const InputDecoration(
-                        hintText: 'Ej. Telecomunicaciones',
-                      ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                    ),
-                    if (!_soloLectura) ...[
-                      const SizedBox(height: 24),
-                      PrimaryGradientButton(
-                        label: _esEdicion
-                            ? 'Guardar cambios'
-                            : 'Crear actividad',
-                        loading: _guardando,
-                        onPressed: _guardando ? null : _guardar,
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),

@@ -90,13 +90,13 @@ final homeDashboardProvider = FutureProvider.autoDispose<HomeDashboardData>((
   ref,
 ) async {
   final eventos = await ref.watch(eventosListProvider.future);
-  final isOnline = ref.watch(isOnlineProvider);
-  final cache = ref.watch(offlineReadCacheProvider);
+  final isOnline = ref.read(isOnlineProvider);
   final repo = ref.watch(registradosRepositoryProvider);
 
   var resumen = const _ResumenGlobal(total: 0, acreditados: 0);
   try {
-    final filas = await cache.leerConRespaldoGlobal(
+    final filas = await leerCacheFirstConRef(
+      ref: ref,
       tabla: OfflineCacheTables.homeResumen,
       desdeServidor: () async {
         final remoto = await repo.obtenerResumenGlobal();
@@ -106,7 +106,6 @@ final homeDashboardProvider = FutureProvider.autoDispose<HomeDashboardData>((
       },
       aFila: (r) => r.toCacheMap(),
       desdeFila: _ResumenGlobal.fromMap,
-      isOnline: isOnline,
     );
     if (filas.isNotEmpty) resumen = filas.first;
   } catch (error) {

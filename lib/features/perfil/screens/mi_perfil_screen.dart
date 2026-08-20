@@ -14,6 +14,7 @@ import '../../../core/widgets/tw_components.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/models/perfil.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -191,19 +192,22 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
 
           return RefreshIndicator(
             color: AppColors.primary,
-            onRefresh: () async {
-              ref.invalidate(currentPerfilProvider);
-              ref.invalidate(miPerfilStatsProvider);
-              ref.invalidate(misLeadsProvider);
-              await Future.wait([
+            onRefresh: () => refrescarLecturas(
+              ref,
+              invalidar: () {
+                ref.invalidate(currentPerfilProvider);
+                ref.invalidate(miPerfilStatsProvider);
+                ref.invalidate(misLeadsProvider);
+              },
+              pendientes: () => [
                 ref.read(currentPerfilProvider.future),
                 ref.read(miPerfilStatsProvider.future),
                 ref.read(misLeadsProvider.future),
-              ]);
-            },
+              ],
+            ),
             child: ListView(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: ClampingScrollPhysics(),
               ),
               padding: AppSpacing.form,
               children: [

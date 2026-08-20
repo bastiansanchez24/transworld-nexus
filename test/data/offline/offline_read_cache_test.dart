@@ -34,6 +34,7 @@ void main() {
     OfflineReadCache cache, {
     required Future<List<Lead>> Function() desdeServidor,
     String evento = eventoId,
+    bool isOnline = true,
   }) {
     return cache.leerConRespaldo<Lead>(
       tabla: tabla,
@@ -41,7 +42,7 @@ void main() {
       desdeServidor: desdeServidor,
       aFila: (l) => l.toCacheMap(),
       desdeFila: Lead.fromMap,
-      isOnline: false,
+      isOnline: isOnline,
     );
   }
 
@@ -55,9 +56,10 @@ void main() {
 
         expect(frescos.single.nombreCompleto, 'María González');
 
-        // La segunda lectura ya puede caer a la copia guardada.
+        // La segunda lectura, ya offline, no toca el servidor.
         final desdeCache = await leer(
           cache,
+          isOnline: false,
           desdeServidor: () async => throw Exception('Failed host lookup'),
         );
         expect(desdeCache.single.nombreCompleto, 'María González');
@@ -72,6 +74,7 @@ void main() {
 
         final desdeCache = await leer(
           cache,
+          isOnline: false,
           desdeServidor: () async => throw Exception('Failed host lookup'),
         );
 
@@ -91,13 +94,19 @@ void main() {
       () async {
         final cache = await nuevaCache();
 
+        var llamado = false;
         expect(
           () => leer(
             cache,
-            desdeServidor: () async => throw Exception('Failed host lookup'),
+            isOnline: false,
+            desdeServidor: () async {
+              llamado = true;
+              throw Exception('Failed host lookup');
+            },
           ),
           throwsA(isA<Exception>()),
         );
+        expect(llamado, isFalse);
       },
     );
 
@@ -109,6 +118,7 @@ void main() {
         () => leer(
           cache,
           evento: 'otro-evento',
+          isOnline: false,
           desdeServidor: () async => throw Exception('Failed host lookup'),
         ),
         throwsA(isA<Exception>()),
@@ -126,6 +136,7 @@ void main() {
 
       final desdeCache = await leer(
         cache,
+        isOnline: false,
         desdeServidor: () async => throw Exception('Failed host lookup'),
       );
       expect(desdeCache.single.nombreCompleto, 'María González Pérez');
@@ -390,5 +401,90 @@ void main() {
         isNull,
       );
     });
+  });
+
+  group('OfflineReadCache.leerCacheFirst', () {
+    Future<List<Lead>> leerFirst(
+      OfflineReadCache cache, {
+      required Future<List<Lead>> Function() desdeServidor,
+      required bool isOnline,
+      void Function()? onActualizado,
+    }) {
+      return cache.leerCacheFirst<Lead>(
+        tabla: tabla,
+        eventoId: eventoId,
+        desdeServidor: desdeServidor,
+        aFila: (l) => l.toCacheMap(),
+        desdeFila: Lead.fromMap,
+        isOnline: isOnline,
+        onActualizado: onActualizado,
+      );
+    }
+
+    test(
+      'con copia local y servidor lento resuelve al instante con disco',
+      () async {
+        final cache = await nuevaCache();
+        await cache.guardar(tabla, eventoId, [lead.toCacheMap()]);
+
+        final servido = await leerFirst(
+          cache,
+          isOnline: true,
+          desdeServidor: () => Completer<List<Lead>>().future,
+        );
+        expect(servido.single.id, lead.id);
+      },
+    );
+
+    test('offline con copia no llama al servidor', () async {
+      final cache = await nuevaCache();
+      await cache.guardar(tabla, eventoId, [lead.toCacheMap()]);
+
+      var llamado = false;
+      final servido = await leerFirst(
+        cache,
+        isOnline: false,
+        desdeServidor: () async {
+          llamado = true;
+          return [lead];
+        },
+      );
+      expect(servido.single.id, lead.id);
+      expect(llamado, isFalse);
+    });
+
+    test(
+      'online con copia revalida y notifica cuando hay datos nuevos',
+      () async {
+        final cache = await nuevaCache();
+        await cache.guardar(tabla, eventoId, [lead.toCacheMap()]);
+
+        final actualizado = Completer<void>();
+        final renombrado = lead.conCambiosPendientes({
+          'nombre_completo': 'María González Pérez',
+        });
+
+        final servido = await leerFirst(
+          cache,
+          isOnline: true,
+          onActualizado: actualizado.complete,
+          desdeServidor: () async => [renombrado],
+        );
+        expect(servido.single.nombreCompleto, 'María González');
+
+        await actualizado.future.timeout(const Duration(seconds: 2));
+        expect(
+          cache
+              .leerLocal(
+                tabla: tabla,
+                eventoId: eventoId,
+                desdeFila: Lead.fromMap,
+              )
+              ?.single
+              .nombreCompleto,
+          'María González Pérez',
+        );
+      },
+    );
   });
 }

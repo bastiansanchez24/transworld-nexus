@@ -119,8 +119,8 @@ final canEditAnyLeadProvider = Provider<bool>((ref) {
   return ref.watch(currentPerfilProvider).valueOrNull?.canEditAnyLead ?? false;
 });
 
-final canViewLeadContactDataProvider = Provider<bool>((ref) {
-  return ref.watch(currentPerfilProvider).valueOrNull?.canViewLeadContactData ??
+final canViewContactDataProvider = Provider<bool>((ref) {
+  return ref.watch(currentPerfilProvider).valueOrNull?.canViewContactData ??
       false;
 });
 

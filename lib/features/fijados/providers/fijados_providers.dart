@@ -20,17 +20,16 @@ final eventosFijadosProvider = FutureProvider.autoDispose<Set<String>>((
   ref,
 ) async {
   ref.watch(authStateChangesProvider);
-  final isOnline = ref.watch(isOnlineProvider);
-  final cache = ref.watch(offlineReadCacheProvider);
+  final isOnline = ref.read(isOnlineProvider);
   final repo = ref.watch(fijadosRepositoryProvider);
   final perfil = await ref.watch(currentPerfilProvider.future);
 
-  final fijados = (await cache.leerConRespaldoGlobal(
+  final fijados = (await leerCacheFirstConRef(
+    ref: ref,
     tabla: OfflineCacheTables.eventosFijados,
     desdeServidor: () async => (await repo.listarEventosFijados()).toList(),
     aFila: _aFila,
     desdeFila: _desdeFila,
-    isOnline: isOnline,
   )).toSet();
 
   if (perfil == null || !perfil.rol.isUsuario) return fijados;
@@ -58,16 +57,14 @@ final campanasFijadasProvider = FutureProvider.autoDispose<Set<String>>((
   ref,
 ) async {
   ref.watch(authStateChangesProvider);
-  final isOnline = ref.watch(isOnlineProvider);
-  final cache = ref.watch(offlineReadCacheProvider);
   final repo = ref.watch(fijadosRepositoryProvider);
 
-  final fijadas = await cache.leerConRespaldoGlobal(
+  final fijadas = await leerCacheFirstConRef(
+    ref: ref,
     tabla: OfflineCacheTables.campanasFijadas,
     desdeServidor: () async => (await repo.listarCampanasFijadas()).toList(),
     aFila: _aFila,
     desdeFila: _desdeFila,
-    isOnline: isOnline,
   );
   return fijadas.toSet();
 });

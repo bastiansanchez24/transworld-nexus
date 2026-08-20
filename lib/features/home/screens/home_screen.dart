@@ -19,8 +19,10 @@ import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/notificaciones_header_button.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
+import '../../../core/widgets/shell_tab_scroll.dart';
 import '../../../core/widgets/tw_components.dart';
 import '../../../data/models/perfil.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../fijados/providers/fijados_providers.dart';
@@ -28,6 +30,7 @@ import '../../notificaciones/providers/notificaciones_providers.dart';
 import '../../updates/services/update_platform.dart';
 import '../../updates/services/windows_uninstaller.dart';
 import '../../updates/widgets/update_checker.dart';
+import '../models/home_featured_item.dart';
 import '../providers/home_dashboard_providers.dart';
 import '../providers/home_featured_providers.dart';
 import '../widgets/home_dashboard_section.dart';
@@ -45,6 +48,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   bool _menuCuentaAbierto = false;
   bool _desinstalando = false;
   final _scrollTop = ValueNotifier<double>(0);
+  final _scrollController = ScrollController();
+  List<HomeFeaturedItem> _ultimosDestacados = const [];
   late final AnimationController _enterCtrl;
 
   @override
@@ -56,6 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _scrollTop.dispose();
     _enterCtrl.dispose();
     super.dispose();
@@ -105,16 +111,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget build(BuildContext context) {
     final perfilAsync = ref.watch(currentPerfilProvider);
     final perfil = perfilAsync.valueOrNull;
-    final featuredItems =
-        ref.watch(homeFeaturedItemsProvider).valueOrNull ?? const [];
+    final featuredAsync = ref.watch(homeFeaturedItemsProvider);
+    final featuredItems = featuredAsync.valueOrNull ?? _ultimosDestacados;
+    if (featuredAsync.hasValue) {
+      _ultimosDestacados = featuredAsync.requireValue;
+    }
+    ref.listen<int>(shellTabEpochProvider(ShellTabBranch.inicio), (prev, next) {
+      if (prev == next) return;
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
+      _scrollTop.value = 0;
+    });
     final noLeidas = ref.watch(notificacionesNoLeidasProvider);
     final first = _firstName(perfil);
     final saludo = first.isEmpty ? 'Hola 👋' : 'Hola, $first 👋';
     final reduce = AppMotion.reduceMotion(context);
+    final bannerVisible = ref.watch(offlineBannerVisibleProvider);
     final safeTop = MediaQuery.paddingOf(context).top;
     // Sin barra de estado (web y Windows) no hay nada que despejar arriba: el
     // aire fijo del spec dejaba la identidad hundida media pantalla.
-    final contentTop = safeTop + _HomeHeaderMetrics.topGap(safeTop);
+    final contentTop =
+        safeTop +
+        _HomeHeaderMetrics.topGap(safeTop, bannerVisible: bannerVisible);
     // El avatar parte a [contentTop]; el blur espera a que toque el safe area.
     final collapseStart = contentTop - safeTop;
     final bottomPad = math.max(
@@ -125,22 +144,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final body = NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification.metrics.axis != Axis.vertical) return false;
-        _scrollTop.value = notification.metrics.pixels;
+        _scrollTop.value = math.max(0, notification.metrics.pixels);
         return false;
       },
       child: RefreshIndicator(
         color: TwColors.brand700,
-        displacement: safeTop + 72,
-        onRefresh: () async {
-          ref.invalidate(homeDashboardProvider);
-          ref.invalidate(homeFeaturedItemsProvider);
-          ref.invalidate(eventosFijadosProvider);
-          ref.invalidate(campanasFijadasProvider);
-          ref.invalidate(currentPerfilProvider);
-        },
+        edgeOffset: safeTop,
+        displacement: 40,
+        onRefresh: () => refrescarLecturas(
+          ref,
+          invalidar: () {
+            ref.invalidate(homeDashboardProvider);
+            ref.invalidate(homeFeaturedItemsProvider);
+            ref.invalidate(eventosFijadosProvider);
+            ref.invalidate(campanasFijadasProvider);
+            ref.invalidate(currentPerfilProvider);
+          },
+          pendientes: () => [
+            ref.read(homeDashboardProvider.future),
+            ref.read(homeFeaturedItemsProvider.future),
+            ref.read(eventosFijadosProvider.future),
+            ref.read(campanasFijadasProvider.future),
+            ref.read(currentPerfilProvider.future),
+          ],
+        ),
         child: ListView(
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: ClampingScrollPhysics(),
           ),
           padding: EdgeInsets.fromLTRB(0, contentTop, 0, bottomPad),
           children: [
@@ -198,6 +229,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         : const SizedBox.shrink(),
                   ),
                   perfilAsync.when(
+                    skipLoadingOnReload: true,
+                    skipLoadingOnRefresh: true,
                     loading: () => const Padding(
                       padding: EdgeInsets.symmetric(vertical: 48),
                       child: LoadingView(),
@@ -245,15 +278,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   child: Stack(
                     children: [
                       enter,
-                      ValueListenableBuilder<double>(
-                        valueListenable: _scrollTop,
-                        builder: (context, t, _) {
-                          return _HomeCollapseBar(
-                            scrollTop: t,
-                            title: saludo,
-                            collapseStart: collapseStart,
-                          );
-                        },
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: ValueListenableBuilder<double>(
+                          valueListenable: _scrollTop,
+                          builder: (context, t, _) {
+                            return _HomeCollapseBar(
+                              scrollTop: t,
+                              title: saludo,
+                              collapseStart: collapseStart,
+                            );
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -293,9 +331,12 @@ abstract final class _HomeHeaderMetrics {
   static const avatarSize = 44.0;
   static const topGapWithSafeArea = 12.0;
   static const topGapWithoutSafeArea = 16.0;
+  static const topGapUnderBanner = 6.0;
 
-  static double topGap(double safeTop) =>
-      safeTop > 0 ? topGapWithSafeArea : topGapWithoutSafeArea;
+  static double topGap(double safeTop, {bool bannerVisible = false}) {
+    if (bannerVisible) return topGapUnderBanner;
+    return safeTop > 0 ? topGapWithSafeArea : topGapWithoutSafeArea;
+  }
 }
 
 class _HomeCollapseBar extends StatelessWidget {

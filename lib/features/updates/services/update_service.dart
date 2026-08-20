@@ -42,6 +42,7 @@ enum UpdateStatus {
   checking,
   upToDate,
   available,
+  awaitingInstallPermission,
   downloading,
   verifying,
   installing,
@@ -199,7 +200,10 @@ class UpdateService {
     _lastAutoCheckAt = DateTime.now();
 
     try {
-      final release = await _source.fetchLatest();
+      final forWindows = otaResolvesWindowsAsset;
+      final release = await _source.fetchLatestWithAsset(
+        forWindows: forWindows,
+      );
 
       if (release.prerelease) {
         developer.log(
@@ -236,7 +240,6 @@ class UpdateService {
         return const UpdateCheckOutcome.upToDate();
       }
 
-      final forWindows = otaResolvesWindowsAsset;
       final asset = release.resolveNexusAsset(forWindows: forWindows);
       if (asset == null || asset.browserDownloadUrl.isEmpty) {
         final listed = release.assets
@@ -372,6 +375,9 @@ class UpdateService {
   }
 
   Future<bool> hasInstallPermission() => _apkInstaller.hasInstallPermission();
+
+  Future<bool> ensureInstallPermission() =>
+      _apkInstaller.ensureInstallPermission();
 
   Future<bool> openInstallSettings() => _apkInstaller.openInstallSettings();
 

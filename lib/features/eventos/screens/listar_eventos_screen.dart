@@ -12,7 +12,9 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/evento_list_context_menu.dart';
 import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/shell_tab_scroll.dart';
 import '../../../data/models/evento.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/eventos_repository.dart';
 import '../../../data/repositories/fijados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -272,14 +274,23 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen>
 
     return CollapsingScrollScaffold(
       title: 'Eventos',
-      onRefresh: () async {
-        ref.invalidate(usuarioEventosAutorizadosProvider);
-        ref.invalidate(eventosListProvider);
-        ref.invalidate(eventosFijadosProvider);
-      },
+      onRefresh: () => refrescarLecturas(
+        ref,
+        invalidar: () {
+          ref.invalidate(usuarioEventosAutorizadosProvider);
+          ref.invalidate(eventosListProvider);
+          ref.invalidate(eventosFijadosProvider);
+        },
+        pendientes: () => [
+          ref.read(usuarioEventosAutorizadosProvider.future),
+          ref.read(eventosListProvider.future),
+          ref.read(eventosFijadosProvider.future),
+        ],
+      ),
       pinnedContent: _buildPinnedControls(puedeCrear: puedeCrear),
       pinnedContentHeight: 112,
-      scrollResetToken: '$_query|$_filtro|${fijados.length}',
+      scrollResetToken:
+          '${ref.watch(shellTabEpochProvider(ShellTabBranch.eventos))}|$_query|$_filtro|${fijados.length}',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(

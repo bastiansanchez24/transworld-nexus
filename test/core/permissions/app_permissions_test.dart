@@ -19,4 +19,25 @@ void main() {
     expect(permissions, isNot(contains(Permission.notification)));
     expect(permissions, isNot(contains(Permission.requestInstallPackages)));
   });
+
+  test('en Android el permiso de instalar queda al final de la lista', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    expect(AppPermissions.required.last, Permission.requestInstallPackages);
+    expect(
+      AppPermissions.requiredFor(
+        includeNotifications: true,
+        includeAppUpdates: true,
+      ).last,
+      Permission.requestInstallPackages,
+    );
+    expect(
+      AppPermissions.requiredFor(
+        includeNotifications: false,
+        includeAppUpdates: false,
+      ),
+      isNot(contains(Permission.requestInstallPackages)),
+    );
+  });
 }

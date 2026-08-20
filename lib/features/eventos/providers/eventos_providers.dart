@@ -15,44 +15,44 @@ import '../../../data/repositories/eventos_repository.dart';
 final eventosListProvider = FutureProvider.autoDispose<List<Evento>>((
   ref,
 ) async {
-  final isOnline = ref.watch(isOnlineProvider);
   final cache = ref.watch(offlineReadCacheProvider);
   final repo = ref.watch(eventosRepositoryProvider);
 
-  final eventos = await cache.leerConRespaldoGlobal(
+  return leerCacheFirstConRef(
+    ref: ref,
     tabla: OfflineCacheTables.eventos,
-    desdeServidor: repo.listarTodos,
+    desdeServidor: () async {
+      final eventos = await repo.listarTodos();
+      // Guardar también cada evento por separado deja listo el detalle: entrar
+      // a un evento sin red no debería depender de haberlo abierto antes.
+      for (final evento in eventos) {
+        await cache.guardar(OfflineCacheTables.eventoDetalle, evento.id, [
+          evento.toCacheMap(),
+        ]);
+      }
+      return eventos;
+    },
     aFila: (evento) => evento.toCacheMap(),
     desdeFila: Evento.fromMap,
-    isOnline: isOnline,
   );
-
-  // Guardar también cada evento por separado deja listo el detalle: entrar a
-  // un evento sin red no debería depender de haberlo abierto antes.
-  for (final evento in eventos) {
-    await cache.guardar(OfflineCacheTables.eventoDetalle, evento.id, [
-      evento.toCacheMap(),
-    ]);
-  }
-  return eventos;
 });
 
 final eventoByIdProvider = FutureProvider.autoDispose.family<Evento, String>((
   ref,
   id,
 ) async {
-  final isOnline = ref.watch(isOnlineProvider);
+  final isOnline = ref.read(isOnlineProvider);
   final cache = ref.watch(offlineReadCacheProvider);
   final repo = ref.watch(eventosRepositoryProvider);
 
   try {
-    final filas = await cache.leerConRespaldo(
+    final filas = await leerCacheFirstConRef(
+      ref: ref,
       tabla: OfflineCacheTables.eventoDetalle,
       eventoId: id,
       desdeServidor: () async => [await repo.obtenerPorId(id)],
       aFila: (evento) => evento.toCacheMap(),
       desdeFila: Evento.fromMap,
-      isOnline: isOnline,
     );
     if (filas.isNotEmpty) return filas.first;
   } catch (error) {

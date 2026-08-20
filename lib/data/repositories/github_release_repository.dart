@@ -7,6 +7,11 @@ import '../models/github_release.dart';
 /// Contrato abstracto de fuente de actualizaciones (extensible a canales).
 abstract class UpdateSource {
   Future<GitHubRelease> fetchLatest();
+
+  /// Última release que incluye el asset de la plataforma. Si `/releases/latest`
+  /// no trae ZIP Windows / APK Android, recorre releases recientes.
+  Future<GitHubRelease> fetchLatestWithAsset({required bool forWindows}) =>
+      fetchLatest();
 }
 
 /// Cliente de la API pública de GitHub Releases.
@@ -47,6 +52,22 @@ class GitHubReleaseRepository implements UpdateSource {
       _latestUrl,
       notFoundMessage: 'No hay Releases publicados en este repositorio.',
     );
+  }
+
+  @override
+  Future<GitHubRelease> fetchLatestWithAsset({required bool forWindows}) async {
+    final latest = await fetchLatest();
+    if (latest.resolveNexusAsset(forWindows: forWindows) != null) {
+      return latest;
+    }
+    final releases = await fetchReleases(perPage: 15);
+    for (final release in releases) {
+      if (release.prerelease) continue;
+      if (release.resolveNexusAsset(forWindows: forWindows) != null) {
+        return release;
+      }
+    }
+    return latest;
   }
 
   /// Lista releases publicados (más recientes primero).

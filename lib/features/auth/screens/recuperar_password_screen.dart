@@ -68,40 +68,46 @@ class _RecuperarPasswordScreenState
                   const Text(
                     'Si el correo existe, te enviamos una nueva '
                     'contraseña de acceso.',
+                    textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ],
               )
-            : Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Ingresa tu correo y te enviaremos una nueva '
-                      'contraseña autogenerada.',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Correo electrónico',
-                        prefixIcon: Icon(Icons.email_outlined),
+            : AbsorbPointer(
+                absorbing: _loading,
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Ingresa tu correo y te enviaremos una nueva '
+                        'contraseña autogenerada.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppColors.textSecondary),
                       ),
-                      validator: (value) =>
-                          (value == null || !value.contains('@'))
-                          ? 'Correo inválido'
-                          : null,
-                    ),
-                    const SizedBox(height: 24),
-                    PrimaryGradientButton(
-                      label: 'Enviar nueva contraseña',
-                      loading: _loading,
-                      onPressed: _loading ? null : _enviar,
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _emailController,
+                        enabled: !_loading,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Correo electrónico',
+                          prefixIcon: Icon(Icons.email_outlined),
+                        ),
+                        validator: (value) =>
+                            (value == null || !value.contains('@'))
+                            ? 'Correo inválido'
+                            : null,
+                      ),
+                      const SizedBox(height: 24),
+                      PrimaryGradientButton(
+                        label: 'Enviar nueva contraseña',
+                        loading: _loading,
+                        onPressed: _loading ? null : _enviar,
+                      ),
+                    ],
+                  ),
                 ),
               ),
       ),

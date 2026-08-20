@@ -82,6 +82,15 @@ class AppPermissions {
             .toList(),
       );
 
+  /// Pantalla del sistema "Permitir de esta fuente". Va al final del
+  /// onboarding y otra vez al tocar Actualizar si todavía no está concedido.
+  static Future<Map<Permission, PermissionStatus>> requestInstallPackages() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return Future.value(const {});
+    }
+    return _request(const [Permission.requestInstallPackages]);
+  }
+
   static Future<Map<Permission, PermissionStatus>> _request(
     List<Permission> permissions,
   ) async {

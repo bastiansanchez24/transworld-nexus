@@ -12,8 +12,10 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/evento_list_context_menu.dart';
 import '../../../core/widgets/nexus_components.dart';
+import '../../../core/widgets/shell_tab_scroll.dart';
 import '../../../core/widgets/tw_components.dart';
 import '../../../data/models/evento_lead.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
 import '../../../data/repositories/fijados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -276,13 +278,21 @@ class _ListarEventosLeadsScreenState
 
     return CollapsingScrollScaffold(
       title: 'Captura de Leads',
-      onRefresh: () async {
-        ref.invalidate(eventosLeadsListProvider);
-        ref.invalidate(campanasFijadasProvider);
-      },
+      onRefresh: () => refrescarLecturas(
+        ref,
+        invalidar: () {
+          ref.invalidate(eventosLeadsListProvider);
+          ref.invalidate(campanasFijadasProvider);
+        },
+        pendientes: () => [
+          ref.read(eventosLeadsListProvider.future),
+          ref.read(campanasFijadasProvider.future),
+        ],
+      ),
       pinnedContent: _buildPinnedControls(puedeCrear: puedeCrear),
       pinnedContentHeight: 112,
-      scrollResetToken: '$_query|$_filtro|${fijados.length}',
+      scrollResetToken:
+          '${ref.watch(shellTabEpochProvider(ShellTabBranch.leads))}|$_query|$_filtro|${fijados.length}',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(

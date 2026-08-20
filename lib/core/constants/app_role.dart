@@ -49,8 +49,8 @@ enum AppRole {
   /// Editar leads de cualquier capturador. Sin esto solo se editan los propios.
   bool get canEditAnyLead => isAdmin || isOrganizador;
 
-  /// Ver el email y el teléfono del lead sin enmascarar.
-  bool get canViewLeadContactData => isAdmin || isOrganizador;
+  /// Ver sin enmascarar el email y el teléfono de leads y registrados.
+  bool get canViewContactData => isAdmin || isOrganizador;
 
   bool get usesFullShell => !isExterno;
 

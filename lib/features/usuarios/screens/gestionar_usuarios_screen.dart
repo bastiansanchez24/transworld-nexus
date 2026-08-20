@@ -12,7 +12,9 @@ import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/pressable.dart';
 import '../../../core/widgets/require_admin.dart';
+import '../../../core/widgets/shell_tab_scroll.dart';
 import '../../../data/models/perfil.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../providers/usuarios_providers.dart';
 
 class GestionarUsuariosScreen extends StatelessWidget {
@@ -135,10 +137,15 @@ class _GestionarUsuariosBodyState extends ConsumerState<_GestionarUsuariosBody>
 
     return CollapsingScrollScaffold(
       title: 'Usuarios',
-      onRefresh: () async => ref.invalidate(usuariosListProvider),
+      onRefresh: () => refrescarLecturas(
+        ref,
+        invalidar: () => ref.invalidate(usuariosListProvider),
+        pendientes: () => [ref.read(usuariosListProvider.future)],
+      ),
       pinnedSearch: _buildPinnedSearch(),
       pinnedContentHeight: 60,
-      scrollResetToken: _query,
+      scrollResetToken:
+          '${ref.watch(shellTabEpochProvider(ShellTabBranch.usuarios))}|$_query',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(

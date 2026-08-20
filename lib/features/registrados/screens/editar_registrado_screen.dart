@@ -8,6 +8,7 @@ import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/mascara_contacto.dart';
 import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -54,6 +55,11 @@ class _EditarRegistradoScreenState
   String _patente0 = '';
   bool _acreditado0 = false;
 
+  /// Teléfono real de la ficha. Los roles que no pueden ver el contacto tienen
+  /// el campo en solo lectura con la máscara puesta, así que es este valor —y
+  /// no el del controlador— el que se vuelve a guardar.
+  String _telefonoGuardado = '';
+
   /// Un insert todavía en la cola no tiene fila en el servidor: su id es el
   /// temporal que generó [SyncQueueService], no un uuid real.
   bool get _esPendiente => esIdSoloLocal(widget.registradoId);
@@ -69,31 +75,52 @@ class _EditarRegistradoScreenState
     super.dispose();
   }
 
-  void _precargar(Registrado r) {
+  void _precargar(Registrado r, {required bool puedeVerContacto}) {
     if (_cargado) return;
     _cargado = true;
     _nombreController.text = r.nombreCompleto;
     _empresaController.text = r.empresa ?? '';
     _cargoController.text = r.cargo ?? '';
-    _telefonoController.text = r.telefono ?? '';
+    _telefonoGuardado = (r.telefono ?? '').trim();
+    _sincronizarTelefono(puedeVerContacto);
     _rutController.text = r.rut ?? '';
     _patenteController.text = r.patente ?? '';
     _acreditado = r.acreditado;
     _nombre0 = _nombreController.text;
     _empresa0 = _empresaController.text;
     _cargo0 = _cargoController.text;
-    _telefono0 = _telefonoController.text;
+    _telefono0 = _telefonoGuardado;
     _rut0 = _rutController.text;
     _patente0 = _patenteController.text;
     _acreditado0 = _acreditado;
   }
 
+  /// Una ficha sin teléfono no tiene nada que ocultar: se deja escribible para
+  /// no bloquear el único momento en que se puede completar el dato.
+  bool _telefonoProtegido(bool puedeVerContacto) =>
+      !puedeVerContacto && _telefonoGuardado.isNotEmpty;
+
+  /// El perfil puede resolverse después de la primera pintada, así que la
+  /// máscara se vuelve a aplicar cuando cambia el permiso.
+  void _sincronizarTelefono(bool puedeVerContacto) {
+    _telefonoController.text = _telefonoProtegido(puedeVerContacto)
+        ? enmascararTelefono(_telefonoGuardado)
+        : _telefonoGuardado;
+  }
+
+  String _telefonoAGuardar({required bool puedeVerContacto}) {
+    return _telefonoProtegido(puedeVerContacto)
+        ? _telefonoGuardado
+        : _telefonoController.text.trim();
+  }
+
   bool get _hayCambios {
     if (!_cargado) return false;
+    final puedeVerContacto = ref.read(canViewContactDataProvider);
     return _nombreController.text != _nombre0 ||
         _empresaController.text != _empresa0 ||
         _cargoController.text != _cargo0 ||
-        _telefonoController.text != _telefono0 ||
+        _telefonoAGuardar(puedeVerContacto: puedeVerContacto) != _telefono0 ||
         _rutController.text != _rut0 ||
         _patenteController.text != _patente0 ||
         _acreditado != _acreditado0;
@@ -101,13 +128,14 @@ class _EditarRegistradoScreenState
 
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
+    final puedeVerContacto = ref.read(canViewContactDataProvider);
     setState(() => _guardando = true);
 
     final cambios = {
       'nombre_completo': _nombreController.text.trim(),
       'empresa': _empresaController.text.trim(),
       'cargo': _cargoController.text.trim(),
-      'telefono': _telefonoController.text.trim(),
+      'telefono': _telefonoAGuardar(puedeVerContacto: puedeVerContacto),
       'rut': formatearRut(_rutController.text),
       'patente': formatearPatente(_patenteController.text),
       'acreditado': _acreditado,
@@ -183,9 +211,18 @@ class _EditarRegistradoScreenState
   @override
   Widget build(BuildContext context) {
     final esAdmin = ref.watch(isAdminProvider);
+    final puedeVerContacto = ref.watch(canViewContactDataProvider);
     final registradosAsync = ref.watch(
       registradosPorEventoProvider(widget.eventoId),
     );
+
+    ref.listen(canViewContactDataProvider, (anterior, actual) {
+      if (!_cargado) return;
+      if (_telefonoProtegido(anterior ?? false) == _telefonoProtegido(actual)) {
+        return;
+      }
+      setState(() => _sincronizarTelefono(actual));
+    });
 
     return AppScaffold(
       title: 'Editar registrado',
@@ -219,7 +256,8 @@ class _EditarRegistradoScreenState
               message: 'No se encontró este registro.',
             );
           }
-          _precargar(registrado);
+          _precargar(registrado, puedeVerContacto: puedeVerContacto);
+          final telefonoProtegido = _telefonoProtegido(puedeVerContacto);
 
           return SingleChildScrollView(
             padding: AppSpacing.form,
@@ -230,7 +268,9 @@ class _EditarRegistradoScreenState
                 children: [
                   PersonaIdentityBanner(
                     nombre: _nombreController.text,
-                    email: registrado.email,
+                    email: puedeVerContacto
+                        ? registrado.email
+                        : enmascararEmail(registrado.email),
                     nombreController: _nombreController,
                     nombreHint: 'Ej. María González',
                     nombreEnabled: !_guardando,
@@ -264,6 +304,17 @@ class _EditarRegistradoScreenState
                     hintText: '+56 9 1234 5678',
                     keyboardType: TextInputType.phone,
                     enabled: !_guardando,
+                    readOnly: telefonoProtegido,
+                    helperText: telefonoProtegido
+                        ? 'Solo visible para administradores y organizadores'
+                        : null,
+                    suffixIcon: telefonoProtegido
+                        ? const Icon(
+                            Symbols.lock_rounded,
+                            size: 18,
+                            color: AppColors.textTertiary,
+                          )
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   NexusFormTextField(

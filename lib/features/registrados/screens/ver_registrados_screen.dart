@@ -11,6 +11,7 @@ import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/mascara_contacto.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
@@ -119,15 +120,20 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
     );
   }
 
-  List<Registrado> _filtrarRegistrados(List<Registrado> registrados) {
+  List<Registrado> _filtrarRegistrados(
+    List<Registrado> registrados, {
+    required bool puedeVerContacto,
+  }) {
     return registrados.where((r) {
       if (_filtro == _Filtro.acreditados && !r.acreditado) {
         return false;
       }
       if (_filtro == _Filtro.pendientes && r.acreditado) return false;
       if (_busqueda.isEmpty) return true;
+      // Sin permiso para ver el contacto tampoco se busca por email: si no, el
+      // correo oculto se podría reconstruir por tanteo.
       return r.nombreCompleto.toLowerCase().contains(_busqueda) ||
-          r.email.toLowerCase().contains(_busqueda);
+          (puedeVerContacto && r.email.toLowerCase().contains(_busqueda));
     }).toList();
   }
 
@@ -167,9 +173,11 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
     final registradosAsync = ref.watch(
       registradosPorEventoProvider(widget.eventoId),
     );
+    final puedeVerContacto = ref.watch(canViewContactDataProvider);
 
     final filtrados = registradosAsync.maybeWhen(
-      data: _filtrarRegistrados,
+      data: (registrados) =>
+          _filtrarRegistrados(registrados, puedeVerContacto: puedeVerContacto),
       orElse: () => const <Registrado>[],
     );
     final listaVacia = registradosAsync.hasValue && filtrados.isEmpty;
@@ -217,7 +225,10 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
             ),
           ],
           data: (registrados) {
-            final filtrados = _filtrarRegistrados(registrados);
+            final filtrados = _filtrarRegistrados(
+              registrados,
+              puedeVerContacto: puedeVerContacto,
+            );
 
             if (registrados.isEmpty) {
               return [
@@ -296,6 +307,8 @@ class _RegistradoTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final puedeVerContacto = ref.watch(canViewContactDataProvider);
+
     // Siempre se puede abrir: la pantalla de edición lee de esta misma lista
     // y sabe encolar los cambios de una fila que aún no llegó al servidor.
     return Pressable(
@@ -334,7 +347,9 @@ class _RegistradoTile extends ConsumerWidget {
                   const SizedBox(height: 2),
                   Text(
                     [
-                      registrado.email,
+                      puedeVerContacto
+                          ? registrado.email
+                          : enmascararEmail(registrado.email),
                       registrado.empresa,
                     ].where((s) => s != null && s.isNotEmpty).join(' · '),
                     maxLines: 1,
@@ -516,7 +531,13 @@ class _QrSheet extends ConsumerStatefulWidget {
 class _QrSheetState extends ConsumerState<_QrSheet> {
   bool _enviando = false;
 
+  String _correoVisible({required bool puedeVerContacto}) {
+    final correo = widget.registrado.email;
+    return puedeVerContacto ? correo : enmascararEmail(correo);
+  }
+
   Future<void> _enviarPorEmail() async {
+    final puedeVerContacto = ref.read(canViewContactDataProvider);
     setState(() => _enviando = true);
     try {
       final evento = await ref.read(eventoByIdProvider(widget.eventoId).future);
@@ -526,7 +547,10 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
       ref.invalidate(registradosPorEventoProvider(widget.eventoId));
       if (mounted) {
         Navigator.of(context).pop();
-        showAppSnackBar(context, 'QR enviado a ${widget.registrado.email}.');
+        showAppSnackBar(
+          context,
+          'QR enviado a ${_correoVisible(puedeVerContacto: puedeVerContacto)}.',
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -545,6 +569,7 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
   @override
   Widget build(BuildContext context) {
     final isOnline = ref.watch(isOnlineProvider);
+    final puedeVerContacto = ref.watch(canViewContactDataProvider);
     final r = widget.registrado;
     // Un registro que solo existe en la cola local todavía no tiene id real
     // en el servidor: su QR no serviría para acreditar ni para el email. Se
@@ -569,7 +594,7 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             Text(
-              r.email,
+              _correoVisible(puedeVerContacto: puedeVerContacto),
               style: const TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),

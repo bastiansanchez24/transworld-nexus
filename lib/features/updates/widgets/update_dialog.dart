@@ -71,7 +71,11 @@ class UpdateDialog extends StatelessWidget {
     final verifying = state.status == UpdateStatus.verifying;
     final installing = state.status == UpdateStatus.installing;
     final failed = state.status == UpdateStatus.failed;
+    final awaitingPermission =
+        state.status == UpdateStatus.awaitingInstallPermission;
     final busy = downloading || verifying || installing;
+    final showInstallPermission =
+        awaitingPermission || (failed && state.needsInstallPermission);
     final installingLabel = otaInstallingLabel;
 
     return AlertDialog(
@@ -170,7 +174,7 @@ class UpdateDialog extends StatelessWidget {
                     : null,
               ),
             ],
-            if (failed && state.needsInstallPermission) ...[
+            if (showInstallPermission) ...[
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -236,13 +240,15 @@ class UpdateDialog extends StatelessWidget {
           ),
         if (!busy && !forced)
           TextButton(onPressed: onLater, child: const Text('Más tarde')),
-        if (failed && state.needsInstallPermission)
+        if (showInstallPermission)
           OutlinedButton(
             onPressed: onOpenSettings,
             child: const Text('Configuración'),
           ),
         if (failed)
           FilledButton(onPressed: onRetry, child: const Text('Reintentar'))
+        else if (awaitingPermission)
+          FilledButton(onPressed: onUpdate, child: const Text('Actualizar'))
         else if (!busy)
           FilledButton(onPressed: onUpdate, child: const Text('Actualizar')),
       ],

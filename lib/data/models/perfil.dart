@@ -29,7 +29,7 @@ class Perfil {
   bool get canExportData => rol.canExportData;
   bool get canViewAllLeads => rol.canViewAllLeads;
   bool get canEditAnyLead => rol.canEditAnyLead;
-  bool get canViewLeadContactData => rol.canViewLeadContactData;
+  bool get canViewContactData => rol.canViewContactData;
   bool get isExterno => rol.isExterno;
   bool get requiresEventAssignment => rol.requiresEventAssignment;
   bool get usesFullShell => rol.usesFullShell;

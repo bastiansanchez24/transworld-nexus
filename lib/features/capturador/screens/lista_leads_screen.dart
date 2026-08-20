@@ -214,7 +214,7 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
     final leadsAsync = ref.watch(leadsPorEventoProvider(widget.eventoId));
     final perfilId = ref.watch(currentPerfilProvider).valueOrNull?.id;
     final canViewAllLeads = ref.watch(canViewAllLeadsProvider);
-    final puedeVerContacto = ref.watch(canViewLeadContactDataProvider);
+    final puedeVerContacto = ref.watch(canViewContactDataProvider);
 
     final filtrados = leadsAsync.maybeWhen(
       data: (leads) => _filtrarLeads(
@@ -598,7 +598,7 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     String? valorOpcional(TextEditingController controller) =>
         _sinVacios(controller.text);
 
-    final puedeVerContacto = ref.read(canViewLeadContactDataProvider);
+    final puedeVerContacto = ref.read(canViewContactDataProvider);
     final email = puedeVerContacto
         ? valorOpcional(_emailController)
         : _emailGuardado;
@@ -788,7 +788,7 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     final esAdmin = ref.watch(isAdminProvider);
     final perfilId = ref.watch(currentPerfilProvider).valueOrNull?.id;
     final puedeEditarCualquiera = ref.watch(canEditAnyLeadProvider);
-    final puedeVerContacto = ref.watch(canViewLeadContactDataProvider);
+    final puedeVerContacto = ref.watch(canViewContactDataProvider);
     final esPendiente = esIdSoloLocal(widget.leadId);
 
     // El lead se resuelve antes del scaffold porque el título y el modo del

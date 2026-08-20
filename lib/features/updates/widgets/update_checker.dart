@@ -59,7 +59,7 @@ class _UpdateCheckerState extends ConsumerState<UpdateChecker>
       case AppLifecycleState.resumed:
         if (!_wasBackgrounded || !mounted || !_isLoggedIn) return;
         _wasBackgrounded = false;
-        ref.read(updateControllerProvider.notifier).checkOnResume();
+        ref.read(updateControllerProvider.notifier).onAppResumed();
     }
   }
 

@@ -22,16 +22,16 @@ void main() {
   });
 
   test(
-    'editar leads ajenos y ver su contacto queda en administrador y organizador',
+    'editar leads ajenos y ver el contacto queda en administrador y organizador',
     () {
       for (final role in [AppRole.admin, AppRole.organizador]) {
         expect(role.canEditAnyLead, isTrue, reason: role.value);
-        expect(role.canViewLeadContactData, isTrue, reason: role.value);
+        expect(role.canViewContactData, isTrue, reason: role.value);
       }
 
       for (final role in [AppRole.user, AppRole.externo]) {
         expect(role.canEditAnyLead, isFalse, reason: role.value);
-        expect(role.canViewLeadContactData, isFalse, reason: role.value);
+        expect(role.canViewContactData, isFalse, reason: role.value);
       }
     },
   );

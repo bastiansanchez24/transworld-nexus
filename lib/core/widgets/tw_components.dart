@@ -891,7 +891,15 @@ class TwKpiCard extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(value, maxLines: 1, style: TwText.kpiValue),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: Text(
+                value,
+                key: ValueKey(value),
+                maxLines: 1,
+                style: TwText.kpiValue,
+              ),
+            ),
           ),
           const SizedBox(height: 5),
           Text(label, style: TwText.kpiLabel),

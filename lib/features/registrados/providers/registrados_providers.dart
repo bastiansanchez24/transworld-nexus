@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/supabase_tables.dart';
-import '../../../core/network/connectivity_service.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/sync_queue_item.dart';
@@ -111,18 +110,15 @@ final registradosResumenProvider = Provider.autoDispose
 final registradosPorEventoProvider = FutureProvider.autoDispose
     .family<List<Registrado>, String>((ref, eventoId) async {
       final repo = ref.watch(registradosRepositoryProvider);
-      final isOnline = ref.watch(isOnlineProvider);
 
-      final servidor = await ref
-          .watch(offlineReadCacheProvider)
-          .leerConRespaldo(
-            tabla: SupabaseTables.registrados,
-            eventoId: eventoId,
-            desdeServidor: () => repo.listarPorEvento(eventoId),
-            aFila: (registrado) => registrado.toCacheMap(),
-            desdeFila: Registrado.fromMap,
-            isOnline: isOnline,
-          );
+      final servidor = await leerCacheFirstConRef(
+        ref: ref,
+        tabla: SupabaseTables.registrados,
+        eventoId: eventoId,
+        desdeServidor: () => repo.listarPorEvento(eventoId),
+        aFila: (registrado) => registrado.toCacheMap(),
+        desdeFila: Registrado.fromMap,
+      );
 
       return fusionarRegistradosConCola(
         servidor: servidor,

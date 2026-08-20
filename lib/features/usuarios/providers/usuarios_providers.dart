@@ -11,18 +11,15 @@ import '../../../data/repositories/auth_repository.dart';
 final usuariosListProvider = FutureProvider.autoDispose<List<Perfil>>((
   ref,
 ) async {
-  final isOnline = ref.watch(isOnlineProvider);
-  final cache = ref.watch(offlineReadCacheProvider);
   final repo = ref.watch(authRepositoryProvider);
 
-  final usuarios = await cache.leerConRespaldoGlobal(
+  return leerCacheFirstConRef(
+    ref: ref,
     tabla: OfflineCacheTables.usuarios,
     desdeServidor: repo.obtenerTodosLosUsuarios,
     aFila: (perfil) => perfil.toCacheMap(),
     desdeFila: Perfil.fromMap,
-    isOnline: isOnline,
   );
-  return usuarios;
 });
 
 final usuarioPorIdProvider = FutureProvider.autoDispose.family<Perfil, String>((

@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/mascara_contacto.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
@@ -67,7 +68,7 @@ class _AcreditarConfirmadoScreenState
     }
   }
 
-  Widget _buildSearchField() {
+  Widget _buildSearchField({required bool puedeVerContacto}) {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.input),
@@ -82,7 +83,9 @@ class _AcreditarConfirmadoScreenState
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          hintText: 'Buscar por nombre o email…',
+          hintText: puedeVerContacto
+              ? 'Buscar por nombre o email…'
+              : 'Buscar por nombre…',
           hintStyle: const TextStyle(color: AppColors.placeholder),
           prefixIcon: const Icon(
             Symbols.search_rounded,
@@ -116,11 +119,16 @@ class _AcreditarConfirmadoScreenState
     );
   }
 
-  List<Registrado> _filtrarRegistrados(List<Registrado> registrados) {
+  List<Registrado> _filtrarRegistrados(
+    List<Registrado> registrados, {
+    required bool puedeVerContacto,
+  }) {
     return registrados.where((r) {
       if (_busqueda.isEmpty) return true;
+      // Sin permiso para ver el contacto tampoco se busca por email: si no, el
+      // correo oculto se podría reconstruir por tanteo.
       return r.nombreCompleto.toLowerCase().contains(_busqueda) ||
-          r.email.toLowerCase().contains(_busqueda);
+          (puedeVerContacto && r.email.toLowerCase().contains(_busqueda));
     }).toList();
   }
 
@@ -133,9 +141,11 @@ class _AcreditarConfirmadoScreenState
     final registradosAsync = ref.watch(
       registradosPorEventoProvider(widget.eventoId),
     );
+    final puedeVerContacto = ref.watch(canViewContactDataProvider);
 
     final filtrados = registradosAsync.maybeWhen(
-      data: _filtrarRegistrados,
+      data: (registrados) =>
+          _filtrarRegistrados(registrados, puedeVerContacto: puedeVerContacto),
       orElse: () => const <Registrado>[],
     );
     final listaVacia = registradosAsync.hasValue && filtrados.isEmpty;
@@ -149,7 +159,7 @@ class _AcreditarConfirmadoScreenState
         tooltip: 'Volver',
         onTap: () => context.pop(),
       ),
-      pinnedContent: _buildSearchField(),
+      pinnedContent: _buildSearchField(puedeVerContacto: puedeVerContacto),
       pinnedContentHeight: 60,
       scrollResetToken: _busqueda,
       lockScroll: listaVacia,
@@ -181,7 +191,10 @@ class _AcreditarConfirmadoScreenState
             ),
           ],
           data: (registrados) {
-            final filtrados = _filtrarRegistrados(registrados);
+            final filtrados = _filtrarRegistrados(
+              registrados,
+              puedeVerContacto: puedeVerContacto,
+            );
 
             if (registrados.isEmpty) {
               return [
@@ -215,8 +228,11 @@ class _AcreditarConfirmadoScreenState
                   itemCount: filtrados.length,
                   separatorBuilder: (_, _) =>
                       const SizedBox(height: AppSpacing.cardGap),
-                  itemBuilder: (context, index) =>
-                      _buildRegistradoTile(filtrados[index], index),
+                  itemBuilder: (context, index) => _buildRegistradoTile(
+                    filtrados[index],
+                    index,
+                    puedeVerContacto: puedeVerContacto,
+                  ),
                 ),
               ),
             ];
@@ -245,7 +261,13 @@ class _AcreditarConfirmadoScreenState
     );
   }
 
-  Widget _buildRegistradoTile(Registrado r, int index) {
+  Widget _buildRegistradoTile(
+    Registrado r,
+    int index, {
+    required bool puedeVerContacto,
+  }) {
+    final correo = puedeVerContacto ? r.email : enmascararEmail(r.email);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
@@ -272,7 +294,7 @@ class _AcreditarConfirmadoScreenState
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${r.email}${r.empresa != null && r.empresa!.isNotEmpty ? ' · ${r.empresa}' : ''}',
+                  '$correo${r.empresa != null && r.empresa!.isNotEmpty ? ' · ${r.empresa}' : ''}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

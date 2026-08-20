@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/network/connectivity_service.dart';
 import '../../../data/offline/offline_cache_tables.dart';
 import '../../../data/offline/offline_read_cache.dart';
 
@@ -19,19 +18,20 @@ import 'home_dashboard_providers.dart';
 /// El resultado ya ensamblado se respalda en disco: son media docena de
 /// consultas encadenadas y sin red no hay forma de rehacerlas, así que el
 /// slider se serviría vacío justo en la pantalla de entrada.
+///
+/// Con copia en disco el carrusel se pinta al instante y el ensamblado va por
+/// detrás. Antes ese ensamblado tenía 20 s de presupuesto **antes** de pintar:
+/// abrir el home costaba la cadena completa de consultas incluso con la caché
+/// llena, y sin red se esperaba el timeout entero para acabar mostrando
+/// exactamente lo que ya estaba guardado.
 final homeFeaturedItemsProvider =
     FutureProvider.autoDispose<List<HomeFeaturedItem>>((ref) async {
-      final isOnline = ref.watch(isOnlineProvider);
-      final cache = ref.watch(offlineReadCacheProvider);
-      return cache.leerConRespaldoGlobal(
+      return leerCacheFirstConRef(
+        ref: ref,
         tabla: OfflineCacheTables.homeDestacados,
         desdeServidor: () => _construirDestacados(ref),
         aFila: (item) => item.toCacheMap(),
         desdeFila: HomeFeaturedItem.fromCacheMap,
-        isOnline: isOnline,
-        // Presupuesto propio: encadena varias consultas y el corte por defecto
-        // lo mandaría a la copia local incluso con red buena.
-        esperaMaximaServidor: const Duration(seconds: 20),
       );
     });
 

@@ -270,142 +270,157 @@ class _CrearEditarEventoFormState
       ],
       body: eventoAsync != null && eventoAsync.isLoading && !_cargado
           ? const LoadingView()
-          : SingleChildScrollView(
-              padding: AppSpacing.form,
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _FieldLabel('Foto'),
-                    const SizedBox(height: 6),
-                    SelectorImagen(
-                      bytes: _imagenBytes,
-                      urlExistente: _imagenUrlExistente,
-                      enabled: !_guardando,
-                      aspectRatio: 16 / 9,
-                      anchoMaximo: kAnchoSelectorImagenEvento,
-                      etiquetaVacio: 'Agregar imagen del evento',
-                      onElegir: _elegirImagen,
-                      onQuitar:
-                          _imagenBytes == null && _imagenUrlExistente == null
-                          ? null
-                          : _quitarImagen,
-                    ),
-                    const SizedBox(height: 14),
-                    _FieldLabel('Nombre'),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _nombreController,
-                      decoration: const InputDecoration(
-                        hintText: 'Ej. Taller ALTAI 2026',
+          : AbsorbPointer(
+              absorbing: _guardando,
+              child: SingleChildScrollView(
+                padding: AppSpacing.form,
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _FieldLabel('Foto'),
+                      const SizedBox(height: 6),
+                      SelectorImagen(
+                        bytes: _imagenBytes,
+                        urlExistente: _imagenUrlExistente,
+                        enabled: !_guardando,
+                        aspectRatio: 16 / 9,
+                        anchoMaximo: kAnchoSelectorImagenEvento,
+                        etiquetaVacio: 'Agregar imagen del evento',
+                        onElegir: _elegirImagen,
+                        onQuitar:
+                            _imagenBytes == null && _imagenUrlExistente == null
+                            ? null
+                            : _quitarImagen,
                       ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                    ),
-                    const SizedBox(height: 14),
-                    _FieldLabel('Fecha'),
-                    const SizedBox(height: 6),
-                    FechaPickerField(fecha: _fecha, onTap: _elegirFecha),
-                    const SizedBox(height: 14),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _FieldLabel('País'),
-                              const SizedBox(height: 6),
-                              TextFormField(
-                                controller: _paisController,
-                                decoration: const InputDecoration(
-                                  hintText: 'Chile',
+                      const SizedBox(height: 14),
+                      _FieldLabel('Nombre'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _nombreController,
+                        enabled: !_guardando,
+                        decoration: const InputDecoration(
+                          hintText: 'Ej. Taller ALTAI 2026',
+                        ),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Requerido'
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+                      _FieldLabel('Fecha'),
+                      const SizedBox(height: 6),
+                      FechaPickerField(
+                        fecha: _fecha,
+                        onTap: _elegirFecha,
+                        enabled: !_guardando,
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _FieldLabel('País'),
+                                const SizedBox(height: 6),
+                                TextFormField(
+                                  controller: _paisController,
+                                  enabled: !_guardando,
+                                  decoration: const InputDecoration(
+                                    hintText: 'Chile',
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _FieldLabel('Lugar'),
-                              const SizedBox(height: 6),
-                              TextFormField(
-                                controller: _lugarController,
-                                decoration: const InputDecoration(
-                                  hintText: 'Hotel…',
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _FieldLabel('Lugar'),
+                                const SizedBox(height: 6),
+                                TextFormField(
+                                  controller: _lugarController,
+                                  enabled: !_guardando,
+                                  decoration: const InputDecoration(
+                                    hintText: 'Hotel…',
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    _FieldLabel('Dirección'),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _direccionController,
-                      decoration: const InputDecoration(
-                        hintText: 'Av. Vitacura 2885',
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    _FieldLabel('Temática'),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _tematicaController,
-                      decoration: const InputDecoration(
-                        hintText: 'Ej. Telecomunicaciones',
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _FieldLabel('Tipo de registro'),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<TipoRegistroEvento>(
-                      initialValue: _tipoRegistro,
-                      decoration: const InputDecoration(),
-                      items: const [
-                        DropdownMenuItem(
-                          value: TipoRegistroEvento.comercial,
-                          child: Text('Comercial'),
+                      const SizedBox(height: 14),
+                      _FieldLabel('Dirección'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _direccionController,
+                        enabled: !_guardando,
+                        decoration: const InputDecoration(
+                          hintText: 'Av. Vitacura 2885',
                         ),
-                        DropdownMenuItem(
-                          value: TipoRegistroEvento.cliente,
-                          child: Text('Cliente'),
-                        ),
-                      ],
-                      onChanged: (value) => setState(
-                        () => _tipoRegistro = value ?? _tipoRegistro,
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    _ToggleCard(
-                      title: 'Requiere certificación',
-                      subtitle: 'Habilita los campos RUT y patente',
-                      value: _certificacion,
-                      onChanged: (v) => setState(() => _certificacion = v),
-                    ),
-                    if (_esEdicion) ...[
+                      const SizedBox(height: 14),
+                      _FieldLabel('Temática'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _tematicaController,
+                        enabled: !_guardando,
+                        decoration: const InputDecoration(
+                          hintText: 'Ej. Telecomunicaciones',
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _FieldLabel('Tipo de registro'),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<TipoRegistroEvento>(
+                        initialValue: _tipoRegistro,
+                        decoration: const InputDecoration(),
+                        items: const [
+                          DropdownMenuItem(
+                            value: TipoRegistroEvento.comercial,
+                            child: Text('Comercial'),
+                          ),
+                          DropdownMenuItem(
+                            value: TipoRegistroEvento.cliente,
+                            child: Text('Cliente'),
+                          ),
+                        ],
+                        onChanged: _guardando
+                            ? null
+                            : (value) => setState(
+                                () => _tipoRegistro = value ?? _tipoRegistro,
+                              ),
+                      ),
                       const SizedBox(height: 14),
                       _ToggleCard(
-                        title: 'Evento activo',
-                        subtitle:
-                            'Los eventos inactivos no reciben autoregistro público',
-                        value: _activo,
-                        onChanged: (v) => setState(() => _activo = v),
+                        title: 'Requiere certificación',
+                        subtitle: 'Habilita los campos RUT y patente',
+                        value: _certificacion,
+                        onChanged: (v) => setState(() => _certificacion = v),
+                      ),
+                      if (_esEdicion) ...[
+                        const SizedBox(height: 14),
+                        _ToggleCard(
+                          title: 'Evento activo',
+                          subtitle:
+                              'Los eventos inactivos no reciben autoregistro público',
+                          value: _activo,
+                          onChanged: (v) => setState(() => _activo = v),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      PrimaryGradientButton(
+                        label: _esEdicion ? 'Guardar' : 'Crear evento',
+                        loading: _guardando,
+                        onPressed: _guardando ? null : _guardar,
                       ),
                     ],
-                    const SizedBox(height: 20),
-                    PrimaryGradientButton(
-                      label: _esEdicion ? 'Guardar' : 'Crear evento',
-                      loading: _guardando,
-                      onPressed: _guardando ? null : _guardar,
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

@@ -20,6 +20,8 @@ class HomeDashboardSection extends ConsumerWidget {
     final dashboardAsync = ref.watch(homeDashboardProvider);
 
     return dashboardAsync.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.xxl),
         child: LoadingView(message: 'Cargando resumen...'),
@@ -105,6 +107,7 @@ class _KpiGrid extends StatelessWidget {
                   if (col > 0) const SizedBox(width: 12),
                   Expanded(
                     child: _HomeCardIn(
+                      key: ValueKey(cards[row * 2 + col].label),
                       index: row * 2 + col,
                       child: cards[row * 2 + col],
                     ),
@@ -488,7 +491,7 @@ class _EventoCalendarioTile extends StatelessWidget {
 }
 
 class _HomeCardIn extends StatefulWidget {
-  const _HomeCardIn({required this.index, required this.child});
+  const _HomeCardIn({super.key, required this.index, required this.child});
 
   final int index;
   final Widget child;

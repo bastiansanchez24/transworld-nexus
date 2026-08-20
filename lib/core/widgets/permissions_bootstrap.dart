@@ -47,12 +47,20 @@ class _PermissionsBootstrapState extends ConsumerState<PermissionsBootstrap> {
       if (!onboarding.yaSolicitados(userId)) {
         await AppPermissions.requestAll(
           includeNotifications: false,
-          includeAppUpdates: perfil.usesFullShell,
+          includeAppUpdates: false,
         );
-        await onboarding.marcarSolicitados(userId);
-      }
 
-      if (perfil.canAccessNotifications &&
+        if (perfil.canAccessNotifications) {
+          await AppPermissions.requestNotifications();
+          await onboarding.marcarNotificacionesSolicitadas(userId);
+        }
+
+        if (perfil.usesFullShell) {
+          await AppPermissions.requestInstallPackages();
+        }
+
+        await onboarding.marcarSolicitados(userId);
+      } else if (perfil.canAccessNotifications &&
           !onboarding.notificacionesYaSolicitadas(userId)) {
         await AppPermissions.requestNotifications();
         await onboarding.marcarNotificacionesSolicitadas(userId);

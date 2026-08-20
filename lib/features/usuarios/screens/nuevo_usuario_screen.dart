@@ -155,158 +155,167 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
     return AppScaffold(
       title: 'Nuevo usuario',
       onWillPop: () => confirmDiscardCreate(context),
-      body: SingleChildScrollView(
-        padding: AppSpacing.form,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Crea una cuenta y envía las credenciales al correo del usuario.',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 18),
-              const _FieldLabel('Nombre completo'),
-              const SizedBox(height: 6),
-              TextFormField(
-                controller: _nombreController,
-                decoration: const InputDecoration(hintText: 'Ej. Juan Pérez'),
-                textInputAction: TextInputAction.next,
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-              ),
-              const SizedBox(height: 14),
-              const _FieldLabel('Correo'),
-              const SizedBox(height: 6),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  hintText: 'usuario@empresa.com',
-                ),
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                validator: (v) {
-                  final value = v?.trim() ?? '';
-                  if (value.isEmpty) return 'Requerido';
-                  if (!value.contains('@')) return 'Email inválido';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 14),
-              const _FieldLabel('Contraseña'),
-              const SizedBox(height: 6),
-              TextFormField(
-                controller: _passwordController,
-                decoration: InputDecoration(
-                  hintText: 'Autogenerada',
-                  helperText: kPasswordHelperText,
-                  helperMaxLines: 3,
-                  suffixIcon: IconButton(
-                    tooltip: 'Regenerar',
-                    onPressed: _guardando
-                        ? null
-                        : () {
-                            setState(() {
-                              _passwordController.text =
-                                  generarContrasenaInvitacion();
-                            });
-                          },
-                    icon: const Icon(Symbols.refresh_rounded),
+      body: AbsorbPointer(
+        absorbing: _guardando,
+        child: SingleChildScrollView(
+          padding: AppSpacing.form,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Crea una cuenta y envía las credenciales al correo del usuario.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
                   ),
                 ),
-                validator: validarContrasenaFuerte,
-              ),
-              const SizedBox(height: 14),
-              const _FieldLabel('Tipo de usuario'),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<AppRole>(
-                initialValue: _rol,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  hintText: 'Selecciona un tipo',
-                ),
-                items: AppRole.creatableRoles
-                    .map(
-                      (r) => DropdownMenuItem(value: r, child: Text(r.label)),
-                    )
-                    .toList(),
-                onChanged: _guardando
-                    ? null
-                    : (v) => setState(() {
-                        _rol = v;
-                        if (v != AppRole.user && v != AppRole.externo) {
-                          _eventoIds.clear();
-                        }
-                      }),
-                validator: (v) =>
-                    v == null ? 'Selecciona el tipo de usuario' : null,
-              ),
-              if (_asignaEventos) ...[
-                const SizedBox(height: 14),
-                const _FieldLabel('Eventos autorizados'),
+                const SizedBox(height: 18),
+                const _FieldLabel('Nombre completo'),
                 const SizedBox(height: 6),
-                eventosAsync.when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: LinearProgressIndicator(),
+                TextFormField(
+                  controller: _nombreController,
+                  enabled: !_guardando,
+                  decoration: const InputDecoration(hintText: 'Ej. Juan Pérez'),
+                  textInputAction: TextInputAction.next,
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                ),
+                const SizedBox(height: 14),
+                const _FieldLabel('Correo'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _emailController,
+                  enabled: !_guardando,
+                  decoration: const InputDecoration(
+                    hintText: 'usuario@empresa.com',
                   ),
-                  error: (_, _) => const Text(
-                    'No se pudieron cargar los eventos.',
-                    style: TextStyle(color: AppColors.danger),
-                  ),
-                  data: (eventos) {
-                    return SelectorEventosMultiples(
-                      eventos: eventos,
-                      seleccionados: _eventoIds,
-                      enabled: !_guardando,
-                      soloActivosDisponibles: _esExterno,
-                      emptyHelperText: _esExterno
-                          ? 'Selecciona al menos un evento.'
-                          : 'Sin eventos asignados: el usuario no podrá operar eventos.',
-                      errorText:
-                          _esExterno && _intentoGuardar && _eventoIds.isEmpty
-                          ? 'Selecciona al menos un evento'
-                          : null,
-                      onChanged: (ids) => setState(() {
-                        _eventoIds
-                          ..clear()
-                          ..addAll(ids);
-                      }),
-                    );
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) return 'Requerido';
+                    if (!value.contains('@')) return 'Email inválido';
+                    return null;
                   },
                 ),
-              ],
-              const SizedBox(height: 28),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
+                const SizedBox(height: 14),
+                const _FieldLabel('Contraseña'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _passwordController,
+                  enabled: !_guardando,
+                  decoration: InputDecoration(
+                    hintText: 'Autogenerada',
+                    helperText: kPasswordHelperText,
+                    helperMaxLines: 3,
+                    suffixIcon: IconButton(
+                      tooltip: 'Regenerar',
                       onPressed: _guardando
                           ? null
                           : () {
-                              final eventos = eventosAsync.valueOrNull ?? [];
-                              final nombres = eventos
-                                  .where((e) => _eventoIds.contains(e.id))
-                                  .map((e) => e.nombre)
-                                  .toList();
-                              _compartir(eventoNombres: nombres);
+                              setState(() {
+                                _passwordController.text =
+                                    generarContrasenaInvitacion();
+                              });
                             },
-                      icon: const Icon(Symbols.share_rounded),
-                      label: const Text('Compartir'),
+                      icon: const Icon(Symbols.refresh_rounded),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: PrimaryGradientButton(
-                      label: _guardando ? 'Guardando…' : 'Guardar',
-                      loading: _guardando,
-                      onPressed: _guardando ? null : _guardar,
+                  validator: validarContrasenaFuerte,
+                ),
+                const SizedBox(height: 14),
+                const _FieldLabel('Tipo de usuario'),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<AppRole>(
+                  initialValue: _rol,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Selecciona un tipo',
+                  ),
+                  items: AppRole.creatableRoles
+                      .map(
+                        (r) => DropdownMenuItem(value: r, child: Text(r.label)),
+                      )
+                      .toList(),
+                  onChanged: _guardando
+                      ? null
+                      : (v) => setState(() {
+                          _rol = v;
+                          if (v != AppRole.user && v != AppRole.externo) {
+                            _eventoIds.clear();
+                          }
+                        }),
+                  validator: (v) =>
+                      v == null ? 'Selecciona el tipo de usuario' : null,
+                ),
+                if (_asignaEventos) ...[
+                  const SizedBox(height: 14),
+                  const _FieldLabel('Eventos autorizados'),
+                  const SizedBox(height: 6),
+                  eventosAsync.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: LinearProgressIndicator(),
                     ),
+                    error: (_, _) => const Text(
+                      'No se pudieron cargar los eventos.',
+                      style: TextStyle(color: AppColors.danger),
+                    ),
+                    data: (eventos) {
+                      return SelectorEventosMultiples(
+                        eventos: eventos,
+                        seleccionados: _eventoIds,
+                        enabled: !_guardando,
+                        soloActivosDisponibles: _esExterno,
+                        emptyHelperText: _esExterno
+                            ? 'Selecciona al menos un evento.'
+                            : 'Sin eventos asignados: el usuario no podrá operar eventos.',
+                        errorText:
+                            _esExterno && _intentoGuardar && _eventoIds.isEmpty
+                            ? 'Selecciona al menos un evento'
+                            : null,
+                        onChanged: (ids) => setState(() {
+                          _eventoIds
+                            ..clear()
+                            ..addAll(ids);
+                        }),
+                      );
+                    },
                   ),
                 ],
-              ),
-            ],
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _guardando
+                            ? null
+                            : () {
+                                final eventos = eventosAsync.valueOrNull ?? [];
+                                final nombres = eventos
+                                    .where((e) => _eventoIds.contains(e.id))
+                                    .map((e) => e.nombre)
+                                    .toList();
+                                _compartir(eventoNombres: nombres);
+                              },
+                        icon: const Icon(Symbols.share_rounded),
+                        label: const Text('Compartir'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: PrimaryGradientButton(
+                        label: _guardando ? 'Guardando…' : 'Guardar',
+                        loading: _guardando,
+                        onPressed: _guardando ? null : _guardar,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

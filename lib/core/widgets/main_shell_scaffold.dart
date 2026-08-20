@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import 'app_widgets.dart';
 import 'ios_native_tab_bar.dart';
 import 'permissions_bootstrap.dart';
+import 'shell_tab_scroll.dart';
 import 'tw_bottom_nav_bar.dart';
 
 /// Shell con la navegación del rediseño: `UITabBar` nativo en iOS, barra
@@ -89,11 +90,9 @@ class MainShellScaffold extends ConsumerWidget {
           child: MainShellNavHost(
             selectedIndex: selectedIndex,
             onItemSelected: (index) {
-              navigationShell.goBranch(
-                tabs[index].branch,
-                initialLocation:
-                    tabs[index].branch == navigationShell.currentIndex,
-              );
+              final branch = tabs[index].branch;
+              navigationShell.goBranch(branch, initialLocation: true);
+              ref.read(shellTabEpochProvider(branch).notifier).state++;
             },
             items: [
               for (final tab in tabs)
