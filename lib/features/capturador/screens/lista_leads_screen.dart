@@ -9,7 +9,6 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
-import '../../../core/network/offline_guard.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
