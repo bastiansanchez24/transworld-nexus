@@ -25,6 +25,12 @@ void main() {
       );
     });
 
+    test('tryParseVersion acepta build de pubspec', () {
+      expect(tryParseVersion('1.6.8+27')?.major, 1);
+      expect(tryParseVersion('1.6.8+27')?.minor, 6);
+      expect(tryParseVersion('1.6.8+27')?.patch, 8);
+    });
+
     test('tryParseVersion rechaza tags inválidos', () {
       expect(tryParseVersion('latest'), isNull);
       expect(tryParseVersion(''), isNull);

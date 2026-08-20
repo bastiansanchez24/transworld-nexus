@@ -14,11 +14,10 @@ void main() {
     }
   });
 
-  test('el usuario interno ve todos los leads; el externo solo los suyos', () {
-    for (final role in [AppRole.admin, AppRole.organizador, AppRole.user]) {
+  test('cualquier rol autenticado ve todos los leads de su campaña', () {
+    for (final role in AppRole.values) {
       expect(role.canViewAllLeads, isTrue, reason: role.value);
     }
-    expect(AppRole.externo.canViewAllLeads, isFalse);
   });
 
   test(
@@ -35,4 +34,10 @@ void main() {
       }
     },
   );
+
+  test('cualquier rol autenticado puede ver actualizaciones', () {
+    for (final role in AppRole.values) {
+      expect(role.canAccessAppUpdates, isTrue, reason: role.value);
+    }
+  });
 }

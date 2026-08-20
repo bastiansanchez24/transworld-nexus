@@ -51,6 +51,11 @@ void main() {
     }
   });
 
+  test('la tab bar Liquid Glass de iOS usa iconos compactos', () {
+    expect(GlassNavTokens.nativeIosIconSize, 16);
+    expect(GlassNavTokens.nativeIosIconSize, lessThan(GlassNavTokens.iconSize));
+  });
+
   test('usesSideRail en web de PC y no en web móvil', () {
     expect(
       GlassNavTokens.usesSideRailFor(

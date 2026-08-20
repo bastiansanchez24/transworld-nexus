@@ -163,6 +163,10 @@ class RegistradosRepository implements SyncExecutor {
     });
   }
 
+  Future<void> desacreditar(String id) async {
+    await actualizar(id, {'acreditado': false, 'acreditado_por': null});
+  }
+
   /// Solo admin puede eliminar (política `rpe_registrados_delete`).
   Future<void> eliminar(String id) async {
     await _client.from(SupabaseTables.registrados).delete().eq('id', id);

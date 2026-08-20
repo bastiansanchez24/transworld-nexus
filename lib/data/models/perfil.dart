@@ -33,6 +33,7 @@ class Perfil {
   bool get isExterno => rol.isExterno;
   bool get requiresEventAssignment => rol.requiresEventAssignment;
   bool get usesFullShell => rol.usesFullShell;
+  bool get canAccessAppUpdates => rol.canAccessAppUpdates;
 
   factory Perfil.fromMap(Map<String, dynamic> map) {
     return Perfil(

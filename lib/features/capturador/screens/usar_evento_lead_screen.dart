@@ -6,15 +6,19 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/theme/tw_tokens.dart';
+import '../../../core/widgets/action_lock.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
-import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/sync_conflict_listener.dart';
 import '../../../core/widgets/tw_components.dart';
 import '../../../core/widgets/tw_detail_scaffold.dart';
+import '../../../core/widgets/tw_offline_notice_card.dart';
 import '../../../data/models/evento_lead.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capturador_providers.dart';
@@ -39,10 +43,27 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
   @override
   String get refreshWhenLocation => RoutePaths.usarEventoLead(widget.eventoId);
 
+  bool _abriendoLeads = false;
+
   @override
   void onBecomeVisible() {
+    if (_abriendoLeads) {
+      setState(() => _abriendoLeads = false);
+    }
     ref.invalidate(eventoLeadByIdProvider(widget.eventoId));
     ref.invalidate(leadsResumenRemotoProvider(widget.eventoId));
+  }
+
+  Future<void> _abrirLeads() async {
+    if (_abriendoLeads) return;
+    ActionLock.instance.deferUnlock();
+    setState(() => _abriendoLeads = true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    context.push(RoutePaths.verLeads(widget.eventoId));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ActionLock.instance.finishIfNoNav();
+    });
   }
 
   @override
@@ -59,79 +80,97 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
         value: SystemUiOverlayStyle.dark,
         child: Scaffold(
           backgroundColor: TwColors.bg,
-          body: OfflineBannerColumn(
-            children: [
-              Expanded(
-                child: eventoAsync.when(
-                  skipLoadingOnReload: true,
-                  loading: () => const LoadingView(),
-                  error: (e, _) => const ErrorView(
-                    message: 'No se pudo cargar la actividad.',
-                  ),
-                  data: (evento) => TwDetailScaffold(
-                    eyebrow: 'Detalle de la actividad',
-                    title: evento.nombre,
-                    onBack: () => context.pop(),
-                    actions: [
-                      // Sin botón compartir: la actividad de captura no tiene
-                      // formulario público que enlazar (§9).
-                      if (puedeEditar)
-                        TwIconButton(
-                          icon: Symbols.edit_rounded,
-                          iconSize: 19,
-                          tooltip: evento.esInterno
-                              ? 'Ver datos de la actividad'
-                              : 'Editar actividad',
-                          onTap: () => context.push(
-                            RoutePaths.editarEventoLead(widget.eventoId),
-                          ),
-                        ),
-                    ],
-                    children: [
-                      _hero(context, evento, resumen),
-                      const TwSectionLabel('Acciones del evento'),
-                      TwActionTile(
-                        icon: Symbols.contacts_rounded,
-                        title: 'Ver leads',
-                        subtitle: 'Listado de clientes capturados',
-                        onTap: () =>
-                            context.push(RoutePaths.verLeads(widget.eventoId)),
-                      ),
-                      if (conflictos > 0) ...[
-                        const SizedBox(height: TwSpacing.tileGap),
-                        TwActionTile(
-                          icon: Symbols.warning_rounded,
-                          iconStyle: TwIconBoxStyle.amberTint,
-                          title: 'Conflictos de sincronización',
-                          subtitle: conflictos == 1
-                              ? '1 pendiente de revisar'
-                              : '$conflictos pendientes de revisar',
-                          onTap: () => showSyncConflictsSheet(context, ref),
-                        ),
-                      ],
-                      // §9 lista además un tile "KPI del evento"; no se monta
-                      // porque `KpiScreen` solo sabe leer `eventos`/
-                      // `registrados` y un evento de leads la haría fallar.
-                      // Queda pendiente su pantalla propia.
-                      if (puedeExportar) ...[
-                        const TwSectionLabel('Administración'),
-                        TwActionTile(
-                          icon: Symbols.table_chart_rounded,
-                          iconStyle: TwIconBoxStyle.excel,
-                          excel: true,
-                          badge: 'XLSX',
-                          title: 'Importar o exportar',
-                          subtitle: _subtituloExcel(resumen?.total),
-                          onTap: () => context.push(
-                            RoutePaths.exportarLeads(widget.eventoId),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+          body: eventoAsync.when(
+            skipLoadingOnReload: true,
+            loading: () => const LoadingView(),
+            error: (e, _) =>
+                const ErrorView(message: 'No se pudo cargar la actividad.'),
+            data: (evento) => TwDetailScaffold(
+              eyebrow: 'Detalle de la actividad',
+              title: evento.nombre,
+              onBack: () => context.pop(),
+              onRefresh: () => refrescarLecturas(
+                ref,
+                invalidar: () {
+                  ref.invalidate(eventoLeadByIdProvider(widget.eventoId));
+                  ref.invalidate(leadsResumenRemotoProvider(widget.eventoId));
+                },
+                pendientes: () => [
+                  ref.read(eventoLeadByIdProvider(widget.eventoId).future),
+                  ref.read(leadsResumenRemotoProvider(widget.eventoId).future),
+                ],
               ),
-            ],
+              actions: [
+                // Sin botón compartir: la actividad de captura no tiene
+                // formulario público que enlazar (§9).
+                if (puedeEditar)
+                  NexusHeaderAction(
+                    icon: Symbols.edit_rounded,
+                    tooltip: evento.esInterno
+                        ? 'Ver datos de la actividad'
+                        : 'Editar actividad',
+                    sfSymbol: 'pencil',
+                    onTap: () => context.push(
+                      RoutePaths.editarEventoLead(widget.eventoId),
+                    ),
+                  ),
+              ],
+              children: [
+                _hero(context, evento, resumen),
+                const TwOfflineNoticeCard(topGap: 20),
+                const TwSectionLabel('Acciones del evento'),
+                TwActionTile(
+                  icon: Symbols.contacts_rounded,
+                  title: 'Ver leads',
+                  subtitle: 'Listado de clientes capturados',
+                  loading: _abriendoLeads,
+                  onTap: _abrirLeads,
+                ),
+                if (evento.esInterno && evento.eventoOrigenId != null) ...[
+                  const SizedBox(height: TwSpacing.tileGap),
+                  TwActionTile(
+                    icon: Symbols.event_rounded,
+                    title: 'Ver evento de registro',
+                    subtitle: 'Abrir el evento del que nació esta actividad',
+                    onTap: () => abrirOVolverA(
+                      context,
+                      RoutePaths.usarEvento(evento.eventoOrigenId!),
+                    ),
+                  ),
+                ],
+                if (conflictos > 0) ...[
+                  const SizedBox(height: TwSpacing.tileGap),
+                  TwActionTile(
+                    icon: Symbols.warning_rounded,
+                    iconStyle: TwIconBoxStyle.amberTint,
+                    title: 'Conflictos de sincronización',
+                    subtitle: conflictos == 1
+                        ? '1 pendiente de revisar'
+                        : '$conflictos pendientes de revisar',
+                    onTap: () => showSyncConflictsSheet(context, ref),
+                  ),
+                ],
+                // §9 lista además un tile "KPI del evento"; no se monta
+                // porque `KpiScreen` solo sabe leer `eventos`/
+                // `registrados` y un evento de leads la haría fallar.
+                // Queda pendiente su pantalla propia.
+                if (puedeExportar) ...[
+                  const TwSectionLabel('Administración'),
+                  TwActionTile(
+                    icon: Symbols.table_chart_rounded,
+                    iconStyle: TwIconBoxStyle.excel,
+                    excel: true,
+                    badge: 'XLSX',
+                    title: 'Importar o exportar',
+                    subtitle: _subtituloExcel(resumen?.total),
+                    onTap: () {
+                      if (!requireOnline(context, ref)) return;
+                      context.push(RoutePaths.exportarLeads(widget.eventoId));
+                    },
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),

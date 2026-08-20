@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/supabase_tables.dart';
 import '../models/lead.dart';
+import '../models/lead_existente.dart';
 import '../models/lead_write_result.dart';
 import '../offline/pending_photo_store.dart';
 import '../offline/sync_queue_item.dart';
@@ -106,6 +107,35 @@ class LeadsRepository implements SyncExecutor {
         .eq('id', id)
         .single();
     return Lead.fromMap(Map<String, dynamic>.from(row));
+  }
+
+  /// Lead ya capturado en la campaña con ese email, o `null`.
+  Future<LeadExistente?> buscarPorEmail({
+    required String eventoId,
+    required String email,
+  }) async {
+    final normalizado = emailLeadNormalizado(email);
+    if (normalizado == null) return null;
+
+    final raw = await _client.rpc(
+      SupabaseRpc.buscarLeadPorEmail,
+      params: {'p_evento_id': eventoId, 'p_email': email},
+    );
+    if (raw == null) return null;
+    if (raw is List) {
+      if (raw.isEmpty) return null;
+      final first = raw.first;
+      if (first is! Map) return null;
+      final existente = LeadExistente.fromRpc(Map<String, dynamic>.from(first));
+      if (existente.leadId.isEmpty) return null;
+      return existente;
+    }
+    if (raw is Map) {
+      final existente = LeadExistente.fromRpc(Map<String, dynamic>.from(raw));
+      if (existente.leadId.isEmpty) return null;
+      return existente;
+    }
+    return null;
   }
 
   Future<LeadWriteResult> crear(Lead lead) async {

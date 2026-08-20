@@ -51,10 +51,36 @@ class RoutePaths {
     return '$base?desdeEvento=${Uri.encodeQueryComponent(desdeEvento)}';
   }
 
-  static String verLeads(String id) => '/capturador/$id/leads';
-  static String detalleLead(String eventoId, String leadId) =>
-      '/capturador/$eventoId/leads/$leadId';
+  static String verLeads(String id, {String? desdeEvento}) {
+    final base = '/capturador/$id/leads';
+    return _conDesdeEvento(base, desdeEvento);
+  }
+
+  static String detalleLead(
+    String eventoId,
+    String leadId, {
+    String? desdeEvento,
+  }) {
+    return _conDesdeEvento('/capturador/$eventoId/leads/$leadId', desdeEvento);
+  }
+
+  static String comentariosLead(
+    String eventoId,
+    String leadId, {
+    String? desdeEvento,
+  }) {
+    return _conDesdeEvento(
+      '/capturador/$eventoId/leads/$leadId/comentarios',
+      desdeEvento,
+    );
+  }
+
   static String exportarLeads(String id) => '/capturador/$id/exportar';
+
+  static String _conDesdeEvento(String base, String? desdeEvento) {
+    if (desdeEvento == null || desdeEvento.isEmpty) return base;
+    return '$base?desdeEvento=${Uri.encodeQueryComponent(desdeEvento)}';
+  }
 
   /// Formulario público de autoregistro (sin sesión). Reemplaza al
   /// formulario externo "Transworld", fuera del alcance de los ZIP

@@ -31,6 +31,9 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const userId = (body.user_id ?? "").trim();
+    const versionApp = typeof body.app_version === "string"
+      ? body.app_version
+      : null;
     if (!userId) {
       return json({ error: "Falta user_id" }, 400);
     }
@@ -78,6 +81,7 @@ Deno.serve(async (req) => {
       password,
       rol: perfil?.rol as string | undefined,
       motivo: "password_restablecida",
+      versionApp,
     });
 
     return json({

@@ -240,6 +240,45 @@ void main() {
     expect(resultado, isTrue);
   });
 
+  testWidgets('confirmación admite etiquetas Sí y No', (tester) async {
+    bool? resultado;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () async {
+                resultado = await confirmDialog(
+                  context,
+                  title: 'Esta persona ya está capturada',
+                  message: '¿Quiere agregar un comentario?',
+                  confirmLabel: 'Sí',
+                  cancelLabel: 'No',
+                );
+              },
+              child: const Text('Abrir'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Abrir'));
+    await tester.pumpAndSettle();
+    expect(find.text('Esta persona ya está capturada'), findsOneWidget);
+
+    await tester.tap(find.text('No'));
+    await tester.pumpAndSettle();
+    expect(resultado, isFalse);
+
+    await tester.tap(find.text('Abrir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sí'));
+    await tester.pumpAndSettle();
+    expect(resultado, isTrue);
+  });
+
   testWidgets('guardar cambios: tres acciones', (tester) async {
     FormExitAction? resultado;
 

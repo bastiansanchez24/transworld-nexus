@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,24 +7,28 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/theme/tw_tokens.dart';
-import '../../../core/widgets/app_network_image.dart';
+import '../../../core/widgets/action_lock.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/cuenta_identity_header.dart';
+import '../../../core/widgets/cuenta_settings_sheet.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
-import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/permissions_bootstrap.dart';
 import '../../../core/widgets/tw_components.dart';
-import '../../../core/widgets/tw_detail_scaffold.dart';
+import '../../../core/widgets/tw_offline_notice_card.dart';
 import '../../../core/widgets/tw_toast.dart';
 import '../../../data/models/capturar_lead_route_extra.dart';
 import '../../../data/models/evento.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../capturador/services/evento_lead_interno_service.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
+import '../../updates/widgets/update_checker.dart';
 import '../providers/externo_dashboard_provider.dart';
 
 /// Vista operativa reducida para usuarios externos: hero, resumen propio y QR.
@@ -42,6 +45,7 @@ class UsarEventoExternoScreen extends ConsumerStatefulWidget {
 class _UsarEventoExternoScreenState
     extends ConsumerState<UsarEventoExternoScreen> {
   bool _bloqueoManejado = false;
+  bool _abriendoLeads = false;
 
   @override
   void initState() {
@@ -82,84 +86,13 @@ class _UsarEventoExternoScreenState
 
   void _abrirMiPerfil() => context.push(RoutePaths.perfil);
 
-  /// Menú de cuenta del externo: su ficha, el estado de sincronización, las
-  /// actualizaciones si la plataforma las soporta, y cerrar sesión.
-  ///
-  /// Sin campana: el externo no recibe notificaciones y una bandeja siempre
-  /// vacía solo genera dudas.
-  Future<void> _mostrarMenuCuenta() async {
-    await showModalBottomSheet<void>(
+  Future<void> _mostrarMenuCuenta() {
+    return showCuentaSettingsSheet(
       context: context,
-      backgroundColor: TwColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 18, 16, 4),
-              child: TwSectionLabel('Ajustes', top: 0),
-            ),
-            // Desplazable: en pantallas cortas los cuatro accesos no caben y
-            // la hoja desbordaba.
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    TwActionTile(
-                      icon: Symbols.person_rounded,
-                      iconStyle: TwIconBoxStyle.blueTint,
-                      title: 'Mi perfil',
-                      onTap: () {
-                        Navigator.of(ctx).pop();
-                        _abrirMiPerfil();
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TwActionTile(
-                      icon: Symbols.sync_rounded,
-                      iconStyle: TwIconBoxStyle.blueTint,
-                      title: 'Sincronización',
-                      onTap: () {
-                        Navigator.of(ctx).pop();
-                        context.push(RoutePaths.sincronizacion);
-                      },
-                    ),
-                    if (!kIsWeb) ...[
-                      const SizedBox(height: 10),
-                      TwActionTile(
-                        icon: Symbols.system_update_rounded,
-                        iconStyle: TwIconBoxStyle.blueTint,
-                        title: 'Actualizaciones',
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          context.push(RoutePaths.actualizaciones);
-                        },
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    TwActionTile(
-                      key: const Key('externo_logout_button'),
-                      icon: Symbols.logout_rounded,
-                      iconStyle: TwIconBoxStyle.amberTint,
-                      title: 'Cerrar sesión',
-                      onTap: () {
-                        Navigator.of(ctx).pop();
-                        _cerrarSesion();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-          ],
-        ),
-      ),
+      onMiPerfil: _abrirMiPerfil,
+      onSincronizacion: () => context.push(RoutePaths.sincronizacion),
+      onActualizaciones: () => context.push(RoutePaths.actualizaciones),
+      onCerrarSesion: _cerrarSesion,
     );
   }
 
@@ -169,16 +102,48 @@ class _UsarEventoExternoScreenState
   /// guardó se dice explícitamente en vez de dejar un formulario que no podría
   /// guardarse en ningún sitio.
   Future<void> _capturarLead(Evento evento) async {
+    ActionLock.instance.deferUnlock();
     try {
       final actividad = await obtenerOCrearEventoLeadInterno(ref, evento);
       if (!mounted) return;
-      await context.push(
+      context.push(
         RoutePaths.capturarLead(actividad.id, desdeEvento: evento.id),
         extra: CapturarLeadRouteExtra(eventoRegistroId: evento.id),
       );
     } catch (e) {
       if (!mounted) return;
-      TwToast.error(context, e.toString().replaceFirst('Exception: ', ''));
+      final detalle = e.toString().replaceFirst('Exception: ', '');
+      TwToast.error(
+        context,
+        detalle == kMensajeSinConexion ? kMensajeSinConexion : detalle,
+      );
+    } finally {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ActionLock.instance.finishIfNoNav();
+      });
+    }
+  }
+
+  Future<void> _verLeads(Evento evento) async {
+    if (_abriendoLeads) return;
+    ActionLock.instance.deferUnlock();
+    setState(() => _abriendoLeads = true);
+    try {
+      final actividad = await obtenerOCrearEventoLeadInterno(ref, evento);
+      if (!mounted) return;
+      context.push(RoutePaths.verLeads(actividad.id, desdeEvento: evento.id));
+    } catch (e) {
+      if (!mounted) return;
+      final detalle = e.toString().replaceFirst('Exception: ', '');
+      TwToast.error(
+        context,
+        detalle == kMensajeSinConexion ? kMensajeSinConexion : detalle,
+      );
+    } finally {
+      if (mounted) setState(() => _abriendoLeads = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ActionLock.instance.finishIfNoNav();
+      });
     }
   }
 
@@ -309,62 +274,91 @@ class _UsarEventoExternoScreenState
       }
     });
 
+    final perfil = ref.watch(currentPerfilProvider).valueOrNull;
+    final safeTop = MediaQuery.paddingOf(context).top;
+    final contentTop = safeTop + 12;
+
     return BrowserThemeColor(
       color: TwColors.bg,
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
-        child: PermissionsBootstrap(
-          child: Scaffold(
-            backgroundColor: TwColors.bg,
-            body: OfflineBannerColumn(
-              children: [
-                Expanded(
-                  child: eventoAsync.when(
-                    loading: () => const LoadingView(),
-                    error: (e, _) => const ErrorView(
-                      message: 'No se pudo cargar el evento.',
+        child: UpdateChecker(
+          child: PermissionsBootstrap(
+            child: Scaffold(
+              backgroundColor: TwColors.bg,
+              body: eventoAsync.when(
+                skipLoadingOnReload: true,
+                skipLoadingOnRefresh: true,
+                loading: () => const LoadingView(),
+                error: (e, _) =>
+                    const ErrorView(message: 'No se pudo cargar el evento.'),
+                data: (evento) => RefreshIndicator(
+                  color: TwColors.brand700,
+                  edgeOffset: safeTop,
+                  displacement: 40,
+                  onRefresh: () => refrescarLecturas(
+                    ref,
+                    invalidar: () {
+                      ref.invalidate(eventoByIdProvider(widget.eventoId));
+                      ref.invalidate(externoDashboardProvider);
+                      ref.invalidate(externoEventosAutorizadosProvider);
+                      ref.invalidate(currentPerfilProvider);
+                    },
+                    pendientes: () => [
+                      ref.read(eventoByIdProvider(widget.eventoId).future),
+                      ref.read(externoDashboardProvider.future),
+                      ref.read(externoEventosAutorizadosProvider.future),
+                      ref.read(currentPerfilProvider.future),
+                    ],
+                  ),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: ClampingScrollPhysics(),
                     ),
-                    data: (evento) => TwDetailScaffold(
-                      eyebrow: 'Evento activo',
-                      title: evento.nombre,
-                      // El externo no navega hacia atrás: su cabecera es de
-                      // cuenta, como el home de los internos. Cerrar sesión
-                      // dejó de colgar del "atrás" y vive en el menú, donde no
-                      // se pulsa por reflejo.
-                      onBack: _abrirMiPerfil,
-                      leading: _AvatarExterno(onTap: _abrirMiPerfil),
-                      actions: [
-                        TwIconButton(
-                          key: const Key('externo_ajustes_button'),
-                          icon: Symbols.settings_rounded,
-                          iconSize: 22,
-                          tooltip: 'Ajustes',
-                          onTap: _mostrarMenuCuenta,
-                        ),
-                      ],
-                      children: [
-                        _EventoExternoHero(
-                          evento: evento,
-                          puedeCambiar: puedeCambiar,
-                          onTapNombre: puedeCambiar
-                              ? _mostrarSelectorEventos
-                              : null,
-                          onCapturarLead: () => _capturarLead(evento),
-                          onEscanear: () => context.push(
-                            RoutePaths.acreditarQr(widget.eventoId),
-                          ),
-                        ),
-                        const TwSectionLabel('Resumen'),
-                        _ExternoStatsCards(
-                          statsAsync: statsAsync,
-                          onRetry: () =>
-                              ref.invalidate(externoDashboardProvider),
-                        ),
-                      ],
+                    padding: EdgeInsets.fromLTRB(
+                      TwSpacing.screenH,
+                      contentTop,
+                      TwSpacing.screenH,
+                      40 + MediaQuery.paddingOf(context).bottom,
                     ),
+                    children: [
+                      CuentaIdentityHeader(
+                        perfil: perfil,
+                        ajustesKey: const Key('externo_ajustes_button'),
+                        onAjustes: _mostrarMenuCuenta,
+                        onMiPerfil: _abrirMiPerfil,
+                      ),
+                      const TwSectionLabel('Evento activo'),
+                      _EventoExternoHero(
+                        evento: evento,
+                        puedeCambiar: puedeCambiar,
+                        onTapNombre: puedeCambiar
+                            ? _mostrarSelectorEventos
+                            : null,
+                        onCapturarLead: () => _capturarLead(evento),
+                        onEscanear: () => context.push(
+                          RoutePaths.acreditarQr(widget.eventoId),
+                        ),
+                      ),
+                      const TwOfflineNoticeCard(topGap: 16),
+                      const TwSectionLabel('Resumen'),
+                      _ExternoStatsCards(
+                        statsAsync: statsAsync,
+                        onRetry: () => ref.invalidate(externoDashboardProvider),
+                      ),
+                      const TwSectionLabel('Acciones'),
+                      TwActionTile(
+                        key: const Key('externo_ver_leads_button'),
+                        icon: Symbols.contacts_rounded,
+                        title: 'Ver leads',
+                        subtitle: 'Listado de clientes capturados',
+                        loading: _abriendoLeads,
+                        onTap: () => _verLeads(evento),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -616,39 +610,6 @@ class _ExternoStatsCards extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-/// Foto de perfil en la cabecera del externo, con el mismo gesto que en el
-/// home de los internos: toca y entra a su ficha.
-class _AvatarExterno extends ConsumerWidget {
-  const _AvatarExterno({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final fotoUrl = ref.watch(currentPerfilProvider).valueOrNull?.fotoUrl;
-
-    return TwPressable(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        clipBehavior: Clip.antiAlias,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: TwColors.blueTint,
-        ),
-        child: fotoUrl == null || fotoUrl.isEmpty
-            ? const Icon(
-                Symbols.person_rounded,
-                size: 22,
-                color: TwColors.blueInk,
-              )
-            : AppNetworkImage(url: fotoUrl, memCacheWidth: 132),
-      ),
     );
   }
 }

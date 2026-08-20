@@ -75,38 +75,32 @@ void main() {
   Lead lead(String id, {String? empresa}) =>
       Lead(id: id, eventoId: eventoId, nombreCompleto: id, empresa: empresa);
 
-  test(
-    'el resumen del servidor manda, aunque el rol solo vea sus leads',
-    () async {
-      final container = await contenedor(
-        perfil: perfilUser,
-        remoto: const LeadsResumen(total: 12, empresas: 5),
-        enCache: [lead('propio')],
-      );
+  test('el resumen del servidor manda sobre la caché local', () async {
+    final container = await contenedor(
+      perfil: perfilUser,
+      remoto: const LeadsResumen(total: 12, empresas: 5),
+      enCache: [lead('propio')],
+    );
 
-      final resumen = container.read(leadsResumenLocalProvider(eventoId));
+    final resumen = container.read(leadsResumenLocalProvider(eventoId));
 
-      expect(resumen?.total, 12);
-      expect(resumen?.empresas, 5);
-    },
-  );
+    expect(resumen?.total, 12);
+    expect(resumen?.empresas, 5);
+  });
 
-  test(
-    'sin resumen del servidor no se pasa el conteo propio como total de la campaña',
-    () async {
-      // El externo es el único rol cuya caché contiene solo sus propios leads.
-      final container = await contenedor(
-        perfil: perfilExterno,
-        enCache: [
-          lead('propio-1'),
-          lead('propio-2', empresa: 'Acme'),
-        ],
-      );
+  test('el externo también cuenta desde la caché completa de la campaña', () async {
+    final container = await contenedor(
+      perfil: perfilExterno,
+      enCache: [
+        lead('propio-1'),
+        lead('ajeno-2', empresa: 'Acme'),
+      ],
+    );
 
-      // Null pinta "—" en el hub: mejor que un 0 o un total recortado.
-      expect(container.read(leadsResumenLocalProvider(eventoId)), isNull);
-    },
-  );
+    final resumen = container.read(leadsResumenLocalProvider(eventoId));
+    expect(resumen?.total, 2);
+    expect(resumen?.empresas, 1);
+  });
 
   test('quien ve todos los leads sí puede contar desde la caché', () async {
     final container = await contenedor(

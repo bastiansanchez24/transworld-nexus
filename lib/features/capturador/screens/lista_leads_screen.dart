@@ -9,6 +9,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
@@ -17,7 +18,6 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
@@ -26,6 +26,7 @@ import '../../../data/offline/pending_photo_store.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/leads_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../lead_comentario_flujo.dart';
 import '../providers/capturador_providers.dart';
 import '../widgets/avatar_lead.dart';
 import '../widgets/foto_lead_identidad.dart';
@@ -33,9 +34,10 @@ import '../widgets/foto_lead_identidad.dart';
 enum _FiltroLead { todos, mios, deOtros }
 
 class ListaLeadsScreen extends ConsumerStatefulWidget {
-  const ListaLeadsScreen({super.key, required this.eventoId});
+  const ListaLeadsScreen({super.key, required this.eventoId, this.desdeEvento});
 
   final String eventoId;
+  final String? desdeEvento;
 
   @override
   ConsumerState<ListaLeadsScreen> createState() => _ListaLeadsScreenState();
@@ -229,7 +231,6 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
 
     return CollapsingScrollScaffold(
       title: canViewAllLeads ? 'Leads' : 'Mis leads',
-      topBanner: const OfflineBanner(),
       alwaysShowActions: true,
       overlayLeading: CollapsingNavButton(
         icon: Symbols.arrow_back_rounded,
@@ -261,7 +262,12 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
         ),
         ...leadsAsync.when(
           skipLoadingOnReload: true,
-          loading: () => [const SliverFillRemaining(child: LoadingView())],
+          loading: () => [
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: LoadingView(),
+            ),
+          ],
           error: (_, _) => [
             SliverFillRemaining(
               child: ErrorView(
@@ -313,6 +319,7 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
                       const SizedBox(height: AppSpacing.cardGap),
                   itemBuilder: (context, index) => _LeadTile(
                     eventoId: widget.eventoId,
+                    desdeEvento: widget.desdeEvento,
                     lead: filtrados[index],
                     index: index,
                     puedeVerContacto: puedeVerContacto,
@@ -333,9 +340,11 @@ class _LeadTile extends StatelessWidget {
     required this.lead,
     required this.index,
     required this.puedeVerContacto,
+    this.desdeEvento,
   });
 
   final String eventoId;
+  final String? desdeEvento;
   final Lead lead;
   final int index;
   final bool puedeVerContacto;
@@ -350,7 +359,9 @@ class _LeadTile extends StatelessWidget {
     ].where((s) => s != null && s.isNotEmpty).join(' · ');
 
     return Pressable(
-      onTap: () => context.push(RoutePaths.detalleLead(eventoId, lead.id)),
+      onTap: () => context.push(
+        RoutePaths.detalleLead(eventoId, lead.id, desdeEvento: desdeEvento),
+      ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
@@ -445,10 +456,12 @@ class DetalleLeadScreen extends ConsumerStatefulWidget {
     super.key,
     required this.eventoId,
     required this.leadId,
+    this.desdeEvento,
   });
 
   final String eventoId;
   final String leadId;
+  final String? desdeEvento;
 
   @override
   ConsumerState<DetalleLeadScreen> createState() => _DetalleLeadScreenState();
@@ -668,7 +681,14 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
           if (!_fotos.contains(foto)) await store.borrar(foto);
         }
         if (mounted) {
-          showAppSnackBar(context, result!.mensajeDuplicado, isError: true);
+          await ofrecerComentarLeadDuplicado(
+            context,
+            ref,
+            eventoId: widget.eventoId,
+            leadId: result!.leadId,
+            mensajeDuplicado: result.mensajeDuplicado,
+            desdeEvento: widget.desdeEvento,
+          );
         }
         return;
       }
@@ -705,7 +725,10 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
               : 'Cambios guardados.',
           isError: fotoDescartada,
         );
-        volverALista(context, RoutePaths.verLeads(widget.eventoId));
+        volverALista(
+          context,
+          RoutePaths.verLeads(widget.eventoId, desdeEvento: widget.desdeEvento),
+        );
       }
     } catch (e) {
       if (isOnline &&
@@ -734,7 +757,13 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
                         'localmente.',
               isError: fotoNoPersistible,
             );
-            volverALista(context, RoutePaths.verLeads(widget.eventoId));
+            volverALista(
+              context,
+              RoutePaths.verLeads(
+                widget.eventoId,
+                desdeEvento: widget.desdeEvento,
+              ),
+            );
           }
           return;
         } catch (_) {
@@ -770,7 +799,10 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
       await ref.read(leadsRepositoryProvider).eliminar(widget.leadId);
       ref.invalidate(leadsPorEventoProvider(widget.eventoId));
       if (mounted) {
-        volverALista(context, RoutePaths.verLeads(widget.eventoId));
+        volverALista(
+          context,
+          RoutePaths.verLeads(widget.eventoId, desdeEvento: widget.desdeEvento),
+        );
       }
     } catch (_) {
       if (mounted) {
@@ -959,6 +991,20 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
                       onPressed: _guardando ? null : _guardar,
                     ),
                   ],
+                  const SizedBox(height: AppSpacing.lg),
+                  OutlinedButton.icon(
+                    onPressed: esPendiente
+                        ? null
+                        : () => irAComentariosLead(
+                            context,
+                            ref,
+                            eventoId: widget.eventoId,
+                            leadId: widget.leadId,
+                            desdeEvento: widget.desdeEvento,
+                          ),
+                    icon: const Icon(Symbols.chat_rounded),
+                    label: const Text('Comentarios'),
+                  ),
                 ],
               ),
             ),

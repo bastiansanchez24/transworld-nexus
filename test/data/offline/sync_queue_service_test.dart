@@ -217,6 +217,28 @@ void main() {
       expect(cola.conflicts, isEmpty);
     });
 
+    test('el insert offline conserva foto local y los datos del lead', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cola = SyncQueueService(prefs, 'usuario-a');
+      await cola.enqueueInsert(
+        table: 'leads',
+        payload: {
+          'nombre_completo': 'María González',
+          'empresa': 'Transworld',
+          'email': 'maria@transworld.cl',
+          'fotos_urls': ['local_foto:///datos/leads_pendientes/a.jpg'],
+        },
+      );
+
+      expect(cola.state.single.payload['fotos_urls'], [
+        'local_foto:///datos/leads_pendientes/a.jpg',
+      ]);
+      expect(cola.state.single.payload['nombre_completo'], 'María González');
+      expect(cola.state.single.payload['empresa'], 'Transworld');
+      expect(cola.state.single.payload['email'], 'maria@transworld.cl');
+    });
+
     test('el motivo queda disponible para avisar una sola vez', () async {
       final cola = await colaCon(['Duplicada']);
       await cola.processPending({'leads': _DuplicadoLuegoExitoExecutor()});

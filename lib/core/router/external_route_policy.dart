@@ -30,13 +30,13 @@ bool isExternalOperationalRouteAllowed({
     if (location == RoutePaths.acreditarQr(eventId)) return true;
   }
 
-  if (!_isCaptureLeadRoute(location)) return false;
+  if (!_isCaptureLeadRoute(location) && !_isLeadVisibilityRoute(location)) {
+    return false;
+  }
 
-  // Capturar un lead es ahora la operación principal del externo, y llega por
-  // dos caminos: el CTA del evento (manual) y el escáner (con prefill del
-  // padrón). En ambos, lo que autoriza es que el evento de origen sea uno de
-  // los suyos. El prefill viaja en `extra` —memoria del proceso, no la URL—,
-  // así que no hay forma de inyectarlo desde fuera con un query param.
+  // Capturar, listar y comentar leads cuelgan del evento de registro
+  // asignado. El id de campaña vive en la URL; lo que autoriza es
+  // `desdeEvento`. RLS sigue acotando las filas.
   return captureSourceEventId != null &&
       captureSourceEventId.isNotEmpty &&
       authorizedEventIds.contains(captureSourceEventId);
@@ -49,4 +49,15 @@ bool _isCaptureLeadRoute(String location) {
       parts[1] == 'capturador' &&
       parts[2].isNotEmpty &&
       parts[3] == 'capturar';
+}
+
+bool _isLeadVisibilityRoute(String location) {
+  final parts = location.split('/');
+  if (parts.length < 4) return false;
+  if (parts[1] != 'capturador' || parts[2].isEmpty || parts[3] != 'leads') {
+    return false;
+  }
+  if (parts.length == 4) return true;
+  if (parts.length == 5) return parts[4].isNotEmpty;
+  return parts.length == 6 && parts[4].isNotEmpty && parts[5] == 'comentarios';
 }

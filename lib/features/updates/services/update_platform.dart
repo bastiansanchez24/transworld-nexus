@@ -3,10 +3,14 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 /// Plataformas donde el flujo OTA vía GitHub Releases está habilitado.
-bool get otaUpdatesSupported {
-  if (kIsWeb) return false;
-  return Platform.isAndroid || Platform.isWindows;
+bool otaUpdatesSupportedFor(TargetPlatform platform, {required bool isWeb}) {
+  if (isWeb) return false;
+  return platform == TargetPlatform.android ||
+      platform == TargetPlatform.windows;
 }
+
+bool get otaUpdatesSupported =>
+    otaUpdatesSupportedFor(defaultTargetPlatform, isWeb: kIsWeb);
 
 String get otaUnsupportedMessage {
   if (kIsWeb) {

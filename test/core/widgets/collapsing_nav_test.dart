@@ -6,6 +6,8 @@ import 'package:transworld_nexus/core/widgets/collapsing_nav.dart';
 import 'package:transworld_nexus/core/widgets/tw_components.dart';
 import 'package:transworld_nexus/core/widgets/tw_detail_scaffold.dart';
 
+void _noop() {}
+
 void main() {
   Future<void> montarLista(WidgetTester tester, {required EdgeInsets padding}) {
     return tester.pumpWidget(
@@ -92,6 +94,42 @@ void main() {
     );
   });
 
+  testWidgets('el menú llena el viewport y no rebota al overscroll', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: TwDetailScaffold(
+          eyebrow: 'Detalle de la actividad',
+          title: 'Campaña',
+          onBack: _noop,
+          children: [SizedBox(height: 80, child: Text('Acciones'))],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
+    expect(scrollable.physics, isA<AlwaysScrollableScrollPhysics>());
+    expect(
+      (scrollable.physics as AlwaysScrollableScrollPhysics).parent,
+      isA<ClampingScrollPhysics>(),
+    );
+
+    final cuerpo = tester.widget<ConstrainedBox>(
+      find.descendant(
+        of: find.byType(SingleChildScrollView),
+        matching: find.byType(ConstrainedBox),
+      ),
+    );
+    expect(cuerpo.constraints.minHeight, greaterThan(600));
+  });
+
   testWidgets('el contenido arranca bajo la barra, no debajo del atrás', (
     tester,
   ) async {
@@ -115,7 +153,40 @@ void main() {
     );
   });
 
-  testWidgets('con lockScroll no se puede desplazar la lista', (tester) async {
+  testWidgets('el pull-to-refresh nace bajo el buscador fijado', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CollapsingScrollScaffold(
+          title: 'Eventos',
+          alwaysShowActions: true,
+          overlayLeading: CollapsingNavButton(
+            icon: Symbols.arrow_back_rounded,
+            onTap: () {},
+          ),
+          pinnedContentHeight: 112,
+          pinnedContent: const SizedBox(height: 112),
+          onRefresh: () async {},
+          slivers: const [
+            SliverToBoxAdapter(child: SizedBox(height: 48, child: Text('Título'))),
+            SliverToBoxAdapter(child: SizedBox(height: 800)),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final context = tester.element(find.byType(CollapsingScrollScaffold));
+    final overlayH = CollapsingNavMetrics(
+      context,
+    ).overlayHeight(conAcciones: true);
+    final indicator = tester.widget<RefreshIndicator>(
+      find.byType(RefreshIndicator),
+    );
+    expect(indicator.edgeOffset, greaterThan(overlayH));
+    expect(indicator.edgeOffset, overlayH + 48 + 112);
+  });
+
+  testWidgets('con lista vacía el scroll queda bloqueado', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: CollapsingScrollScaffold(

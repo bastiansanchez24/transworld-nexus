@@ -12,4 +12,6 @@ declare namespace Deno {
   function serve(
     handler: (request: Request) => Response | Promise<Response>,
   ): void;
+
+  function readFile(path: string | URL): Promise<Uint8Array>;
 }

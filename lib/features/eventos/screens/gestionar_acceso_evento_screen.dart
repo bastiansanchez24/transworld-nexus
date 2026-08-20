@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/offline_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -52,6 +53,7 @@ class _GestionarAccesoEventoBodyState
   }
 
   Future<void> _guardar() async {
+    if (!requireOnline(context, ref)) return;
     setState(() => _guardando = true);
     try {
       await ref

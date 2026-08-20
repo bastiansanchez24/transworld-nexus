@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/app_role.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -210,6 +211,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   }
 
   Future<void> _guardar() async {
+    if (!requireOnline(context, ref)) return;
     setState(() => _intentoGuardar = true);
     if (!_formKey.currentState!.validate()) return;
     if (_rol == AppRole.externo && _rolOriginal != AppRole.externo) {
@@ -290,6 +292,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
   }
 
   Future<void> _eliminar(String nombre) async {
+    if (!requireOnline(context, ref)) return;
     final esCuentaPropia =
         ref.read(currentPerfilProvider).valueOrNull?.id == widget.usuarioId;
     if (esCuentaPropia) {

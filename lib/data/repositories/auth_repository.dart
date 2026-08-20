@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/supabase_tables.dart';
+import '../../core/utils/version_utils.dart';
 import '../models/perfil.dart';
 import '../supabase/supabase_client_provider.dart';
 
@@ -31,7 +33,10 @@ class AuthRepository {
   Future<void> recuperarContrasena(String email) async {
     final response = await _client.functions.invoke(
       SupabaseFunctions.resetPassword,
-      body: {'email': email.trim().toLowerCase()},
+      body: {
+        'email': email.trim().toLowerCase(),
+        ...await _cuerpoVersionApp(),
+      },
     );
     if (response.status != 200) {
       final data = response.data;
@@ -224,6 +229,7 @@ class AuthRepository {
           'password': password,
           'rol': rol,
           if (ids.isNotEmpty) 'evento_ids': ids,
+          ...await _cuerpoVersionApp(),
         },
       );
 
@@ -336,7 +342,7 @@ class AuthRepository {
 
       final response = await _client.functions.invoke(
         SupabaseFunctions.regenerarPasswordUsuario,
-        body: {'user_id': usuarioId},
+        body: {'user_id': usuarioId, ...await _cuerpoVersionApp()},
       );
 
       if (response.status != 200) {
@@ -360,6 +366,19 @@ class AuthRepository {
         throw Exception(details['error'].toString());
       }
       rethrow;
+    }
+  }
+
+  /// SemVer de esta instalación (`1.6.8`) para el APK del correo de credenciales.
+  Future<Map<String, String>> _cuerpoVersionApp() async {
+    try {
+      final parsed = tryParseVersion(
+        (await PackageInfo.fromPlatform()).version,
+      );
+      if (parsed == null) return const {};
+      return {'app_version': '${parsed.major}.${parsed.minor}.${parsed.patch}'};
+    } catch (_) {
+      return const {};
     }
   }
 }

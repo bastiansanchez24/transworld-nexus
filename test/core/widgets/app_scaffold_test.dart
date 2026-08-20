@@ -212,4 +212,31 @@ void main() {
 
     expect(find.text('Editar algo'), findsNothing);
   });
+
+  test('en iOS el gesto atrás no se bloquea aunque haya onWillPop', () {
+    expect(
+      scaffoldAllowsInteractivePop(
+        hasWillPop: true,
+        isWeb: false,
+        platform: TargetPlatform.iOS,
+      ),
+      isTrue,
+    );
+    expect(
+      scaffoldAllowsInteractivePop(
+        hasWillPop: true,
+        isWeb: false,
+        platform: TargetPlatform.android,
+      ),
+      isFalse,
+    );
+    expect(
+      scaffoldAllowsInteractivePop(
+        hasWillPop: false,
+        isWeb: false,
+        platform: TargetPlatform.android,
+      ),
+      isTrue,
+    );
+  });
 }

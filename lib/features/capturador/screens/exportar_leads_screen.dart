@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/offline_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -27,6 +28,7 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
   bool _generando = false;
 
   Future<void> _exportar() async {
+    if (!requireOnline(context, ref)) return;
     if (!ref.read(canExportDataProvider)) {
       showAppSnackBar(
         context,

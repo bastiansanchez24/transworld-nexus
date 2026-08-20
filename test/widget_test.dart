@@ -43,6 +43,8 @@ void main() {
     expect(AppRole.externo.canRegisterAttendees, isFalse);
     expect(AppRole.externo.canAccessNotifications, isFalse);
     expect(AppRole.externo.usesFullShell, isFalse);
+    expect(AppRole.externo.canAccessAppUpdates, isTrue);
+    expect(AppRole.admin.canAccessAppUpdates, isTrue);
   });
 
   test('AppRole.assignableRoles solo incluye roles internos', () {

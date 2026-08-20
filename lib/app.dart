@@ -10,6 +10,7 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_scroll_behavior.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/browser_theme_color.dart';
+import 'core/widgets/action_lock.dart';
 import 'core/widgets/app_widgets.dart';
 import 'core/widgets/offline_blocking_overlay.dart';
 import 'core/widgets/sync_conflict_listener.dart';
@@ -126,11 +127,13 @@ class _ReadyApp extends ConsumerWidget {
         builder: (context, child) => DesktopWindowFrame(
           child: WindowsMouseGestures(
             router: router,
-            child: OfflineBlockingOverlay(
-              router: router,
-              child: SyncConflictListener(
-                child: WindowsUpdateGate(
-                  child: child ?? const SizedBox.shrink(),
+            child: ActionLockBarrier(
+              child: OfflineBlockingOverlay(
+                router: router,
+                child: SyncConflictListener(
+                  child: WindowsUpdateGate(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),

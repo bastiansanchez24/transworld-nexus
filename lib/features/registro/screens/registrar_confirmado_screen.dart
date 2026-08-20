@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tw_tokens.dart';
 import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -88,22 +90,10 @@ class _RegistrarConfirmadoScreenState
     setState(() => _autovalidar = true);
 
     final email = formatearEmail(_emailController.text);
-    final isOnline = ref.read(isOnlineProvider);
     final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
 
-    // Dar de alta a un asistente nuevo exige red: el registro dispara el envío
-    // del QR por correo y necesita comprobar el duplicado contra la base, no
-    // solo contra la cola local. Encolarlo daría por registrada a una persona
-    // que quizá ya existe y que además no recibiría su QR.
-    if (!isOnline) {
+    if (!requireOnline(context, ref)) {
       _guardando = false;
-      if (mounted) {
-        showAppSnackBar(
-          context,
-          'Sin conexión: registrar un asistente nuevo requiere internet.',
-          isError: true,
-        );
-      }
       return;
     }
 
@@ -198,6 +188,7 @@ class _RegistrarConfirmadoScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const _InfoRegistroCard(),
                   CamposRegistroAsistente(
                     nombreController: _nombreController,
                     emailController: _emailController,
@@ -236,6 +227,51 @@ class _RegistrarConfirmadoScreenState
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _InfoRegistroCard extends StatelessWidget {
+  const _InfoRegistroCard();
+
+  static const mensaje =
+      'Completa los datos del asistente. Al guardar se enviará el código QR '
+      'al correo indicado.';
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: TwColors.surfaceTint,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Symbols.info_rounded,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                mensaje,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

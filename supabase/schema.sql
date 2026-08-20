@@ -17,7 +17,8 @@
 --    acceso_user_y_privacidad_leads · completar_auditoria_registrados ·
 --    configurar_acceso_evento · resumen_campana_leads ·
 --    resumen_campana_acceso · normalizar_email_registrados ·
---    evento_lead_origen_interno_externo.
+--    evento_lead_origen_interno_externo · lead_comentarios ·
+--    resumen_campana_acceso_externo.
 --
 --  Es idempotente y (en su mayoría) no destructivo: usa
 --  IF NOT EXISTS / OR REPLACE. Las correcciones de RLS SÍ
@@ -388,6 +389,27 @@ CREATE TABLE IF NOT EXISTS public.leads (
     REFERENCES public.perfiles (id)
 );
 
+-- Hilo grupal por lead. El nombre del autor se denormaliza para no abrir
+-- la RLS de perfiles y para sobrevivir a la baja de la cuenta.
+CREATE TABLE IF NOT EXISTS public.lead_comentarios (
+  id           uuid NOT NULL DEFAULT gen_random_uuid(),
+  lead_id      uuid NOT NULL,
+  autor_id     uuid,
+  autor_nombre text NOT NULL DEFAULT 'Sin identificar',
+  autor_rol    text,
+  cuerpo       text NOT NULL,
+  created_at   timestamptz NOT NULL DEFAULT timezone('utc', now()),
+  updated_at   timestamptz NOT NULL DEFAULT timezone('utc', now()),
+  CONSTRAINT lead_comentarios_pkey PRIMARY KEY (id),
+  CONSTRAINT lead_comentarios_lead_id_fkey FOREIGN KEY (lead_id)
+    REFERENCES public.leads (id) ON DELETE CASCADE,
+  CONSTRAINT lead_comentarios_autor_id_fkey FOREIGN KEY (autor_id)
+    REFERENCES public.perfiles (id),
+  CONSTRAINT lead_comentarios_cuerpo_check CHECK (
+    char_length(btrim(cuerpo)) BETWEEN 1 AND 1000
+  )
+);
+
 -- Columnas agregadas de forma explícita porque CREATE TABLE IF NOT EXISTS no
 -- modifica instalaciones previas. `capturador_nombre` evita abrir la RLS de
 -- perfiles para mostrar quién capturó un lead.
@@ -395,6 +417,14 @@ ALTER TABLE public.leads
   ADD COLUMN IF NOT EXISTS email_normalizado text;
 ALTER TABLE public.leads
   ADD COLUMN IF NOT EXISTS capturador_nombre text;
+
+ALTER TABLE public.lead_comentarios
+  ADD COLUMN IF NOT EXISTS autor_rol text;
+ALTER TABLE public.lead_comentarios
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+UPDATE public.lead_comentarios
+SET updated_at = created_at
+WHERE updated_at IS NULL;
 
 -- Al reprovisionar sobre una base existente se retiran temporalmente las
 -- defensas para poder completar el backfill de filas legacy; se reinstalan
@@ -482,6 +512,8 @@ CREATE INDEX IF NOT EXISTS idx_leads_perfil_id ON public.leads (perfil_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_evento_email_normalizado_unique
   ON public.leads (evento_id, email_normalizado)
   WHERE email_normalizado IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_lead_comentarios_lead_created
+  ON public.lead_comentarios (lead_id, created_at);
 
 -- ----------------------------------------------------------------
 -- 3. Funciones helper
@@ -671,8 +703,10 @@ AS $$
      AND public.rpe_externo_tiene_evento(p_evento_origen_id);
 $$;
 
--- Con evento_origen_id manda el id; sin él se conserva el match por nombre para
--- no cortarle el acceso a las filas anteriores al vínculo por id.
+-- Misma regla que cl_eventos_leads_select: con origen manda el id; sin él se
+-- conserva el match por nombre para no cortarle el acceso a las filas
+-- anteriores al vínculo. Se reutilizan los mismos helpers del SELECT para
+-- que listar la actividad y pedir su resumen no diverjan.
 CREATE OR REPLACE FUNCTION public.cl_externo_campana_autorizada(p_campana_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -683,14 +717,14 @@ AS $$
   SELECT EXISTS (
     SELECT 1
     FROM public.eventos_leads el
-    JOIN public.eventos e
-      ON CASE
-           WHEN el.evento_origen_id IS NOT NULL THEN e.id = el.evento_origen_id
-           ELSE lower(trim(e.nombre)) = lower(trim(el.nombre))
-         END
     WHERE el.id = p_campana_id
-      AND public.rpe_is_externo()
-      AND public.rpe_externo_tiene_evento(e.id)
+      AND (
+        public.cl_externo_evento_origen_autorizado(el.evento_origen_id)
+        OR (
+          el.evento_origen_id IS NULL
+          AND public.cl_externo_nombre_campana_autorizado(el.nombre)
+        )
+      )
   );
 $$;
 
@@ -790,6 +824,65 @@ DROP TRIGGER IF EXISTS trg_leads_server_fields ON public.leads;
 CREATE TRIGGER trg_leads_server_fields
   BEFORE INSERT OR UPDATE ON public.leads
   FOR EACH ROW EXECUTE FUNCTION public.cl_set_lead_server_fields();
+
+CREATE OR REPLACE FUNCTION public.cl_set_lead_comentario_server_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_nombre text;
+  v_rol text;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.cuerpo IS NOT DISTINCT FROM OLD.cuerpo
+       AND NEW.lead_id IS NOT DISTINCT FROM OLD.lead_id THEN
+      NEW.updated_at := OLD.updated_at;
+      RETURN NEW;
+    END IF;
+
+    NEW.id := OLD.id;
+    NEW.lead_id := OLD.lead_id;
+    NEW.autor_id := OLD.autor_id;
+    NEW.autor_nombre := OLD.autor_nombre;
+    NEW.autor_rol := OLD.autor_rol;
+    NEW.created_at := OLD.created_at;
+    NEW.cuerpo := btrim(NEW.cuerpo);
+    NEW.updated_at := timezone('utc', now());
+    RETURN NEW;
+  END IF;
+
+  IF auth.uid() IS NOT NULL THEN
+    NEW.autor_id := auth.uid();
+  END IF;
+
+  SELECT
+    COALESCE(NULLIF(btrim(p.nombre_completo), ''), 'Sin identificar'),
+    p.rol
+  INTO v_nombre, v_rol
+  FROM public.perfiles p
+  WHERE p.id = NEW.autor_id;
+
+  IF NOT FOUND THEN
+    NEW.autor_nombre := 'Sin identificar';
+    NEW.autor_rol := NULL;
+  ELSE
+    NEW.autor_nombre := v_nombre;
+    NEW.autor_rol := v_rol;
+  END IF;
+
+  NEW.cuerpo := btrim(NEW.cuerpo);
+  NEW.updated_at := COALESCE(NEW.created_at, timezone('utc', now()));
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_lead_comentarios_server_fields ON public.lead_comentarios;
+CREATE TRIGGER trg_lead_comentarios_server_fields
+  BEFORE INSERT OR UPDATE ON public.lead_comentarios
+  FOR EACH ROW
+  EXECUTE FUNCTION public.cl_set_lead_comentario_server_fields();
 
 CREATE OR REPLACE FUNCTION public.rpe_set_updated_at()
 RETURNS trigger
@@ -1729,6 +1822,77 @@ BEGIN
 END;
 $$;
 
+-- Lookup de duplicado al escanear: misma normalización que cl_guardar_lead.
+CREATE OR REPLACE FUNCTION public.cl_buscar_lead_por_email(
+  p_evento_id uuid,
+  p_email text
+)
+RETURNS TABLE (
+  lead_id uuid,
+  capturador_nombre text,
+  es_propio boolean
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+DECLARE
+  v_usuario_id uuid := auth.uid();
+  v_rol text;
+  v_activo boolean;
+  v_email_normalizado text := NULLIF(lower(btrim(p_email)), '');
+  v_existente public.leads%ROWTYPE;
+BEGIN
+  IF v_usuario_id IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'No autenticado';
+  END IF;
+
+  SELECT p.rol, p.activo
+  INTO v_rol, v_activo
+  FROM public.perfiles p
+  WHERE p.id = v_usuario_id;
+
+  IF NOT FOUND OR v_activo IS NOT TRUE THEN
+    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Usuario inactivo o sin perfil';
+  END IF;
+
+  IF p_evento_id IS NULL OR NOT EXISTS (
+    SELECT 1 FROM public.eventos_leads el WHERE el.id = p_evento_id
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Campaña no encontrada';
+  END IF;
+
+  IF v_rol NOT IN ('admin', 'organizador', 'user')
+     AND NOT (
+       v_rol = 'externo'
+       AND public.cl_externo_campana_autorizada(p_evento_id)
+     ) THEN
+    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Sin acceso a la campaña';
+  END IF;
+
+  IF v_email_normalizado IS NULL THEN
+    RETURN;
+  END IF;
+
+  SELECT l.* INTO v_existente
+  FROM public.leads l
+  WHERE l.evento_id = p_evento_id
+    AND NULLIF(lower(btrim(l.email)), '') = v_email_normalizado
+  ORDER BY l.created_at NULLS LAST, l.id
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  lead_id := v_existente.id;
+  capturador_nombre := v_existente.capturador_nombre;
+  es_propio := v_existente.perfil_id = v_usuario_id;
+  RETURN NEXT;
+END;
+$$;
+
 -- Perfil sistema al que se reasignan las acreditaciones cuando se
 -- elimina al usuario que las hizo. UUID fijo; no aparece en la UI
 -- de gestión (activo=false). Ver RPC rpe_eliminar_usuario más abajo.
@@ -1775,10 +1939,11 @@ ALTER TABLE public.perfiles
 -- auth.users.
 --
 -- Regla de negocio: todas las FKs históricas (acreditado_por,
--- ingresado_por, creado_por, leads.perfil_id, eventos_leads.perfil_id)
--- se reasignan al perfil sistema "Usuario eliminado" (uuid fijo). No
--- deben quedar NULL. Si otra tabla ajena bloquea el DELETE de
--- auth.users, se degrada a ban permanente ('desactivado').
+-- ingresado_por, creado_por, leads.perfil_id, eventos_leads.perfil_id,
+-- lead_comentarios.autor_id) se reasignan al perfil sistema "Usuario
+-- eliminado" (uuid fijo). No deben quedar NULL. Si otra tabla ajena
+-- bloquea el DELETE de auth.users, se degrada a ban permanente
+-- ('desactivado').
 --
 -- Devuelve 'eliminado' o 'desactivado' según el resultado.
 DROP FUNCTION IF EXISTS public.rpe_eliminar_usuario(uuid);
@@ -1849,6 +2014,11 @@ BEGIN
     SET perfil_id = v_sentinel
     WHERE perfil_id = usuario_id;
   END IF;
+  IF to_regclass('public.lead_comentarios') IS NOT NULL THEN
+    UPDATE public.lead_comentarios
+    SET autor_id = v_sentinel
+    WHERE autor_id = usuario_id;
+  END IF;
 
   DELETE FROM public.perfiles WHERE id = usuario_id;
 
@@ -1895,6 +2065,12 @@ REVOKE ALL ON FUNCTION public.cl_resumen_campana(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.cl_resumen_campana(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.cl_externo_evento_origen_autorizado(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.cl_externo_evento_origen_autorizado(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.cl_externo_campana_autorizada(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cl_externo_campana_autorizada(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.cl_externo_nombre_campana_autorizado(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cl_externo_nombre_campana_autorizado(text) TO authenticated;
+REVOKE ALL ON FUNCTION public.cl_buscar_lead_por_email(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.cl_buscar_lead_por_email(uuid, text) TO authenticated;
 
 -- ----------------------------------------------------------------
 -- 5. RLS
@@ -1905,6 +2081,7 @@ ALTER TABLE public.registrados      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usuarios_eventos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.eventos_leads    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leads            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lead_comentarios ENABLE ROW LEVEL SECURITY;
 
 -- --- perfiles ---
 DROP POLICY IF EXISTS "Acceso total perfiles" ON public.perfiles;
@@ -2088,13 +2265,16 @@ CREATE POLICY cl_eventos_leads_delete ON public.eventos_leads
 
 -- Los internos (admin/organizador/user) ven todos los leads de la campaña; el
 -- rol `user` solo los lee, y el email y el teléfono le llegan enmascarados en
--- la app. El externo sigue acotado a los que capturó él.
+-- la app. El externo autorizado ve el mismo listado de su campaña (contacto
+-- también enmascarado en la app); fuera de esas campañas sigue acotado a los
+-- que capturó él.
 DROP POLICY IF EXISTS cl_leads_select ON public.leads;
 CREATE POLICY cl_leads_select ON public.leads
   FOR SELECT TO authenticated
   USING (
     public.rpe_is_internal_user()
     OR perfil_id = auth.uid()
+    OR public.cl_externo_campana_autorizada(evento_id)
   );
 
 DROP POLICY IF EXISTS cl_leads_insert ON public.leads;
@@ -2127,6 +2307,42 @@ CREATE POLICY cl_leads_delete ON public.leads
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.eventos_leads TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.leads TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.lead_comentarios TO authenticated;
+
+DROP POLICY IF EXISTS cl_lead_comentarios_select ON public.lead_comentarios;
+CREATE POLICY cl_lead_comentarios_select ON public.lead_comentarios
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.leads l
+      WHERE l.id = lead_id
+    )
+  );
+
+DROP POLICY IF EXISTS cl_lead_comentarios_insert ON public.lead_comentarios;
+CREATE POLICY cl_lead_comentarios_insert ON public.lead_comentarios
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.leads l
+      WHERE l.id = lead_id
+    )
+  );
+
+DROP POLICY IF EXISTS cl_lead_comentarios_delete ON public.lead_comentarios;
+CREATE POLICY cl_lead_comentarios_delete ON public.lead_comentarios
+  FOR DELETE TO authenticated
+  USING (
+    autor_id = auth.uid()
+    OR public.rpe_is_admin()
+    OR public.rpe_is_organizador()
+  );
+
+DROP POLICY IF EXISTS cl_lead_comentarios_update ON public.lead_comentarios;
+CREATE POLICY cl_lead_comentarios_update ON public.lead_comentarios
+  FOR UPDATE TO authenticated
+  USING (autor_id = auth.uid())
+  WITH CHECK (autor_id = auth.uid());
 
 -- ----------------------------------------------------------------
 -- 5a. Fijados personales (eventos y campañas por usuario)

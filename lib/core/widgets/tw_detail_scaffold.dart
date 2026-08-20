@@ -1,8 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/tw_tokens.dart';
-import 'offline_banner.dart';
+import 'ios_native_chrome.dart';
 import 'tw_components.dart';
 
 /// Medidas de la cabecera fija de las pantallas-menú.
@@ -60,7 +62,7 @@ class TwDetailScaffold extends StatefulWidget {
     required this.onBack,
     required this.children,
     this.actions = const [],
-    this.topBanner,
+    this.onRefresh,
     this.maxContentWidth = 560,
     this.bottomPadding = 40,
     this.backIcon = Symbols.arrow_back_rounded,
@@ -90,7 +92,7 @@ class TwDetailScaffold extends StatefulWidget {
 
   final List<Widget> actions;
   final List<Widget> children;
-  final Widget? topBanner;
+  final Future<void> Function()? onRefresh;
   final double maxContentWidth;
   final double bottomPadding;
 
@@ -126,73 +128,82 @@ class _TwDetailScaffoldState extends State<TwDetailScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final banner = widget.topBanner;
-    if (banner == null) return _contenido(context);
-    // El banner reserva la barra de estado y `_contenido` la recibe ya
-    // consumida: el alto de la cabecera se calcula desde ese inset y contarlo
-    // dos veces dejaba un hueco del alto de la barra.
-    return OfflineBannerHost(banner: banner, builder: _contenido);
+    return _contenido(context);
   }
 
   Widget _contenido(BuildContext context) {
     final topInset = TwDetailBarMetrics.topInsetOf(context);
     final headerHeight = TwDetailBarMetrics.height(topInset);
+    final bottomPad =
+        widget.bottomPadding + TwDetailBarMetrics.bottomInsetOf(context);
 
-    return Column(
-      children: [
-        Expanded(
-          child: Stack(
-            children: [
-              SingleChildScrollView(
-                controller: _controller,
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                padding: EdgeInsets.fromLTRB(
-                  TwSpacing.screenH,
-                  headerHeight,
-                  TwSpacing.screenH,
-                  widget.bottomPadding +
-                      TwDetailBarMetrics.bottomInsetOf(context),
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: widget.maxContentWidth,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: widget.children,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: RepaintBoundary(
-                  child: ValueListenableBuilder<double>(
-                    valueListenable: _scrollY,
-                    builder: (context, scrollY, _) => _TwDetailBar(
-                      scrollOffset: scrollY,
-                      topInset: topInset,
-                      eyebrow: widget.eyebrow,
-                      title: widget.title,
-                      onBack: widget.onBack,
-                      backIcon: widget.backIcon,
-                      backTooltip: widget.backTooltip,
-                      backKey: widget.backKey,
-                      leading: widget.leading,
-                      actions: widget.actions,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final minBody = math.max(
+          0.0,
+          constraints.maxHeight - headerHeight - bottomPad,
+        );
+        Widget scroll = SingleChildScrollView(
+          controller: _controller,
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: ClampingScrollPhysics(),
           ),
-        ),
-      ],
+          padding: EdgeInsets.fromLTRB(
+            TwSpacing.screenH,
+            headerHeight,
+            TwSpacing.screenH,
+            bottomPad,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: widget.maxContentWidth,
+                minHeight: minBody,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: widget.children,
+              ),
+            ),
+          ),
+        );
+        if (widget.onRefresh != null) {
+          scroll = RefreshIndicator(
+            color: TwColors.brand700,
+            edgeOffset: headerHeight,
+            displacement: 40,
+            onRefresh: widget.onRefresh!,
+            child: scroll,
+          );
+        }
+        return Stack(
+          children: [
+            scroll,
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: RepaintBoundary(
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _scrollY,
+                  builder: (context, scrollY, _) => _TwDetailBar(
+                    scrollOffset: scrollY,
+                    topInset: topInset,
+                    eyebrow: widget.eyebrow,
+                    title: widget.title,
+                    onBack: widget.onBack,
+                    backIcon: widget.backIcon,
+                    backTooltip: widget.backTooltip,
+                    backKey: widget.backKey,
+                    leading: widget.leading,
+                    actions: widget.actions,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -267,12 +278,13 @@ class _TwDetailBar extends StatelessWidget {
             child: Row(
               children: [
                 leading ??
-                    TwIconButton(
+                    TwIosGlassIconButton(
                       key: backKey,
                       icon: backIcon,
                       iconSize: 22,
                       tooltip: backTooltip,
                       onTap: onBack,
+                      sfSymbol: 'chevron.left',
                     ),
                 const SizedBox(width: 10),
                 // El eyebrow deja paso al título compacto con un cross-fade,

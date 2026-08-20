@@ -36,7 +36,7 @@ class Env {
 
   /// Owner del repo GitHub usado como fuente OTA (`/releases/latest`).
   static String get githubOwner =>
-      dotenv.env['GITHUB_OWNER'] ?? 'bastiansanchez24';
+      dotenv.env['GITHUB_OWNER'] ?? 'bsanchezTW';
 
   /// Nombre del repo GitHub usado como fuente OTA.
   static String get githubRepo =>

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/supabase_tables.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
@@ -125,7 +126,10 @@ class _GestionarUsuariosBodyState extends ConsumerState<_GestionarUsuariosBody>
         const SizedBox(width: 8),
         PinnedSearchActionButton(
           icon: Symbols.person_add_rounded,
-          onTap: () => context.push(RoutePaths.nuevoUsuario),
+          onTap: () {
+            if (!requireOnline(context, ref)) return;
+            context.push(RoutePaths.nuevoUsuario);
+          },
         ),
       ],
     );
@@ -203,7 +207,12 @@ class _GestionarUsuariosBodyState extends ConsumerState<_GestionarUsuariosBody>
         ),
         ...usuariosAsync.when(
           skipLoadingOnReload: true,
-          loading: () => [const SliverFillRemaining(child: LoadingView())],
+          loading: () => [
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: LoadingView(),
+            ),
+          ],
           error: (e, _) => [
             SliverFillRemaining(
               child: ErrorView(
@@ -257,16 +266,19 @@ class _GestionarUsuariosBodyState extends ConsumerState<_GestionarUsuariosBody>
   }
 }
 
-class _UsuarioRow extends StatelessWidget {
+class _UsuarioRow extends ConsumerWidget {
   const _UsuarioRow({required this.usuario, required this.index});
 
   final Perfil usuario;
   final int index;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Pressable(
-      onTap: () => context.push(RoutePaths.editarUsuario(usuario.id)),
+      onTap: () {
+        if (!requireOnline(context, ref)) return;
+        context.push(RoutePaths.editarUsuario(usuario.id));
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(

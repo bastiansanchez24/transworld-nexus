@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -154,6 +156,7 @@ class _CrearEditarEventoFormState
   }
 
   Future<void> _guardar() async {
+    if (!requireOnline(context, ref)) return;
     if (!_formKey.currentState!.validate()) return;
     setState(() => _guardando = true);
 
@@ -213,6 +216,7 @@ class _CrearEditarEventoFormState
   }
 
   Future<void> _eliminar() async {
+    if (!requireOnline(context, ref)) return;
     final confirmado = await confirmDialog(
       context,
       title: 'Eliminar evento',
@@ -243,6 +247,7 @@ class _CrearEditarEventoFormState
   @override
   Widget build(BuildContext context) {
     final esAdmin = ref.watch(isAdminProvider);
+    final hayRed = ref.watch(isOnlineProvider);
     final eventoAsync = widget.eventoId == null
         ? null
         : ref.watch(eventoByIdProvider(widget.eventoId!));
@@ -257,6 +262,7 @@ class _CrearEditarEventoFormState
         context: context,
         isCreate: !_esEdicion,
         isDirty: _hayCambios,
+        readOnly: !hayRed,
         save: _guardar,
       ),
       actions: [
@@ -265,7 +271,7 @@ class _CrearEditarEventoFormState
             icon: Symbols.delete_outline_rounded,
             tooltip: 'Eliminar evento',
             danger: true,
-            onTap: _guardando ? null : _eliminar,
+            onTap: (_guardando || !hayRed) ? null : _eliminar,
           ),
       ],
       body: eventoAsync != null && eventoAsync.isLoading && !_cargado
@@ -284,7 +290,7 @@ class _CrearEditarEventoFormState
                       SelectorImagen(
                         bytes: _imagenBytes,
                         urlExistente: _imagenUrlExistente,
-                        enabled: !_guardando,
+                        enabled: !_guardando && hayRed,
                         aspectRatio: 16 / 9,
                         anchoMaximo: kAnchoSelectorImagenEvento,
                         etiquetaVacio: 'Agregar imagen del evento',
@@ -299,7 +305,7 @@ class _CrearEditarEventoFormState
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _nombreController,
-                        enabled: !_guardando,
+                        enabled: !_guardando && hayRed,
                         decoration: const InputDecoration(
                           hintText: 'Ej. Taller ALTAI 2026',
                         ),
@@ -313,7 +319,7 @@ class _CrearEditarEventoFormState
                       FechaPickerField(
                         fecha: _fecha,
                         onTap: _elegirFecha,
-                        enabled: !_guardando,
+                        enabled: !_guardando && hayRed,
                       ),
                       const SizedBox(height: 14),
                       Row(
@@ -327,7 +333,7 @@ class _CrearEditarEventoFormState
                                 const SizedBox(height: 6),
                                 TextFormField(
                                   controller: _paisController,
-                                  enabled: !_guardando,
+                                  enabled: !_guardando && hayRed,
                                   decoration: const InputDecoration(
                                     hintText: 'Chile',
                                   ),
@@ -344,7 +350,7 @@ class _CrearEditarEventoFormState
                                 const SizedBox(height: 6),
                                 TextFormField(
                                   controller: _lugarController,
-                                  enabled: !_guardando,
+                                  enabled: !_guardando && hayRed,
                                   decoration: const InputDecoration(
                                     hintText: 'Hotel…',
                                   ),
@@ -359,7 +365,7 @@ class _CrearEditarEventoFormState
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _direccionController,
-                        enabled: !_guardando,
+                        enabled: !_guardando && hayRed,
                         decoration: const InputDecoration(
                           hintText: 'Av. Vitacura 2885',
                         ),
@@ -369,7 +375,7 @@ class _CrearEditarEventoFormState
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _tematicaController,
-                        enabled: !_guardando,
+                        enabled: !_guardando && hayRed,
                         decoration: const InputDecoration(
                           hintText: 'Ej. Telecomunicaciones',
                         ),
@@ -390,7 +396,7 @@ class _CrearEditarEventoFormState
                             child: Text('Cliente'),
                           ),
                         ],
-                        onChanged: _guardando
+                        onChanged: (_guardando || !hayRed)
                             ? null
                             : (value) => setState(
                                 () => _tipoRegistro = value ?? _tipoRegistro,
@@ -417,7 +423,7 @@ class _CrearEditarEventoFormState
                       PrimaryGradientButton(
                         label: _esEdicion ? 'Guardar' : 'Crear evento',
                         loading: _guardando,
-                        onPressed: _guardando ? null : _guardar,
+                        onPressed: (_guardando || !hayRed) ? null : _guardar,
                       ),
                     ],
                   ),

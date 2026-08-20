@@ -9,7 +9,7 @@
   No requiere recompilarse por versión: siempre instala el último release.
 
 .PARAMETER Owner
-  Owner del repositorio GitHub (default: bastiansanchez24).
+  Owner del repositorio GitHub (default: bsanchezTW).
 
 .PARAMETER Repo
   Nombre del repositorio GitHub (default: transworld-nexus).
@@ -32,7 +32,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$Owner = 'bastiansanchez24',
+  [string]$Owner = 'bsanchezTW',
   [string]$Repo = 'transworld-nexus',
   [string]$InstallDir = '',
   [switch]$DesktopShortcut,

@@ -2,25 +2,21 @@ import 'dart:io' show exit;
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/theme/tw_tokens.dart';
-import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
-import '../../../core/widgets/notificaciones_header_button.dart';
-import '../../../core/widgets/offline_banner.dart';
-import '../../../core/widgets/pressable.dart';
+import '../../../core/widgets/cuenta_identity_header.dart';
+import '../../../core/widgets/cuenta_settings_sheet.dart';
 import '../../../core/widgets/shell_tab_scroll.dart';
-import '../../../core/widgets/tw_components.dart';
+import '../../../core/widgets/tw_offline_notice_card.dart';
 import '../../../data/models/perfil.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -45,7 +41,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
-  bool _menuCuentaAbierto = false;
   bool _desinstalando = false;
   final _scrollTop = ValueNotifier<double>(0);
   final _scrollController = ScrollController();
@@ -69,7 +64,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Future<void> _desinstalar() async {
     if (_desinstalando || !canUninstallApp) return;
-    setState(() => _menuCuentaAbierto = false);
 
     final ok = await confirmDialog(
       context,
@@ -107,6 +101,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return nombre.split(RegExp(r'\s+')).first;
   }
 
+  Future<void> _mostrarAjustes() {
+    return showCuentaSettingsSheet(
+      context: context,
+      onMiPerfil: () => context.push(RoutePaths.perfil),
+      onSincronizacion: () => context.push(RoutePaths.sincronizacion),
+      onActualizaciones: () => context.push(RoutePaths.actualizaciones),
+      onDesinstalar: canUninstallApp ? _desinstalar : null,
+      onCerrarSesion: () => ref.read(authRepositoryProvider).cerrarSesion(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final perfilAsync = ref.watch(currentPerfilProvider);
@@ -127,14 +132,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final first = _firstName(perfil);
     final saludo = first.isEmpty ? 'Hola 👋' : 'Hola, $first 👋';
     final reduce = AppMotion.reduceMotion(context);
-    final bannerVisible = ref.watch(offlineBannerVisibleProvider);
     final safeTop = MediaQuery.paddingOf(context).top;
-    // Sin barra de estado (web y Windows) no hay nada que despejar arriba: el
-    // aire fijo del spec dejaba la identidad hundida media pantalla.
-    final contentTop =
-        safeTop +
-        _HomeHeaderMetrics.topGap(safeTop, bannerVisible: bannerVisible);
-    // El avatar parte a [contentTop]; el blur espera a que toque el safe area.
+    final contentTop = safeTop + _HomeHeaderMetrics.topGap(safeTop);
     final collapseStart = contentTop - safeTop;
     final bottomPad = math.max(
       120.0,
@@ -176,17 +175,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           padding: EdgeInsets.fromLTRB(0, contentTop, 0, bottomPad),
           children: [
             _HomeColumn(
-              child: _HeaderPerfil(
+              child: CuentaIdentityHeader(
                 perfil: perfil,
-                menuAbierto: _menuCuentaAbierto,
                 noLeidas: noLeidas,
                 onNotificaciones: () => context.push(RoutePaths.notificaciones),
-                onToggleMenu: () =>
-                    setState(() => _menuCuentaAbierto = !_menuCuentaAbierto),
-                onMiPerfil: () {
-                  setState(() => _menuCuentaAbierto = false);
-                  context.push(RoutePaths.perfil);
-                },
+                onAjustes: _mostrarAjustes,
+                onMiPerfil: () => context.push(RoutePaths.perfil),
               ),
             ),
             if (featuredItems.isNotEmpty) ...[
@@ -198,36 +192,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  AnimatedSize(
-                    duration: AppMotion.toggle,
-                    curve: AppMotion.ease,
-                    alignment: Alignment.topCenter,
-                    child: _menuCuentaAbierto
-                        ? Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _MenuCuenta(
-                              onMiPerfil: () {
-                                setState(() => _menuCuentaAbierto = false);
-                                context.push(RoutePaths.perfil);
-                              },
-                              onSincronizacion: () {
-                                setState(() => _menuCuentaAbierto = false);
-                                context.push(RoutePaths.sincronizacion);
-                              },
-                              onActualizaciones: () {
-                                setState(() => _menuCuentaAbierto = false);
-                                context.push(RoutePaths.actualizaciones);
-                              },
-                              onDesinstalar: canUninstallApp
-                                  ? _desinstalar
-                                  : null,
-                              onCerrarSesion: () => ref
-                                  .read(authRepositoryProvider)
-                                  .cerrarSesion(),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
+                  const TwOfflineNoticeCard(bottomGap: 20),
                   perfilAsync.when(
                     skipLoadingOnReload: true,
                     skipLoadingOnRefresh: true,
@@ -272,28 +237,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         child: UpdateChecker(
           child: Scaffold(
             backgroundColor: TwColors.bg,
-            body: OfflineBannerColumn(
+            body: Stack(
               children: [
-                Expanded(
-                  child: Stack(
-                    children: [
-                      enter,
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: ValueListenableBuilder<double>(
-                          valueListenable: _scrollTop,
-                          builder: (context, t, _) {
-                            return _HomeCollapseBar(
-                              scrollTop: t,
-                              title: saludo,
-                              collapseStart: collapseStart,
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                enter,
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: _scrollTop,
+                    builder: (context, t, _) {
+                      return _HomeCollapseBar(
+                        scrollTop: t,
+                        title: saludo,
+                        collapseStart: collapseStart,
+                      );
+                    },
                   ),
                 ),
               ],
@@ -328,13 +287,10 @@ class _HomeColumn extends StatelessWidget {
 
 /// Medidas del header de identidad: el avatar vive a [topGap] bajo el safe area.
 abstract final class _HomeHeaderMetrics {
-  static const avatarSize = 44.0;
   static const topGapWithSafeArea = 12.0;
   static const topGapWithoutSafeArea = 16.0;
-  static const topGapUnderBanner = 6.0;
 
-  static double topGap(double safeTop, {bool bannerVisible = false}) {
-    if (bannerVisible) return topGapUnderBanner;
+  static double topGap(double safeTop) {
     return safeTop > 0 ? topGapWithSafeArea : topGapWithoutSafeArea;
   }
 }
@@ -436,307 +392,6 @@ class _HomeCollapseBar extends StatelessWidget {
                 ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderPerfil extends StatelessWidget {
-  const _HeaderPerfil({
-    required this.perfil,
-    required this.menuAbierto,
-    required this.noLeidas,
-    required this.onNotificaciones,
-    required this.onToggleMenu,
-    required this.onMiPerfil,
-  });
-
-  final Perfil? perfil;
-  final bool menuAbierto;
-  final int noLeidas;
-  final VoidCallback onNotificaciones;
-  final VoidCallback onToggleMenu;
-  final VoidCallback onMiPerfil;
-
-  String get _firstName {
-    final nombre = perfil?.nombreCompleto.trim() ?? '';
-    if (nombre.isEmpty) return '';
-    return nombre.split(RegExp(r'\s+')).first;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final first = _firstName;
-    final saludo = first.isEmpty ? 'Hola 👋' : 'Hola, $first 👋';
-    final rol = perfil?.rol.label ?? '';
-
-    return Row(
-      children: [
-        Pressable(
-          scale: 0.94,
-          onTap: onMiPerfil,
-          child: _HomeAvatar(
-            nombre: perfil?.nombreCompleto ?? '?',
-            fotoUrl: perfil?.fotoUrl,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                saludo,
-                style: TwText.greeting,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (rol.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                _HeaderRoleChip(label: rol),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        _IconChip(
-          icon: menuAbierto ? Symbols.close_rounded : Symbols.settings_rounded,
-          tooltip: menuAbierto ? 'Cerrar menú' : 'Ajustes de la cuenta',
-          onTap: onToggleMenu,
-        ),
-        const SizedBox(width: 12),
-        NotificacionesHeaderButton(noLeidas: noLeidas, onTap: onNotificaciones),
-      ],
-    );
-  }
-}
-
-class _HomeAvatar extends StatelessWidget {
-  const _HomeAvatar({required this.nombre, this.fotoUrl});
-
-  final String nombre;
-  final String? fotoUrl;
-
-  String get _inicial {
-    final trimmed = nombre.trim();
-    if (trimmed.isEmpty) return '?';
-    return trimmed[0].toUpperCase();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tieneFoto = fotoUrl != null && fotoUrl!.isNotEmpty;
-    return Container(
-      width: _HomeHeaderMetrics.avatarSize,
-      height: _HomeHeaderMetrics.avatarSize,
-      padding: const EdgeInsets.all(2),
-      decoration: const BoxDecoration(
-        color: TwColors.surfaceTint,
-        borderRadius: TwRadii.button,
-        // Marco navy fino: despega la foto del fondo claro del home.
-        border: Border.fromBorderSide(
-          BorderSide(color: TwColors.hero700, width: 1.5),
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: TwRadii.field,
-        child: tieneFoto
-            ? AppNetworkImage(
-                url: fotoUrl!,
-                fit: BoxFit.cover,
-                memCacheWidth: 132,
-                placeholder: _Inicial(letra: _inicial),
-                errorWidget: _Inicial(letra: _inicial),
-              )
-            : _Inicial(letra: _inicial),
-      ),
-    );
-  }
-}
-
-class _Inicial extends StatelessWidget {
-  const _Inicial({required this.letra});
-
-  final String letra;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        letra,
-        style: TwText.brandName.copyWith(fontSize: 17, color: TwColors.hero700),
-      ),
-    );
-  }
-}
-
-class _IconChip extends StatelessWidget {
-  const _IconChip({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Pressable(
-        scale: 0.92,
-        onTap: onTap,
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            color: TwColors.surface,
-            borderRadius: TwRadii.iconLg,
-            border: Border.fromBorderSide(BorderSide(color: TwColors.border08)),
-            boxShadow: TwShadows.soft,
-          ),
-          child: Icon(icon, color: TwColors.iconInk, size: 20),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderRoleChip extends StatelessWidget {
-  const _HeaderRoleChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: const BoxDecoration(
-        color: TwColors.blueTint,
-        borderRadius: TwRadii.badge,
-      ),
-      child: Text(label.toUpperCase(), style: TwText.roleBadge),
-    );
-  }
-}
-
-class _MenuCuenta extends StatelessWidget {
-  const _MenuCuenta({
-    required this.onMiPerfil,
-    required this.onSincronizacion,
-    required this.onActualizaciones,
-    this.onDesinstalar,
-    required this.onCerrarSesion,
-  });
-
-  final VoidCallback onMiPerfil;
-  final VoidCallback onSincronizacion;
-  final VoidCallback onActualizaciones;
-  final VoidCallback? onDesinstalar;
-  final VoidCallback onCerrarSesion;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: TwColors.surface,
-        borderRadius: TwRadii.card,
-        border: Border.fromBorderSide(BorderSide(color: TwColors.border07)),
-        boxShadow: TwShadows.card,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          _CuentaTile(
-            icon: Symbols.person_rounded,
-            label: 'Mi perfil',
-            onTap: onMiPerfil,
-          ),
-          const _CuentaDivider(),
-          _CuentaTile(
-            icon: Symbols.sync_rounded,
-            label: 'Sincronización',
-            onTap: onSincronizacion,
-          ),
-          const _CuentaDivider(),
-          _CuentaTile(
-            icon: kIsWeb
-                ? Symbols.history_rounded
-                : Symbols.system_update_rounded,
-            label: kIsWeb ? 'Historial de versiones' : 'Actualizaciones',
-            onTap: onActualizaciones,
-          ),
-          if (onDesinstalar != null) ...[
-            const _CuentaDivider(),
-            _CuentaTile(
-              icon: Symbols.delete_forever_rounded,
-              label: 'Desinstalar',
-              destructivo: true,
-              onTap: onDesinstalar!,
-            ),
-          ],
-          const _CuentaDivider(),
-          _CuentaTile(
-            icon: Symbols.logout_rounded,
-            label: 'Cerrar sesión',
-            destructivo: true,
-            onTap: onCerrarSesion,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CuentaDivider extends StatelessWidget {
-  const _CuentaDivider();
-
-  @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, indent: 50, color: TwColors.border07);
-}
-
-class _CuentaTile extends StatelessWidget {
-  const _CuentaTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructivo = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructivo;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = destructivo ? TwColors.danger : TwColors.ink;
-    return TwPressable(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: TwText.tileTitle.copyWith(fontSize: 14, color: color),
-              ),
-            ),
-            if (!destructivo)
-              const Icon(
-                Symbols.chevron_right_rounded,
-                size: 22,
-                color: TwColors.chevron,
-              ),
           ],
         ),
       ),

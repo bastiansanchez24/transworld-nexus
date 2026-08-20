@@ -139,6 +139,25 @@ void main() {
       expect(editado.fotosUrls, isEmpty);
     });
 
+    test('el insert offline lleva foto local y los campos', () {
+      final pendiente = Lead(
+        id: '',
+        eventoId: 'evento-1',
+        nombreCompleto: 'María González',
+        empresa: 'Transworld',
+        email: 'maria@transworld.cl',
+        fotosUrls: const ['local_foto:///datos/leads_pendientes/a.jpg'],
+        perfilId: 'perfil-9',
+      );
+
+      expect(pendiente.toInsertMap()['fotos_urls'], [
+        'local_foto:///datos/leads_pendientes/a.jpg',
+      ]);
+      expect(pendiente.toInsertMap()['nombre_completo'], 'María González');
+      expect(pendiente.toInsertMap()['empresa'], 'Transworld');
+      expect(pendiente.toInsertMap()['email'], 'maria@transworld.cl');
+    });
+
     test('queda marcado como pendiente de sincronizar', () {
       expect(lead.pendienteDeSincronizar, isFalse);
       expect(

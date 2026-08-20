@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -35,6 +35,7 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
   bool get _ocupado => _generando || _importando;
 
   Future<void> _exportar({required bool soloAcreditados}) async {
+    if (!requireOnline(context, ref)) return;
     if (!ref.read(canExportDataProvider)) {
       showAppSnackBar(
         context,
@@ -92,14 +93,7 @@ class _ExportarScreenState extends ConsumerState<ExportarScreen> {
   }
 
   Future<void> _cargarExcel() async {
-    if (!ref.read(isOnlineProvider)) {
-      showAppSnackBar(
-        context,
-        'La carga de Excel requiere conexión a internet.',
-        isError: true,
-      );
-      return;
-    }
+    if (!requireOnline(context, ref)) return;
 
     final archivo = await openFile(
       acceptedTypeGroups: const [

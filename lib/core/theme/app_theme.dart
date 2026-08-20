@@ -86,9 +86,11 @@ abstract final class GlassNavTokens {
   /// Alto real que ocupa el platform view de la tab bar nativa.
   static const nativeIosOccupied = nativeIosHeight + nativeIosPillRoom;
 
-  /// Lado del SF Symbol. Por debajo del defecto de UIKit (25): con 25 los
-  /// iconos se veían desproporcionados frente al resto de la app.
-  static const nativeIosIconSize = 20.0;
+  /// Lado del SF Symbol en el `UITabBar` Liquid Glass.
+  ///
+  /// El defecto de UIKit es 25 y el plugin 24; con 20 seguían viéndose
+  /// desproporcionados frente a las etiquetas y al resto de la app.
+  static const nativeIosIconSize = 16.0;
 
   /// Ancho del rail de escritorio (icono + etiqueta, como Discord / WhatsApp).
   static const sideRailWidth = 96.0;

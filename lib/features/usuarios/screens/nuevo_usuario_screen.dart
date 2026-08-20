@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_role.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/password_generator.dart';
@@ -92,6 +93,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
   }
 
   Future<void> _guardar() async {
+    if (!requireOnline(context, ref)) return;
     setState(() => _intentoGuardar = true);
     if (!_formKey.currentState!.validate()) return;
     if (_rol == null) {

@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
@@ -141,17 +142,8 @@ class _EditarRegistradoScreenState
       'acreditado': _acreditado,
     };
 
-    // Editar la ficha de un registrado no es una operación de feria: se hace
-    // desde la oficina y toca datos que otros pueden estar cambiando a la vez.
-    // Encolarla sin red arriesga pisar cambios ajenos sin que nadie lo vea, así
-    // que se corta. Acreditar —que sí es de feria— sigue yendo a la cola.
-    if (!ref.read(isOnlineProvider)) {
+    if (!requireOnline(context, ref)) {
       setState(() => _guardando = false);
-      showAppSnackBar(
-        context,
-        'Sin conexión: editar la ficha requiere internet.',
-        isError: true,
-      );
       return;
     }
 
@@ -186,6 +178,7 @@ class _EditarRegistradoScreenState
   }
 
   Future<void> _eliminar() async {
+    if (!requireOnline(context, ref)) return;
     final confirmado = await confirmDialog(
       context,
       title: 'Eliminar registrado',
@@ -211,6 +204,7 @@ class _EditarRegistradoScreenState
   @override
   Widget build(BuildContext context) {
     final esAdmin = ref.watch(isAdminProvider);
+    final hayRed = ref.watch(isOnlineProvider);
     final puedeVerContacto = ref.watch(canViewContactDataProvider);
     final registradosAsync = ref.watch(
       registradosPorEventoProvider(widget.eventoId),
@@ -230,6 +224,7 @@ class _EditarRegistradoScreenState
         context: context,
         isCreate: false,
         isDirty: _hayCambios,
+        readOnly: !hayRed,
         save: _guardar,
       ),
       actions: [
@@ -240,7 +235,7 @@ class _EditarRegistradoScreenState
             icon: Symbols.delete_outline_rounded,
             tooltip: 'Eliminar registrado',
             danger: true,
-            onTap: _guardando ? null : _eliminar,
+            onTap: (_guardando || !hayRed) ? null : _eliminar,
           ),
       ],
       body: registradosAsync.when(
@@ -259,7 +254,9 @@ class _EditarRegistradoScreenState
           _precargar(registrado, puedeVerContacto: puedeVerContacto);
           final telefonoProtegido = _telefonoProtegido(puedeVerContacto);
 
-          return SingleChildScrollView(
+          return AbsorbPointer(
+            absorbing: _guardando,
+            child: SingleChildScrollView(
             padding: AppSpacing.form,
             child: Form(
               key: _formKey,
@@ -273,7 +270,7 @@ class _EditarRegistradoScreenState
                         : enmascararEmail(registrado.email),
                     nombreController: _nombreController,
                     nombreHint: 'Ej. María González',
-                    nombreEnabled: !_guardando,
+                    nombreEnabled: !_guardando && hayRed,
                     nombreValidator: (v) =>
                         (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                     badge: StatusChip(
@@ -288,14 +285,14 @@ class _EditarRegistradoScreenState
                     label: 'Empresa',
                     controller: _empresaController,
                     hintText: 'Ej. Transworld',
-                    enabled: !_guardando,
+                    enabled: !_guardando && hayRed,
                   ),
                   const SizedBox(height: 14),
                   NexusFormTextField(
                     label: 'Cargo',
                     controller: _cargoController,
                     hintText: 'Ej. Gerente comercial',
-                    enabled: !_guardando,
+                    enabled: !_guardando && hayRed,
                   ),
                   const SizedBox(height: 14),
                   NexusFormTextField(
@@ -303,7 +300,7 @@ class _EditarRegistradoScreenState
                     controller: _telefonoController,
                     hintText: '+56 9 1234 5678',
                     keyboardType: TextInputType.phone,
-                    enabled: !_guardando,
+                    enabled: !_guardando && hayRed,
                     readOnly: telefonoProtegido,
                     helperText: telefonoProtegido
                         ? 'Solo visible para administradores y organizadores'
@@ -321,7 +318,7 @@ class _EditarRegistradoScreenState
                     label: 'RUT / RUC',
                     controller: _rutController,
                     hintText: '12.345.678-5',
-                    enabled: !_guardando,
+                    enabled: !_guardando && hayRed,
                     validator: (v) => validarRut(v, requerido: false),
                   ),
                   const SizedBox(height: 14),
@@ -329,7 +326,7 @@ class _EditarRegistradoScreenState
                     label: 'Patente',
                     controller: _patenteController,
                     hintText: 'ABCD12',
-                    enabled: !_guardando,
+                    enabled: !_guardando && hayRed,
                     validator: (v) => validarPatente(v, requerido: false),
                   ),
                   const SizedBox(height: 14),
@@ -337,17 +334,20 @@ class _EditarRegistradoScreenState
                     title: 'Acreditado',
                     subtitle: 'Estado de ingreso al evento',
                     value: _acreditado,
-                    onChanged: (v) => setState(() => _acreditado = v),
+                    onChanged: hayRed
+                        ? (v) => setState(() => _acreditado = v)
+                        : (_) {},
                   ),
                   const SizedBox(height: 24),
                   PrimaryGradientButton(
                     label: 'Guardar cambios',
                     loading: _guardando,
-                    onPressed: _guardando ? null : _guardar,
+                    onPressed: (_guardando || !hayRed) ? null : _guardar,
                   ),
                 ],
               ),
             ),
+          ),
           );
         },
       ),

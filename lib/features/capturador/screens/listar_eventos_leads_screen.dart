@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/fijados_limits.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
@@ -124,6 +125,7 @@ class _ListarEventosLeadsScreenState
         if (!mounted) return;
         context.push(RoutePaths.editarEventoLead(evento.id));
       case EventoListMenuAction.eliminar:
+        if (!requireOnline(context, ref)) return;
         await _eliminarEventoLead(evento);
     }
   }
@@ -217,7 +219,10 @@ class _ListarEventosLeadsScreenState
                 const SizedBox(width: 8),
                 PinnedSearchActionButton(
                   icon: Symbols.add_rounded,
-                  onTap: () => context.push(RoutePaths.crearEventoLead),
+                  onTap: () {
+                    if (!requireOnline(context, ref)) return;
+                    context.push(RoutePaths.crearEventoLead);
+                  },
                 ),
               ],
             ],
@@ -310,7 +315,12 @@ class _ListarEventosLeadsScreenState
         ),
         ...eventosAsync.when(
           skipLoadingOnReload: true,
-          loading: () => [const SliverFillRemaining(child: LoadingView())],
+          loading: () => [
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: LoadingView(),
+            ),
+          ],
           error: (e, _) => [
             SliverFillRemaining(
               child: ErrorView(

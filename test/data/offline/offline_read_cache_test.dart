@@ -487,4 +487,88 @@ void main() {
       },
     );
   });
+
+  group('OfflineReadCache.parchearFila', () {
+    test('actualiza una fila existente y deja las demás', () async {
+      final cache = await nuevaCache();
+      await cache.guardar('registrados', eventoId, [
+        {'id': 'ana', 'acreditado': true, 'nombre': 'Ana'},
+        {'id': 'bruno', 'acreditado': false, 'nombre': 'Bruno'},
+      ]);
+
+      final cambio = await cache.parchearFila(
+        tabla: 'registrados',
+        eventoId: eventoId,
+        id: 'ana',
+        cambios: {'acreditado': false},
+      );
+
+      expect(cambio, isTrue);
+      final local = cache.leerLocal(
+        tabla: 'registrados',
+        eventoId: eventoId,
+        desdeFila: (fila) => fila,
+      );
+      expect(
+        local!.firstWhere((fila) => fila['id'] == 'ana')['acreditado'],
+        isFalse,
+      );
+      expect(
+        local.firstWhere((fila) => fila['id'] == 'bruno')['nombre'],
+        'Bruno',
+      );
+    });
+
+    test('no inventa una copia si el evento no está en disco', () async {
+      final cache = await nuevaCache();
+      final cambio = await cache.parchearFila(
+        tabla: 'registrados',
+        eventoId: eventoId,
+        id: 'ana',
+        cambios: {'acreditado': false},
+      );
+      expect(cambio, isFalse);
+      expect(
+        cache.leerLocal(
+          tabla: 'registrados',
+          eventoId: eventoId,
+          desdeFila: (fila) => fila,
+        ),
+        isNull,
+      );
+    });
+
+    test('omitir la revalidación no deja que un GET viejo pise el parche', () async {
+      final cache = await nuevaCache();
+      await cache.guardar('registrados', eventoId, [
+        {'id': 'ana', 'acreditado': false},
+      ]);
+      await cache.parchearFila(
+        tabla: 'registrados',
+        eventoId: eventoId,
+        id: 'ana',
+        cambios: {'acreditado': true},
+      );
+      cache.omitirProximaRevalidacion('registrados', eventoId, 1);
+
+      var servidor = 0;
+      final local = await cache.leerCacheFirst<Map<String, dynamic>>(
+        tabla: 'registrados',
+        eventoId: eventoId,
+        revision: 1,
+        isOnline: true,
+        desdeServidor: () async {
+          servidor++;
+          return [
+            {'id': 'ana', 'acreditado': false},
+          ];
+        },
+        aFila: (fila) => fila,
+        desdeFila: (fila) => fila,
+      );
+
+      expect(servidor, 0);
+      expect(local.single['acreditado'], isTrue);
+    });
+  });
 }

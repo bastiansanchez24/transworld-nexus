@@ -10,18 +10,33 @@ class LoadingView extends StatelessWidget {
 
   final String? message;
 
+  /// En las listas del shell el [SliverFillRemaining] llega detrás de la tab
+  /// bar: el centro geométrico queda bajo. Mismo lift que [EmptyStateView].
+  static const _mobileAlign = Alignment(0, -0.28);
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(),
-          if (message != null) ...[
-            const SizedBox(height: 12),
-            Text(message!, style: Theme.of(context).textTheme.bodyMedium),
+    final liftForNav =
+        ShellNavScope.visibleOf(context) &&
+        !GlassNavTokens.usesSideRailOf(context);
+    final bottomInset = liftForNav
+        ? GlassNavTokens.contentBottomInset(context)
+        : 0.0;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Align(
+        alignment: liftForNav ? _mobileAlign : Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            if (message != null) ...[
+              const SizedBox(height: 12),
+              Text(message!, style: Theme.of(context).textTheme.bodyMedium),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -163,6 +178,7 @@ Future<bool> confirmDialog(
   required String title,
   required String message,
   String confirmLabel = 'Confirmar',
+  String cancelLabel = 'Cancelar',
   bool destructive = false,
 }) async {
   final result = await showDialog<bool>(
@@ -181,7 +197,7 @@ Future<bool> confirmDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancelar'),
+          child: Text(cancelLabel),
         ),
         FilledButton(
           style: destructive

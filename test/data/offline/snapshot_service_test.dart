@@ -8,12 +8,22 @@ void main() {
   final ayer = hoy.subtract(const Duration(days: 1));
   final manana = hoy.add(const Duration(days: 1));
 
-  Evento evento(String id, {required DateTime fecha, bool activo = true}) {
-    return Evento(id: id, nombre: id, fecha: fecha, activo: activo);
+  Evento evento(
+    String id, {
+    required DateTime fecha,
+    bool activo = true,
+    String? nombre,
+  }) {
+    return Evento(id: id, nombre: nombre ?? id, fecha: fecha, activo: activo);
   }
 
-  EventoLead actividad(String id, {required DateTime fecha}) {
-    return EventoLead(id: id, nombre: id, fecha: fecha);
+  EventoLead actividad(String id, {required DateTime fecha, String? origenId}) {
+    return EventoLead(
+      id: id,
+      nombre: id,
+      fecha: fecha,
+      eventoOrigenId: origenId,
+    );
   }
 
   group('SnapshotService.eventosDelSnapshot', () {
@@ -52,6 +62,47 @@ void main() {
       ]);
 
       expect(elegidas.map((e) => e.id), ['viva']);
+    });
+  });
+
+  group('SnapshotService.campanasDelSnapshot', () {
+    test('el interno baja todas las actividades vigentes', () {
+      final elegidas = SnapshotService.campanasDelSnapshot(
+        actividades: [
+          actividad('ajena', fecha: manana),
+          actividad('propia', fecha: manana, origenId: 'evento-1'),
+        ],
+        eventosVisibles: [evento('evento-1', fecha: manana)],
+        esExterno: false,
+      );
+
+      expect(elegidas.map((e) => e.id), ['ajena', 'propia']);
+    });
+
+    test('el externo solo baja las ligadas a sus eventos', () {
+      final elegidas = SnapshotService.campanasDelSnapshot(
+        actividades: [
+          actividad('ajena', fecha: manana),
+          actividad('por-id', fecha: manana, origenId: 'evento-1'),
+          actividad('Expo', fecha: manana),
+          actividad('pasada', fecha: ayer, origenId: 'evento-1'),
+        ],
+        eventosVisibles: [evento('evento-1', fecha: manana, nombre: 'Expo')],
+        esExterno: true,
+      );
+
+      expect(elegidas.map((e) => e.id), ['por-id', 'Expo']);
+    });
+  });
+
+  group('SnapshotService.esErrorSinAccesoResumen', () {
+    test('reconoce el 42501 del RPC de conteos', () {
+      const crudo =
+          'PostgrestException(message: Sin acceso al resumen de la campaña, '
+          'code: 42501, details: Forbidden, hint: null)';
+
+      expect(SnapshotService.esErrorSinAccesoResumen(crudo), isTrue);
+      expect(SnapshotService.esErrorSinAccesoResumen('timeout'), isFalse);
     });
   });
 }

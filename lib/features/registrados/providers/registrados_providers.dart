@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/supabase_tables.dart';
+import '../../../core/network/connectivity_service.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/sync_queue_item.dart';
@@ -144,4 +145,52 @@ bool existeEmailPendienteODuplicado(
         (item.payload['email'] as String?)?.trim().toLowerCase() ==
             emailNormalizado,
   );
+}
+
+/// Acredita o quita la acreditación: servidor o cola, y write-through a caché.
+Future<void> persistirAcreditacion(
+  WidgetRef ref, {
+  required Registrado registrado,
+  required bool acreditado,
+  required String acreditadoPorId,
+}) async {
+  final isOnline = ref.read(isOnlineProvider);
+  final cache = ref.read(offlineReadCacheProvider);
+  await cache.esperarRevalidaciones();
+
+  if (isOnline && !esIdSoloLocal(registrado.id)) {
+    final repo = ref.read(registradosRepositoryProvider);
+    if (acreditado) {
+      await repo.acreditar(registrado.id, acreditadoPorId: acreditadoPorId);
+    } else {
+      await repo.desacreditar(registrado.id);
+    }
+  } else {
+    await ref
+        .read(syncQueueServiceProvider.notifier)
+        .enqueueUpdate(
+          table: SupabaseTables.registrados,
+          entityId: registrado.id,
+          changes: {
+            'acreditado': acreditado,
+            'acreditado_por': acreditado ? acreditadoPorId : null,
+          },
+        );
+  }
+
+  await cache.parchearFila(
+    tabla: SupabaseTables.registrados,
+    eventoId: registrado.eventoId,
+    id: registrado.id,
+    cambios: {'acreditado': acreditado},
+  );
+  final clave = '${SupabaseTables.registrados}:${registrado.eventoId}';
+  final siguiente = ref.read(cacheRevisionProvider(clave)) + 1;
+  cache.omitirProximaRevalidacion(
+    SupabaseTables.registrados,
+    registrado.eventoId,
+    siguiente,
+  );
+  ref.read(cacheRevisionProvider(clave).notifier).state = siguiente;
+  ref.invalidate(registradosPorEventoProvider(registrado.eventoId));
 }

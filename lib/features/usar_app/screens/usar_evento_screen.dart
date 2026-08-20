@@ -7,17 +7,21 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/config/env.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/theme/tw_tokens.dart';
+import '../../../core/widgets/action_lock.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
-import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/tw_components.dart';
 import '../../../core/widgets/tw_detail_scaffold.dart';
+import '../../../core/widgets/tw_offline_notice_card.dart';
 import '../../../core/widgets/tw_toast.dart';
 import '../../../data/models/evento.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../capturador/providers/capturador_providers.dart';
 import '../../capturador/services/evento_lead_interno_service.dart';
@@ -43,11 +47,15 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
   String get refreshWhenLocation => RoutePaths.usarEvento(widget.eventoId);
 
   bool _creandoEventoLead = false;
+  bool _abriendoRegistrados = false;
 
   /// Al volver al menú (tras registrar, editar, eliminar o acreditar) se
   /// recarga la lista para que las tarjetas no queden con los conteos viejos.
   @override
   void onBecomeVisible() {
+    if (_abriendoRegistrados) {
+      setState(() => _abriendoRegistrados = false);
+    }
     ref.invalidate(eventoByIdProvider(widget.eventoId));
     ref.invalidate(registradosPorEventoProvider(widget.eventoId));
     ref.invalidate(eventoLeadInternoProvider(widget.eventoId));
@@ -57,12 +65,14 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
   /// vía es capturar un lead desde los registrados: ambas resuelven al mismo id.
   Future<void> _crearEventoLead(Evento evento) async {
     if (_creandoEventoLead) return;
+    if (!requireOnline(context, ref)) return;
+    ActionLock.instance.deferUnlock();
     setState(() => _creandoEventoLead = true);
     try {
       final eventoLead = await obtenerOCrearEventoLeadInterno(ref, evento);
       ref.invalidate(eventoLeadInternoProvider(widget.eventoId));
       if (!mounted) return;
-      await context.push(RoutePaths.usarEventoLead(eventoLead.id));
+      context.push(RoutePaths.usarEventoLead(eventoLead.id));
     } catch (_) {
       if (mounted) {
         showAppSnackBar(
@@ -72,11 +82,27 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
         );
       }
     } finally {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ActionLock.instance.finishIfNoNav();
+      });
       if (mounted) setState(() => _creandoEventoLead = false);
     }
   }
 
+  Future<void> _abrirRegistrados() async {
+    if (_abriendoRegistrados) return;
+    ActionLock.instance.deferUnlock();
+    setState(() => _abriendoRegistrados = true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    context.push(RoutePaths.verRegistrados(widget.eventoId));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ActionLock.instance.finishIfNoNav();
+    });
+  }
+
   Future<void> _compartir(String nombreEvento) async {
+    if (!requireOnline(context, ref)) return;
     final base = Env.appPublicBaseUrl.replaceAll(RegExp(r'/$'), '');
     final link = '$base${RoutePaths.registroPublico(widget.eventoId)}';
     final esMovil =
@@ -111,118 +137,130 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
         value: SystemUiOverlayStyle.dark,
         child: Scaffold(
           backgroundColor: TwColors.bg,
-          body: OfflineBannerColumn(
-            children: [
-              Expanded(
-                child: eventoAsync.when(
-                  // Al volver (gesto iOS o atrás) RefreshOnVisible invalida
-                  // el evento: sin esto el menú se desmonta un frame.
-                  skipLoadingOnReload: true,
-                  loading: () => const LoadingView(),
-                  error: (e, _) =>
-                      const ErrorView(message: 'No se pudo cargar el evento.'),
-                  data: (evento) => TwDetailScaffold(
-                    eyebrow: 'Detalle del evento',
-                    title: evento.nombre,
-                    onBack: () => context.pop(),
-                    actions: [
-                      if (puedeEditar)
-                        TwIconButton(
-                          icon: Symbols.edit_rounded,
-                          iconSize: 19,
-                          tooltip: 'Editar evento',
-                          onTap: () => context.push(
-                            RoutePaths.editarEvento(widget.eventoId),
-                          ),
-                        ),
-                      TwIconButton(
-                        icon: Symbols.ios_share_rounded,
-                        iconSize: 20,
-                        variant: TwIconButtonStyle.brand,
-                        tooltip: 'Compartir enlace de registro',
-                        onTap: () => _compartir(evento.nombre),
-                      ),
-                    ],
-                    children: [
-                      _hero(context, evento, resumen),
-                      const TwSectionLabel('Acciones del evento'),
-                      TwActionTile(
-                        icon: Symbols.person_add_rounded,
-                        iconStyle: TwIconBoxStyle.brand,
-                        title: 'Registrar asistente',
-                        subtitle: 'Inscribir a alguien en el evento',
-                        onTap: () =>
-                            context.push(RoutePaths.registrar(widget.eventoId)),
-                      ),
-                      const SizedBox(height: TwSpacing.tileGap),
-                      TwActionTile(
-                        icon: Symbols.contacts_rounded,
-                        title: 'Lista de asistentes registrados',
-                        subtitle: _subtituloAsistentes(resumen?.total),
-                        onTap: () => context.push(
-                          RoutePaths.verRegistrados(widget.eventoId),
-                        ),
-                      ),
-                      if (eventoLead != null) ...[
-                        const SizedBox(height: TwSpacing.tileGap),
-                        TwActionTile(
-                          icon: Symbols.person_search_rounded,
-                          title: 'Ver actividad de captura',
-                          subtitle: 'Captura de oportunidades de este evento',
-                          onTap: () => context.push(
-                            RoutePaths.usarEventoLead(eventoLead.id),
-                          ),
-                        ),
-                      ] else if (puedeEditar) ...[
-                        const SizedBox(height: TwSpacing.tileGap),
-                        TwActionTile(
-                          icon: Symbols.person_search_rounded,
-                          title: 'Crear actividad de captura',
-                          subtitle: _creandoEventoLead
-                              ? 'Creando…'
-                              : 'Capturar oportunidades en este evento',
-                          onTap: () => _crearEventoLead(evento),
-                        ),
-                      ],
-                      const TwSectionLabel('Administración'),
-                      if (esAdmin) ...[
-                        TwActionTile(
-                          icon: Symbols.groups_rounded,
-                          title: 'Gestionar acceso',
-                          subtitle: 'Acreditar y controlar la entrada',
-                          onTap: () => context.push(
-                            RoutePaths.accesoEvento(widget.eventoId),
-                          ),
-                        ),
-                        const SizedBox(height: TwSpacing.tileGap),
-                      ],
-                      TwActionTile(
-                        icon: Symbols.bar_chart_rounded,
-                        iconStyle: TwIconBoxStyle.purpleTint,
-                        title: 'KPI del evento',
-                        subtitle: 'Métricas y acreditación en vivo',
-                        onTap: () =>
-                            context.push(RoutePaths.kpi(widget.eventoId)),
-                      ),
-                      if (puedeExportar) ...[
-                        const SizedBox(height: TwSpacing.tileGap),
-                        TwActionTile(
-                          icon: Symbols.table_chart_rounded,
-                          iconStyle: TwIconBoxStyle.excel,
-                          excel: true,
-                          badge: 'XLSX',
-                          title: 'Importar o exportar',
-                          subtitle: _subtituloExcel(resumen?.total),
-                          onTap: () => context.push(
-                            RoutePaths.exportar(widget.eventoId),
-                          ),
-                        ),
-                      ],
-                    ],
+          body: eventoAsync.when(
+            // Al volver (gesto iOS o atrás) RefreshOnVisible invalida
+            // el evento: sin esto el menú se desmonta un frame.
+            skipLoadingOnReload: true,
+            loading: () => const LoadingView(),
+            error: (e, _) =>
+                const ErrorView(message: 'No se pudo cargar el evento.'),
+            data: (evento) => TwDetailScaffold(
+              eyebrow: 'Detalle del evento',
+              title: evento.nombre,
+              onBack: () => context.pop(),
+              onRefresh: () => refrescarLecturas(
+                ref,
+                invalidar: () {
+                  ref.invalidate(eventoByIdProvider(widget.eventoId));
+                  ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+                  ref.invalidate(eventoLeadInternoProvider(widget.eventoId));
+                },
+                pendientes: () => [
+                  ref.read(eventoByIdProvider(widget.eventoId).future),
+                  ref.read(
+                    registradosPorEventoProvider(widget.eventoId).future,
                   ),
-                ),
+                  ref.read(eventoLeadInternoProvider(widget.eventoId).future),
+                ],
               ),
-            ],
+              actions: [
+                if (puedeEditar)
+                  NexusHeaderAction(
+                    icon: Symbols.edit_rounded,
+                    tooltip: 'Editar evento',
+                    sfSymbol: 'pencil',
+                    onTap: () =>
+                        context.push(RoutePaths.editarEvento(widget.eventoId)),
+                  ),
+                NexusHeaderAction(
+                  icon: Symbols.ios_share_rounded,
+                  variant: TwIconButtonStyle.brand,
+                  tooltip: 'Compartir enlace de registro',
+                  sfSymbol: 'square.and.arrow.up',
+                  onTap: () => _compartir(evento.nombre),
+                ),
+              ],
+              children: [
+                _hero(context, evento, resumen),
+                const TwOfflineNoticeCard(topGap: 20),
+                const TwSectionLabel('Acciones del evento'),
+                TwActionTile(
+                  icon: Symbols.person_add_rounded,
+                  iconStyle: TwIconBoxStyle.brand,
+                  title: 'Registrar asistente',
+                  subtitle: 'Inscribir a alguien en el evento',
+                  onTap: () {
+                    if (!requireOnline(context, ref)) return;
+                    context.push(RoutePaths.registrar(widget.eventoId));
+                  },
+                ),
+                const SizedBox(height: TwSpacing.tileGap),
+                TwActionTile(
+                  icon: Symbols.contacts_rounded,
+                  title: 'Lista de asistentes registrados',
+                  subtitle: _subtituloAsistentes(resumen?.total),
+                  loading: _abriendoRegistrados,
+                  onTap: _abrirRegistrados,
+                ),
+                if (eventoLead != null) ...[
+                  const SizedBox(height: TwSpacing.tileGap),
+                  TwActionTile(
+                    icon: Symbols.person_search_rounded,
+                    title: 'Ver actividad de captura',
+                    subtitle: 'Captura de oportunidades de este evento',
+                    onTap: () => abrirOVolverA(
+                      context,
+                      RoutePaths.usarEventoLead(eventoLead.id),
+                    ),
+                  ),
+                ] else if (puedeEditar) ...[
+                  const SizedBox(height: TwSpacing.tileGap),
+                  TwActionTile(
+                    icon: Symbols.person_search_rounded,
+                    title: 'Crear actividad de captura',
+                    subtitle: _creandoEventoLead
+                        ? 'Creando…'
+                        : 'Capturar oportunidades en este evento',
+                    onTap: () => _crearEventoLead(evento),
+                  ),
+                ],
+                const TwSectionLabel('Administración'),
+                if (esAdmin) ...[
+                  TwActionTile(
+                    icon: Symbols.groups_rounded,
+                    title: 'Gestionar acceso',
+                    subtitle: 'Acreditar y controlar la entrada',
+                    onTap: () {
+                      if (!requireOnline(context, ref)) return;
+                      context.push(RoutePaths.accesoEvento(widget.eventoId));
+                    },
+                  ),
+                  const SizedBox(height: TwSpacing.tileGap),
+                ],
+                TwActionTile(
+                  icon: Symbols.bar_chart_rounded,
+                  iconStyle: TwIconBoxStyle.purpleTint,
+                  title: 'KPI del evento',
+                  subtitle: 'Métricas y acreditación en vivo',
+                  onTap: () => context.push(RoutePaths.kpi(widget.eventoId)),
+                ),
+                if (puedeExportar) ...[
+                  const SizedBox(height: TwSpacing.tileGap),
+                  TwActionTile(
+                    icon: Symbols.table_chart_rounded,
+                    iconStyle: TwIconBoxStyle.excel,
+                    excel: true,
+                    badge: 'XLSX',
+                    title: 'Importar o exportar',
+                    subtitle: _subtituloExcel(resumen?.total),
+                    onTap: () {
+                      if (!requireOnline(context, ref)) return;
+                      context.push(RoutePaths.exportar(widget.eventoId));
+                    },
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),

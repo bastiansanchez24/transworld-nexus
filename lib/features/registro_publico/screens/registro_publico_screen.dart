@@ -9,7 +9,6 @@ import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/offline_banner.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
@@ -135,7 +134,6 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            const OfflineBanner(),
             Expanded(
               child: Align(
                 alignment: Alignment.topCenter,

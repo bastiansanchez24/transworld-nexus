@@ -193,4 +193,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Ver leads'), findsOneWidget);
   });
+
+  testWidgets(
+    'una actividad interna muestra el tile al evento de registro',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            connectivityStreamProvider.overrideWith((ref) => Stream.value(true)),
+            authStateChangesProvider.overrideWith(
+              (ref) => const Stream<AuthState>.empty(),
+            ),
+            currentPerfilProvider.overrideWith((ref) async => perfilUser),
+            eventoLeadByIdProvider.overrideWith(
+              (ref, id) async => EventoLead(
+                id: 'campana-1',
+                nombre: 'Campaña de prueba',
+                fecha: DateTime(2099, 8, 20),
+                pais: 'Chile',
+                tipo: TipoEventoLead.interno,
+                eventoOrigenId: 'evt-madre',
+              ),
+            ),
+            leadsResumenLocalProvider.overrideWith(
+              (ref, id) => const LeadsResumen(total: 12, empresas: 5),
+            ),
+          ],
+          child: const MaterialApp(
+            locale: Locale('es'),
+            home: UsarEventoLeadScreen(eventoId: 'campana-1'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Ver evento de registro'),
+        80,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Ver evento de registro'), findsOneWidget);
+    },
+  );
+
+  testWidgets('una actividad externa no muestra el tile al evento madre', (
+    tester,
+  ) async {
+    await montar(tester, perfil: perfilUser);
+    expect(find.text('Ver evento de registro'), findsNothing);
+  });
 }

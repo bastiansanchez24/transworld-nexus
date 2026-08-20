@@ -6,16 +6,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:transworld_nexus/core/constants/app_role.dart';
 import 'package:transworld_nexus/core/network/connectivity_service.dart';
+import 'package:transworld_nexus/core/network/offline_policy.dart';
 import 'package:transworld_nexus/core/theme/tw_tokens.dart';
 import 'package:transworld_nexus/core/widgets/evento_hero_banner.dart';
 import 'package:transworld_nexus/data/models/evento.dart';
 import 'package:transworld_nexus/data/models/perfil.dart';
+import 'package:transworld_nexus/features/updates/services/update_platform.dart';
 import 'package:transworld_nexus/data/offline/sync_queue_service.dart';
+import 'package:transworld_nexus/data/repositories/auth_repository.dart';
 import 'package:transworld_nexus/features/auth/providers/auth_providers.dart';
 import 'package:transworld_nexus/features/eventos/providers/eventos_providers.dart';
 import 'package:transworld_nexus/features/externo/providers/externo_dashboard_provider.dart';
 import 'package:transworld_nexus/features/externo/screens/usar_evento_externo_screen.dart';
 import 'package:transworld_nexus/features/registrados/providers/registrados_providers.dart';
+
+class _FakeAuthRepository extends AuthRepository {
+  _FakeAuthRepository()
+    : super(
+        SupabaseClient(
+          'http://localhost',
+          'fake-anon-key',
+          authOptions: const AuthClientOptions(autoRefreshToken: false),
+        ),
+      );
+}
 
 void main() {
   final evento = Evento(
@@ -50,6 +64,7 @@ void main() {
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
           connectivityStreamProvider.overrideWith((ref) => Stream.value(true)),
+          authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
           authStateChangesProvider.overrideWith(
             (ref) => const Stream<AuthState>.empty(),
           ),
@@ -114,6 +129,14 @@ void main() {
       find.byKey(const Key('externo_ajustes_button')),
     );
     expect(ajustesRect.right, lessThanOrEqualTo(320));
+
+    await tester.scrollUntilVisible(
+      find.text('Ver leads'),
+      80,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Ver leads'), findsOneWidget);
+    expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -131,11 +154,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mi perfil'), findsOneWidget);
-    expect(find.text('Sincronización'), findsOneWidget);
+    if (supportsOfflineCacheAqui) {
+      expect(find.text('Sincronización'), findsOneWidget);
+    } else {
+      expect(find.text('Sincronización'), findsNothing);
+    }
+    expect(
+      find.text(
+        otaUpdatesSupported ? 'Actualizaciones' : 'Historial de versiones',
+      ),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('externo_logout_button')), findsOneWidget);
     // El externo no recibe notificaciones: una campana siempre vacía solo
     // genera dudas.
     expect(find.text('Notificaciones'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cerrar sesión pide confirmación', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await montar(tester);
+
+    await tester.tap(find.byKey(const Key('externo_ajustes_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('externo_logout_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('¿Está seguro que desea cerrar sesión?'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EVENTO ACTIVO'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

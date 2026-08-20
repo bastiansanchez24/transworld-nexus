@@ -43,8 +43,8 @@ class AppPermissions {
   /// Permisos aplicables a una sesión concreta.
   ///
   /// Los usuarios externos no tienen acceso al módulo de notificaciones, por
-  /// lo que tampoco se les debe mostrar el prompt del sistema operativo. Del
-  /// mismo modo, no necesitan autorizar instalaciones OTA fuera de la tienda.
+  /// lo que tampoco se les debe mostrar el prompt del sistema operativo. El
+  /// permiso OTA sí aplica a todas las sesiones autenticadas en Android.
   static List<Permission> requiredFor({
     required bool includeNotifications,
     bool includeAppUpdates = true,

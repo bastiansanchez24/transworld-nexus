@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/github_release_repository.dart';
@@ -146,7 +147,7 @@ class UpdateController extends StateNotifier<UpdateState> {
     if (!(_ref.read(isOnlineProvider))) {
       state = state.copyWith(
         status: UpdateStatus.failed,
-        errorMessage: 'Sin conexión a Internet.',
+        errorMessage: kMensajeSinConexion,
       );
       return;
     }

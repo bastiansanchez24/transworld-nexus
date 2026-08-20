@@ -26,6 +26,7 @@ class TwColors {
   static const bg = Color(0xFFF2F5F9);
   static const surface = Color(0xFFFFFFFF); // tarjetas y tiles
   static const surfaceTint = Color(0xFFEEF2F9); // caja de icono neutro
+  static const silver = Color(0xFFE8ECF2);
   static const fieldBg = Color(0xFFFFFFFF); // fondo de input editable
   static const fieldBorder = Color(0xFFE3EAF4); // borde hairline (no editable)
   static const fieldBorderActive = Color(
@@ -73,6 +74,14 @@ class TwColors {
   static const purpleInk = Color(0xFF5B46B8);
   static const amberTint = Color(0xFFFDEFE2);
   static const amberInk = Color(0xFFB4691F);
+  static const amberInkMuted = Color(0xC7B4691F); // ~78%
+
+  /// Cartel de sin conexión: naranjo pálido + tinta muy oscura (no gris).
+  static const offlineNoticeBg = Color(0xFFFBE0C4);
+  static const offlineNoticeIconBg = Color(0xFFF3C894);
+  static const offlineNoticeInk = Color(0xFF4A1F05);
+  static const offlineNoticeMuted = Color(0xFF6B3010);
+  static const offlineNoticeBorder = Color(0x66C45E12);
 
   // ---------- Excel ----------
   static const excel500 = Color(0xFF21A366);

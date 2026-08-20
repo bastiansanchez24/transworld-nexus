@@ -160,6 +160,39 @@ class SnapshotService extends StateNotifier<SnapshotEstado> {
     return catalogo.where((e) => !e.yaOcurrio).toList();
   }
 
+  /// Campañas que el snapshot pide al servidor.
+  ///
+  /// El externo solo opera las ligadas a sus eventos de registro. Pedir el
+  /// resumen de las demás dispara `42501` ("Sin acceso al resumen de la
+  /// campaña") y ensuciaba la etapa de listas aunque los leads sí se
+  /// hubieran bajado.
+  static List<EventoLead> campanasDelSnapshot({
+    required List<EventoLead> actividades,
+    required List<Evento> eventosVisibles,
+    required bool esExterno,
+  }) {
+    final vigentes = actividadesDelSnapshot(actividades);
+    if (!esExterno) return vigentes;
+
+    final ids = eventosVisibles.map((e) => e.id).toSet();
+    final nombres = {
+      for (final evento in eventosVisibles) evento.nombre.trim().toLowerCase(),
+    };
+    return vigentes.where((campana) {
+      final origen = campana.eventoOrigenId?.trim();
+      if (origen != null && origen.isNotEmpty) return ids.contains(origen);
+      return nombres.contains(campana.nombre.trim().toLowerCase());
+    }).toList();
+  }
+
+  /// El RPC de conteos rechazó la campaña. Los leads de esa actividad ya
+  /// pueden estar en disco; no vale marcar toda la etapa como fallida.
+  static bool esErrorSinAccesoResumen(Object error) {
+    return error.toString().toLowerCase().contains(
+      'sin acceso al resumen de la campaña',
+    );
+  }
+
   Future<void> ejecutar() async {
     restaurarMetadatosSiHaceFalta();
     if (state.enCurso) return;
@@ -233,8 +266,13 @@ class SnapshotService extends StateNotifier<SnapshotEstado> {
 
       // Los registrados cuelgan de un evento y los leads de una actividad de
       // captura: son tablas distintas y hay que recorrer ambas listas.
+      final perfil = _ref.read(currentPerfilProvider).valueOrNull;
       final eventos = eventosDelSnapshot(catalogo);
-      final campanas = actividadesDelSnapshot(actividades);
+      final campanas = campanasDelSnapshot(
+        actividades: actividades,
+        eventosVisibles: catalogo,
+        esExterno: perfil?.isExterno ?? false,
+      );
       final total = eventos.length + campanas.length;
       var hechos = 0;
 
@@ -257,8 +295,12 @@ class SnapshotService extends StateNotifier<SnapshotEstado> {
           () async {
             _ref.invalidate(leadsPorEventoProvider(campana.id));
             await _ref.read(leadsPorEventoProvider(campana.id).future);
-            _ref.invalidate(leadsResumenRemotoProvider(campana.id));
-            await _ref.read(leadsResumenRemotoProvider(campana.id).future);
+            try {
+              _ref.invalidate(leadsResumenRemotoProvider(campana.id));
+              await _ref.read(leadsResumenRemotoProvider(campana.id).future);
+            } catch (e) {
+              if (!esErrorSinAccesoResumen(e)) rethrow;
+            }
           },
           completados: hechos,
           total: total,

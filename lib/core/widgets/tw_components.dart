@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/tw_tokens.dart';
+import 'action_lock.dart';
 
 /// Librería de componentes del rediseño (guía §3 átomos, §4 formularios,
 /// §5 superficies).
@@ -103,7 +104,7 @@ class TwIconButton extends StatelessWidget {
 
     Widget boton = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: habilitado ? onTap : null,
+      onTap: !habilitado ? null : () => ActionLock.instance.run(onTap!),
       child: Container(
         width: size,
         height: size,
@@ -805,7 +806,9 @@ class _TwPressableState extends State<TwPressable> {
       onTapDown: activo ? (_) => _set(true) : null,
       onTapUp: activo ? (_) => _set(false) : null,
       onTapCancel: activo ? () => _set(false) : null,
-      onTap: widget.onTap,
+      onTap: widget.onTap == null
+          ? null
+          : () => ActionLock.instance.run(widget.onTap!),
       onLongPress: widget.onLongPress,
       child: AnimatedScale(
         scale: _down && !reduce ? widget.scale : 1,
@@ -920,6 +923,7 @@ class TwActionTile extends StatelessWidget {
     this.subtitle,
     this.badge,
     this.excel = false,
+    this.loading = false,
   });
 
   final IconData icon;
@@ -933,12 +937,15 @@ class TwActionTile extends StatelessWidget {
   /// Borde y sombra verdes de la variante de exportación.
   final bool excel;
 
+  /// Sustituye el chevron por un spinner mientras carga la siguiente pantalla.
+  final bool loading;
+
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return TwPressable(
-      onTap: onTap,
+      onTap: loading ? null : onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 14),
         decoration: BoxDecoration(
@@ -968,11 +975,21 @@ class TwActionTile extends StatelessWidget {
             ),
             if (badge != null) ...[const SizedBox(width: 13), TwBadge(badge!)],
             const SizedBox(width: 13),
-            Icon(
-              Symbols.chevron_right_rounded,
-              size: 22,
-              color: excel ? TwColors.chevronGreen : TwColors.chevron,
-            ),
+            if (loading)
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: excel ? TwColors.excel700 : TwColors.brand700,
+                ),
+              )
+            else
+              Icon(
+                Symbols.chevron_right_rounded,
+                size: 22,
+                color: excel ? TwColors.chevronGreen : TwColors.chevron,
+              ),
           ],
         ),
       ),

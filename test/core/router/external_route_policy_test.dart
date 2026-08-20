@@ -58,6 +58,26 @@ void main() {
     );
   });
 
+  test('lista, detalle y comentarios de leads exigen el evento de origen', () {
+    final lista = RoutePaths.verLeads(campaignId);
+    final detalle = RoutePaths.detalleLead(campaignId, 'lead-1');
+    final comentarios = RoutePaths.comentariosLead(campaignId, 'lead-1');
+
+    for (final location in [lista, detalle, comentarios]) {
+      expect(
+        allowed(location, sourceEventId: eventId),
+        isTrue,
+        reason: location,
+      );
+      expect(
+        allowed(location, sourceEventId: otherEventId),
+        isFalse,
+        reason: location,
+      );
+      expect(allowed(location), isFalse, reason: location);
+    }
+  });
+
   test('el menú de cuenta del externo está permitido', () {
     // Su ficha y el estado del dispositivo no dependen de ningún evento.
     expect(allowed(RoutePaths.perfil), isTrue);

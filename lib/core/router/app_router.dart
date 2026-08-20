@@ -12,6 +12,7 @@ import '../../features/auth/screens/recuperar_password_screen.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/capturador/screens/crear_editar_evento_lead_screen.dart';
 import '../../features/capturador/screens/crear_lead_screen.dart';
+import '../../features/capturador/screens/comentarios_lead_screen.dart';
 import '../../features/capturador/screens/exportar_leads_screen.dart';
 import '../../features/capturador/screens/lista_leads_screen.dart';
 import '../../features/capturador/screens/listar_eventos_leads_screen.dart';
@@ -46,6 +47,7 @@ import 'page_transitions.dart';
 import 'route_paths.dart';
 import 'session_boot_route.dart';
 import 'user_event_route_policy.dart';
+import '../widgets/action_lock.dart';
 import '../widgets/ios_native_tab_bar.dart';
 import '../widgets/main_shell_scaffold.dart';
 
@@ -108,7 +110,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: authClient.currentSession != null
         ? RoutePaths.splash
         : RoutePaths.login,
-    observers: [CNTabBarRouteObserver()],
+    observers: [CNTabBarRouteObserver(), ActionLockObserver()],
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final location = state.matchedLocation;
@@ -358,11 +360,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RoutePaths.recuperarPassword,
-        builder: (context, state) => const RecuperarPasswordScreen(),
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: const RecuperarPasswordScreen(),
+        ),
       ),
       GoRoute(
         path: RoutePaths.recrearPass,
-        builder: (context, state) => const RecrearPassScreen(),
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: const RecrearPassScreen(),
+        ),
       ),
       GoRoute(
         path: RoutePaths.eventoFinalizado,
@@ -545,10 +553,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/capturador/:eventoId/leads/:leadId/comentarios',
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: ComentariosLeadScreen(
+            eventoId: state.pathParameters['eventoId']!,
+            leadId: state.pathParameters['leadId']!,
+            desdeEvento: state.uri.queryParameters['desdeEvento'],
+          ),
+        ),
+      ),
+      GoRoute(
         path: '/capturador/:id/leads',
         pageBuilder: (context, state) => sharedAxisPage(
           key: state.pageKey,
-          child: ListaLeadsScreen(eventoId: state.pathParameters['id']!),
+          child: ListaLeadsScreen(
+            eventoId: state.pathParameters['id']!,
+            desdeEvento: state.uri.queryParameters['desdeEvento'],
+          ),
         ),
       ),
       GoRoute(
@@ -558,6 +580,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           child: DetalleLeadScreen(
             eventoId: state.pathParameters['eventoId']!,
             leadId: state.pathParameters['leadId']!,
+            desdeEvento: state.uri.queryParameters['desdeEvento'],
           ),
         ),
       ),

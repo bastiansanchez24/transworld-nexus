@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/supabase_tables.dart';
 import '../../../data/models/evento_lead.dart';
 import '../../../data/models/lead.dart';
+import '../../../data/models/lead_comentario.dart';
 import '../../../data/offline/offline_cache_tables.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/sync_queue_item.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
+import '../../../data/repositories/lead_comentarios_repository.dart';
 import '../../../data/repositories/leads_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 
@@ -24,10 +26,11 @@ final eventosLeadsListProvider = FutureProvider.autoDispose<List<EventoLead>>((
     desdeServidor: () async {
       final actividades = await repo.listarTodos();
       for (final actividad in actividades) {
-        await cache
-            .guardar(OfflineCacheTables.eventoLeadDetalle, actividad.id, [
-              actividad.toCacheMap(),
-            ]);
+        await cache.guardar(
+          OfflineCacheTables.eventoLeadDetalle,
+          actividad.id,
+          [actividad.toCacheMap()],
+        );
         final origen = actividad.eventoOrigenId;
         if (origen != null && origen.isNotEmpty) {
           await cache.guardar(OfflineCacheTables.eventoLeadPorOrigen, origen, [
@@ -238,10 +241,8 @@ final leadsResumenLocalProvider = Provider.autoDispose
         return aplicarColaAResumen(base: base, cola: cola, eventoId: eventoId);
       }
 
-      // Sin resumen del servidor solo se puede contar lo que hay en caché, y
-      // eso únicamente sirve si el perfil ve todos los leads: para `user` o
-      // externo serían sus propias filas haciéndose pasar por el total de la
-      // evento (de ahí los ceros del hub). Mejor dejarlo en "—".
+      // Sin resumen del servidor se cuenta la caché de leads de la campaña.
+      // Todos los roles ven ese listado; el externo queda acotado por RLS.
       if (!perfil.canViewAllLeads) return null;
 
       final local = cache.leerLocal(
@@ -298,4 +299,9 @@ final leadsPorEventoProvider = FutureProvider.autoDispose
         ),
         eventoId: eventoId,
       );
+    });
+
+final comentariosPorLeadProvider = FutureProvider.autoDispose
+    .family<List<LeadComentario>, String>((ref, leadId) async {
+      return ref.watch(leadComentariosRepositoryProvider).listar(leadId);
     });

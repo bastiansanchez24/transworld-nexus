@@ -11,10 +11,10 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/pressable.dart';
-import '../../../core/widgets/require_permission.dart';
 import '../../../data/models/github_release.dart';
 import '../../../data/repositories/github_release_repository.dart';
 import '../providers/update_providers.dart';
+import '../services/update_platform.dart';
 import '../services/update_service.dart';
 import '../widgets/update_dialog.dart';
 
@@ -33,14 +33,7 @@ class ActualizacionesScreen extends StatelessWidget {
   const ActualizacionesScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return RequirePermission(
-      allowed: (p) => p.usesFullShell,
-      deniedMessage:
-          'Actualizaciones solo está disponible para usuarios internos.',
-      builder: (context) => const _ActualizacionesBody(),
-    );
-  }
+  Widget build(BuildContext context) => const _ActualizacionesBody();
 }
 
 class _ActualizacionesBody extends ConsumerStatefulWidget {
@@ -222,7 +215,7 @@ class _ActualizacionesBodyState extends ConsumerState<_ActualizacionesBody> {
         : _versionLabel(_installedVersion);
 
     return AppScaffold(
-      title: kIsWeb ? 'Historial de versiones' : 'Actualizaciones',
+      title: otaUpdatesSupported ? 'Actualizaciones' : 'Historial de versiones',
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: _loadCurrentReleaseInfo,
@@ -415,7 +408,7 @@ class _CurrentVersionCard extends StatelessWidget {
                 height: 1.4,
               ),
             ),
-          if (!kIsWeb) ...[
+          if (otaUpdatesSupported) ...[
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: checking ? null : onBuscar,

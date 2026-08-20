@@ -1,5 +1,9 @@
 import { enviarCorreoBrevo, remitenteSoporte } from "./brevo.ts";
 import {
+  INSTRUCTIVO_IOS_PDF_BASE64,
+  NOMBRE_INSTRUCTIVO_IOS,
+} from "./instructivo_ios_pdf.ts";
+import {
   asuntoCredenciales,
   htmlCredenciales,
   type MotivoCredenciales,
@@ -20,6 +24,8 @@ export async function enviarCredenciales(opts: {
   rol?: string | null;
   /** Por defecto, alta de cuenta nueva. */
   motivo?: MotivoCredenciales;
+  /** SemVer de la app del emisor; arma el enlace del APK. */
+  versionApp?: string | null;
 }): Promise<void> {
   const motivo = opts.motivo ?? "cuenta_nueva";
   const datos = {
@@ -28,6 +34,7 @@ export async function enviarCredenciales(opts: {
     password: opts.password,
     rol: opts.rol,
     motivo,
+    versionApp: opts.versionApp,
   };
 
   const res = await enviarCorreoBrevo({
@@ -37,6 +44,12 @@ export async function enviarCredenciales(opts: {
     subject: asuntoCredenciales(motivo),
     htmlContent: htmlCredenciales(datos),
     textContent: textoCredenciales(datos),
+    attachment: [
+      {
+        name: NOMBRE_INSTRUCTIVO_IOS,
+        content: INSTRUCTIVO_IOS_PDF_BASE64,
+      },
+    ],
     tags: ["credenciales", motivo],
   });
 

@@ -161,6 +161,17 @@ class ScannerController extends ChangeNotifier {
     });
   }
 
+  /// Mantiene el escáner sin detectar (p. ej. mientras hay un diálogo).
+  ///
+  /// Sale de [ScannerPhase.processing] para que el `finally` de
+  /// [handleDetection] no reanude solo a los dos segundos.
+  void holdScanning() {
+    if (_disposed) return;
+    _feedbackMessage = null;
+    _phase = ScannerPhase.feedback;
+    notifyListeners();
+  }
+
   /// Reanuda detección (y animación de esquinas).
   void resumeScanning({Duration delay = Duration.zero}) {
     if (_disposed) return;

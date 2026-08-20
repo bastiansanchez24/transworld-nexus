@@ -6,8 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
@@ -15,7 +15,6 @@ import '../../../core/utils/mascara_contacto.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
-import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/pressable.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/sync_queue_service.dart';
@@ -184,7 +183,6 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
 
     return CollapsingScrollScaffold(
       title: 'Registrados',
-      topBanner: const OfflineBanner(),
       alwaysShowActions: true,
       overlayLeading: CollapsingNavButton(
         icon: Symbols.arrow_back_rounded,
@@ -213,7 +211,12 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
         ),
         ...registradosAsync.when(
           skipLoadingOnReload: true,
-          loading: () => [const SliverFillRemaining(child: LoadingView())],
+          loading: () => [
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: LoadingView(),
+            ),
+          ],
           error: (e, _) => [
             SliverFillRemaining(
               child: ErrorView(
@@ -421,6 +424,7 @@ class _RegistradoTile extends ConsumerWidget {
             Tooltip(
               message: registrado.acreditado ? 'Acreditado' : 'Acreditar',
               child: Pressable(
+                key: Key('registrado_acreditar_${registrado.id}'),
                 scale: 0.9,
                 onTap: () => _onTapAcreditar(context, ref),
                 child: Container(
@@ -451,10 +455,38 @@ class _RegistradoTile extends ConsumerWidget {
 
   Future<void> _onTapAcreditar(BuildContext context, WidgetRef ref) async {
     if (registrado.acreditado) {
-      showAppSnackBar(
+      final quitar = await confirmDialog(
         context,
-        '${registrado.nombreCompleto} ya está acreditado.',
+        title: 'Quitar acreditación',
+        message:
+            '¿Deseas quitar la acreditación de ${registrado.nombreCompleto}?',
+        confirmLabel: 'Quitar',
+        destructive: true,
       );
+      if (!quitar || !context.mounted) return;
+
+      try {
+        await persistirAcreditacion(
+          ref,
+          registrado: registrado,
+          acreditado: false,
+          acreditadoPorId: '',
+        );
+        if (context.mounted) {
+          showAppSnackBar(
+            context,
+            'Se quitó la acreditación de ${registrado.nombreCompleto}.',
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          showAppSnackBar(
+            context,
+            'No se pudo quitar la acreditación.',
+            isError: true,
+          );
+        }
+      }
       return;
     }
 
@@ -467,27 +499,14 @@ class _RegistradoTile extends ConsumerWidget {
     if (!confirmar || !context.mounted) return;
 
     final userId = ref.read(currentPerfilProvider).valueOrNull?.id;
-    final isOnline = ref.read(isOnlineProvider);
-    // Lo que decide si se puede acreditar directo es que la fila exista en el
-    // servidor, no la insignia de pendiente: un registrado ya sincronizado
-    // que solo tiene una edición en cola sí acepta el UPDATE inmediato.
-    final soloEnLaCola = esIdSoloLocal(registrado.id);
 
     try {
-      if (isOnline && !soloEnLaCola) {
-        await ref
-            .read(registradosRepositoryProvider)
-            .acreditar(registrado.id, acreditadoPorId: userId ?? '');
-      } else {
-        await ref
-            .read(syncQueueServiceProvider.notifier)
-            .enqueueUpdate(
-              table: SupabaseTables.registrados,
-              entityId: registrado.id,
-              changes: {'acreditado': true},
-            );
-      }
-      ref.invalidate(registradosPorEventoProvider(eventoId));
+      await persistirAcreditacion(
+        ref,
+        registrado: registrado,
+        acreditado: true,
+        acreditadoPorId: userId ?? '',
+      );
       if (context.mounted) {
         showAppSnackBar(context, '${registrado.nombreCompleto} acreditado.');
       }
@@ -537,6 +556,7 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
   }
 
   Future<void> _enviarPorEmail() async {
+    if (!requireOnline(context, ref)) return;
     final puedeVerContacto = ref.read(canViewContactDataProvider);
     setState(() => _enviando = true);
     try {
@@ -643,7 +663,7 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
               const Padding(
                 padding: EdgeInsets.only(top: 8),
                 child: Text(
-                  'El envío por email requiere conexión.',
+                  kMensajeSinConexion,
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,

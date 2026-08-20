@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -5,8 +6,23 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/tw_tokens.dart';
 import '../theme/browser_theme_color.dart';
-import 'offline_banner.dart';
+import 'ios_native_chrome.dart';
 import 'tw_components.dart';
+
+/// El pop interactivo de iOS (deslizar desde el borde) exige `canPop: true`.
+///
+/// Con [hasWillPop] el botón atrás de la cabecera sigue pidiendo confirmación;
+/// el gesto nativo no se apaga. En Android/web el sistema back sí se intercepta.
+bool scaffoldAllowsInteractivePop({
+  required bool hasWillPop,
+  bool? isWeb,
+  TargetPlatform? platform,
+}) {
+  if (!hasWillPop) return true;
+  if (isWeb ?? kIsWeb) return false;
+  final resolved = platform ?? defaultTargetPlatform;
+  return resolved == TargetPlatform.iOS || resolved == TargetPlatform.macOS;
+}
 
 /// Plantilla push: header sticky con blur (HANDOFF §4.8).
 ///
@@ -33,8 +49,9 @@ class AppScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
   final double maxContentWidth;
 
-  /// Si no es null, intercepta atrás (cabecera, sistema y `maybePop`).
-  /// Devuelve `true` para salir.
+  /// Si no es null, intercepta el botón atrás de la cabecera (y el back
+  /// del sistema en Android). En iOS nativo el gesto de deslizar se deja
+  /// pasar: `canPop: false` apaga el pop interactivo de [CupertinoPage].
   final Future<bool> Function()? onWillPop;
 
   Future<void> _intentarVolver(BuildContext context) async {
@@ -47,8 +64,10 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canPop = scaffoldAllowsInteractivePop(hasWillPop: onWillPop != null);
+
     return PopScope(
-      canPop: onWillPop == null,
+      canPop: canPop,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop || onWillPop == null) return;
         final salir = await onWillPop!();
@@ -61,26 +80,24 @@ class AppScaffold extends StatelessWidget {
           child: Scaffold(
             backgroundColor: TwColors.bg,
             floatingActionButton: floatingActionButton,
-            body: OfflineBannerHost(
-              builder: (context) => Column(
-                children: [
-                  _PushHeader(
-                    title: title,
-                    titleWidget: titleWidget,
-                    actions: actions,
-                    mostrarAtras: onWillPop != null || context.canPop(),
-                    onBack: () => _intentarVolver(context),
-                  ),
-                  if (headerBottom != null)
-                    _constrained(
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                        child: headerBottom!,
-                      ),
+            body: Column(
+              children: [
+                _PushHeader(
+                  title: title,
+                  titleWidget: titleWidget,
+                  actions: actions,
+                  mostrarAtras: onWillPop != null || context.canPop(),
+                  onBack: () => _intentarVolver(context),
+                ),
+                if (headerBottom != null)
+                  _constrained(
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                      child: headerBottom!,
                     ),
-                  Expanded(child: _constrained(body)),
-                ],
-              ),
+                  ),
+                Expanded(child: _constrained(body)),
+              ],
             ),
           ),
         ),
@@ -101,9 +118,9 @@ class AppScaffold extends StatelessWidget {
 
 /// Acción de la cabecera push (atrás, editar, eliminar…).
 ///
-/// Es [TwIconButton] con el nombre que ya usan las pantallas: mismo botón que
-/// los menús de evento y evento de leads, para que la app no tenga dos estilos de
-/// cabecera conviviendo.
+/// En iOS es el botón Liquid Glass nativo; en el resto, el mismo chip
+/// [TwIconButton] que los menús de evento, para que la app no tenga dos
+/// estilos de cabecera conviviendo.
 class NexusHeaderAction extends StatelessWidget {
   const NexusHeaderAction({
     super.key,
@@ -112,6 +129,8 @@ class NexusHeaderAction extends StatelessWidget {
     this.tooltip,
     this.loading = false,
     this.danger = false,
+    this.variant = TwIconButtonStyle.plain,
+    this.sfSymbol,
   });
 
   /// Lado del botón. También es el ancho de los huecos que deja la cabecera
@@ -123,17 +142,23 @@ class NexusHeaderAction extends StatelessWidget {
   final String? tooltip;
   final bool loading;
   final bool danger;
+  final TwIconButtonStyle variant;
+
+  /// SF Symbol nativo (atrás, lápiz, papelera…). Si falta se infiere.
+  final String? sfSymbol;
 
   @override
   Widget build(BuildContext context) {
-    return TwIconButton(
+    return TwIosGlassIconButton(
       icon: icon,
       iconSize: 20,
       size: size,
+      variant: variant,
       onTap: onTap,
       tooltip: tooltip,
       loading: loading,
       danger: danger,
+      sfSymbol: sfSymbol,
     );
   }
 }
@@ -157,9 +182,11 @@ class _PushHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
 
+    final nativoIos = usesNativeIosChrome;
+
     return ClipRect(
       child: TwGlassFilter(
-        sigma: 12,
+        sigma: nativoIos ? 20 : 12,
         child: Container(
           padding: EdgeInsets.fromLTRB(
             TwSpacing.screenH,
@@ -168,10 +195,12 @@ class _PushHeader extends StatelessWidget {
             14,
           ),
           decoration: BoxDecoration(
-            color: TwColors.bg.withValues(alpha: 0.92),
-            border: const Border(
-              bottom: BorderSide(color: TwColors.border07, width: 1),
-            ),
+            color: TwColors.bg.withValues(alpha: nativoIos ? 0.42 : 0.92),
+            border: nativoIos
+                ? null
+                : const Border(
+                    bottom: BorderSide(color: TwColors.border07, width: 1),
+                  ),
           ),
           child: Row(
             children: [
@@ -179,6 +208,7 @@ class _PushHeader extends StatelessWidget {
                 NexusHeaderAction(
                   icon: Symbols.arrow_back_rounded,
                   tooltip: 'Volver',
+                  sfSymbol: 'chevron.left',
                   onTap: onBack,
                 )
               else

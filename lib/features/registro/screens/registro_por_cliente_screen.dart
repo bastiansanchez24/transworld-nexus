@@ -8,7 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/env.dart';
-import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -46,6 +46,7 @@ class _RegistroPorClienteScreenState
   }
 
   Future<void> _compartir(String nombreEvento) async {
+    if (!requireOnline(context, ref)) return;
     await SharePlus.instance.share(
       ShareParams(text: '¡Regístrate al evento "$nombreEvento" aquí!\n$_link'),
     );
@@ -75,14 +76,7 @@ class _RegistroPorClienteScreenState
   }
 
   Future<void> _cargarExcel() async {
-    if (!ref.read(isOnlineProvider)) {
-      showAppSnackBar(
-        context,
-        'La carga de Excel requiere conexión a internet.',
-        isError: true,
-      );
-      return;
-    }
+    if (!requireOnline(context, ref)) return;
 
     final archivo = await openFile(
       acceptedTypeGroups: const [
@@ -232,7 +226,10 @@ class _RegistroPorClienteScreenState
               icon: Symbols.person_add_rounded,
               title: 'Registrar manualmente',
               subtitle: 'Formulario individual de asistente',
-              onTap: () => context.push(RoutePaths.registrar(widget.eventoId)),
+              onTap: () {
+                if (!requireOnline(context, ref)) return;
+                context.push(RoutePaths.registrar(widget.eventoId));
+              },
             ),
           ],
         ),

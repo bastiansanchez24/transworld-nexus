@@ -19,10 +19,35 @@ export interface DatosCredenciales {
   /** Rol tal como se guarda en `perfiles.rol`. Omitido = no se muestra. */
   rol?: string | null;
   motivo?: MotivoCredenciales;
+  /**
+   * SemVer de la app del emisor (`1.6.8`). El APK del correo apunta a esa
+   * Release. Omitido = `/releases/latest`.
+   */
+  versionApp?: string | null;
 }
 
 /** Panel web de administración (ver comentario en `lib/core/config/env.dart`). */
 const URL_PANEL = "https://regispro.transworld.cl/";
+
+const GITHUB_OWNER = "bsanchezTW";
+const GITHUB_REPO = "transworld-nexus";
+
+/** `v1.6.8` / `1.6.8+27` → `1.6.8`. */
+export function normalizarVersionApp(
+  raw: string | null | undefined,
+): string | null {
+  const match = String(raw ?? "").trim().match(/^v?(\d+\.\d+\.\d+)/i);
+  return match ? match[1] : null;
+}
+
+/** APK de la misma versión que el emisor, o la última Release si no hay. */
+export function urlDescargaAndroid(versionRaw?: string | null): string {
+  const version = normalizarVersionApp(versionRaw);
+  if (!version) {
+    return `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+  }
+  return `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/v${version}/android-regispro-v${version}.apk`;
+}
 
 /** Mismo buzón que muestra la pantalla de login (`login_screen.dart`). */
 const SOPORTE_EMAIL = "soporte@transworld.cl";
@@ -78,7 +103,7 @@ const REQUISITOS = [
 
 /** Los pasos admiten HTML en línea (solo `<strong>`). */
 const PASOS = [
-  "Abra el panel web o la aplicación instalada (Windows o Android) e ingrese " +
+  "Abra el panel web o la aplicación instalada (Windows, Android o iOS) e ingrese " +
   "el usuario y la contraseña temporal indicados arriba.",
   'Reemplace la contraseña temporal por una propia en <strong style="color:#12203a;">Mi Perfil → Mis Datos de Usuario</strong>.',
   'Verifique su perfil y los eventos asignados en la sección <strong style="color:#12203a;">Inicio</strong> de la aplicación.',
@@ -100,6 +125,7 @@ export function htmlCredenciales(datos: DatosCredenciales): string {
   const email = escapeHtml(datos.email);
   const password = escapeHtml(datos.password);
   const rol = etiquetaRol(datos.rol);
+  const urlAndroid = urlDescargaAndroid(datos.versionApp);
 
   const filaRol = rol
     ? `
@@ -234,12 +260,20 @@ export function htmlCredenciales(datos: DatosCredenciales): string {
       <td width="600" style="width:600px; padding:28px 32px 0 32px;" class="pad">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
           <tr>
+            <td align="center" style="background-color:#f7f8fa; border:1px solid #e3e7ed; border-radius:12px; padding:16px 26px 15px 26px;">
+              <a href="${urlAndroid}" style="display:block; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:18px; mso-line-height-rule:exactly; letter-spacing:0.4px; font-weight:bold; color:#12203a; text-decoration:none; text-transform:uppercase; border-radius:12px;">Descargar para Android</a>
+            </td>
+          </tr>
+        </table>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr><td height="12" style="height:12px; line-height:12px; font-size:12px;">&nbsp;</td></tr>
+          <tr>
             <td bgcolor="#01386d" style="background-color:#01386d; border-radius:12px; padding:16px 26px 15px 26px; text-align:center;">
               <a href="${URL_PANEL}" style="display:block; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:18px; mso-line-height-rule:exactly; letter-spacing:0.4px; font-weight:bold; color:#ffffff; text-decoration:none; text-transform:uppercase; border-radius:12px;">Iniciar sesión en el panel web</a>
             </td>
           </tr>
         </table>
-        <p style="margin:16px 0 0 0; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; mso-line-height-rule:exactly; color:#7c8794;">También puede ingresar con los mismos datos desde la aplicación RegisPro instalada en su equipo o teléfono.</p>
+        <p style="margin:16px 0 0 0; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; mso-line-height-rule:exactly; color:#7c8794;">Si usa un iPhone o iPad, el instructivo de instalación va adjunto a este correo.</p>
       </td>
     </tr>
 
@@ -318,6 +352,7 @@ ${requisitos}
 export function textoCredenciales(datos: DatosCredenciales): string {
   const copy = COPY[datos.motivo ?? "cuenta_nueva"];
   const rol = etiquetaRol(datos.rol);
+  const urlAndroid = urlDescargaAndroid(datos.versionApp);
 
   const lineas = [
     copy.titulo.toUpperCase(),
@@ -334,7 +369,9 @@ export function textoCredenciales(datos: DatosCredenciales): string {
 
   lineas.push(
     "",
+    `Descargar para Android: ${urlAndroid}`,
     `Panel web: ${URL_PANEL}`,
+    "Si usa un iPhone o iPad, el instructivo de instalación va adjunto a este correo.",
     "También puede ingresar con los mismos datos desde la aplicación RegisPro",
     "instalada en su equipo o teléfono.",
     "",

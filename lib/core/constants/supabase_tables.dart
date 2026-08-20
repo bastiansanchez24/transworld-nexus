@@ -19,6 +19,7 @@ class SupabaseTables {
   /// Eventos del módulo Capturador de leads (tabla independiente de [eventos]).
   static const eventosLeads = 'eventos_leads';
   static const leads = 'leads';
+  static const leadComentarios = 'lead_comentarios';
 
   static const notificaciones = 'notificaciones';
   static const notificacionesLeidas = 'notificaciones_leidas';
@@ -51,6 +52,7 @@ class SupabaseRpc {
   static const ocultarTodasNotificaciones = 'rpe_ocultar_todas_notificaciones';
   static const resumenCampana = 'cl_resumen_campana';
   static const guardarLead = 'cl_guardar_lead';
+  static const buscarLeadPorEmail = 'cl_buscar_lead_por_email';
   static const existeEmailRegistrado = 'rpe_existe_email_registrado';
 }
 

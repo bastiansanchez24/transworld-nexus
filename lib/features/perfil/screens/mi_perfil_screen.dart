@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/password_policy.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -62,15 +62,7 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
   /// Los datos de cuenta viven solo en el servidor: nombre, foto y contraseña
   /// no tienen copia local ni cola. Guardarlos sin red dejaría al usuario
   /// creyendo que cambió su contraseña cuando la vieja sigue siendo la válida.
-  bool _exigirRed() {
-    if (ref.read(isOnlineProvider)) return true;
-    showAppSnackBar(
-      context,
-      'Sin conexión: los datos de tu cuenta se actualizan solo con internet.',
-      isError: true,
-    );
-    return false;
-  }
+  bool _exigirRed() => requireOnline(context, ref);
 
   Future<void> _guardarDatos() async {
     if (!_formKey.currentState!.validate()) return;

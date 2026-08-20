@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../theme/browser_theme_color.dart';
 import '../theme/tw_tokens.dart';
+import 'ios_native_chrome.dart';
 import 'tw_components.dart';
 import 'tw_detail_scaffold.dart';
 
@@ -248,27 +249,30 @@ class CollapsingNavOverlay extends StatelessWidget {
   }
 }
 
-/// Botón de la barra colapsable. Mismo botón que las cabeceras de detalle:
-/// 44×44 para llenar la zona que le reserva [CollapsingNavOverlay].
+/// Botón de la barra colapsable. En iOS es el círculo Liquid Glass nativo;
+/// en el resto, el mismo chip 44×44 que [TwDetailScaffold].
 class CollapsingNavButton extends StatelessWidget {
   const CollapsingNavButton({
     super.key,
     required this.icon,
     required this.onTap,
     this.tooltip,
+    this.sfSymbol,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
+  final String? sfSymbol;
 
   @override
   Widget build(BuildContext context) {
-    return TwIconButton(
+    return TwIosGlassIconButton(
       icon: icon,
       iconSize: 20,
       onTap: onTap,
       tooltip: tooltip,
+      sfSymbol: sfSymbol ?? 'chevron.left',
     );
   }
 }
@@ -561,9 +565,15 @@ class _CollapsingScrollScaffoldState extends State<CollapsingScrollScaffold> {
     );
 
     if (!widget.lockScroll && widget.onRefresh != null) {
+      final barH = metrics.overlayHeight(conAcciones: _tieneAccionesFijas);
+      // El buscador/filtros viven en un Stack encima del scroll: sin sumarlos
+      // el indicador nace tapado detrás de esa franja.
+      final edgeOffset = hasPinnedContent
+          ? barH + _collapseExtent + widget.pinnedContentHeight
+          : barH;
       return RefreshIndicator(
         color: AppColors.primary,
-        edgeOffset: metrics.overlayHeight(conAcciones: _tieneAccionesFijas),
+        edgeOffset: edgeOffset,
         onRefresh: widget.onRefresh!,
         child: scrollView,
       );

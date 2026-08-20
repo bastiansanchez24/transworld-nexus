@@ -32,6 +32,52 @@ void volverALista(BuildContext context, String listPath) {
   context.go(listPath);
 }
 
+/// Abre [location]: si ya está más abajo en la pila, hace pop hasta ella;
+/// si no, la empuja. Así el evento y su actividad no se apilan en bucle.
+void abrirOVolverA(BuildContext context, String location) {
+  if (!context.mounted) return;
+  final router = GoRouter.maybeOf(context);
+  if (router == null) return;
+
+  final target = _pathOf(location);
+  if (target.isEmpty) return;
+
+  final stack = matchedLocationsInStack(
+    router.routerDelegate.currentConfiguration,
+  ).map(_pathOf).toList();
+  final index = stack.indexOf(target);
+  if (index >= 0) {
+    for (var i = 0; i < stack.length - 1 - index; i++) {
+      if (!context.canPop()) return;
+      context.pop();
+    }
+    return;
+  }
+  context.push(location);
+}
+
+/// Rutas hoja de la pila (sin el shell). Un `push` deja un match extra al
+/// final; el tab del shell queda primero.
+@visibleForTesting
+List<String> matchedLocationsInStack(RouteMatchList configuration) {
+  final locations = <String>[];
+
+  void collect(List<RouteMatchBase> matches) {
+    for (final match in matches) {
+      if (match is ShellRouteMatch) {
+        collect(match.matches);
+        continue;
+      }
+      locations.add(match.matchedLocation);
+    }
+  }
+
+  collect(configuration.matches);
+  return locations;
+}
+
+String _pathOf(String location) => Uri.parse(location).path;
+
 /// Invalida providers la primera vez que esta ruta queda al frente, y cada
 /// vez que se vuelve a ella (tabs del shell, menú del evento, pop de editar).
 ///

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../data/models/evento.dart';
 import '../../../data/models/evento_lead.dart';
 import '../../../data/offline/offline_cache_tables.dart';
@@ -44,11 +45,7 @@ Future<EventoLead> obtenerOCrearEventoLeadInterno(
   if (existente != null) return existente;
 
   if (!isOnline) {
-    throw Exception(
-      'Sin conexión no se puede crear la actividad de captura de '
-      '"${evento.nombre}". Sincroniza con internet una vez y luego podrás '
-      'capturar leads sin red.',
-    );
+    throw Exception(kMensajeSinConexion);
   }
 
   final creado = await repo.crear(

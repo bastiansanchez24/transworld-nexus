@@ -249,6 +249,12 @@ class OfflineReadCache {
     _revalidaciones[clave] = revalidar();
   }
 
+  /// Tras un write-through local, el rebuild inmediato debe leer disco y no
+  /// disparar un GET que todavía puede traer el valor viejo.
+  void omitirProximaRevalidacion(String tabla, String eventoId, int revision) {
+    _revisionAutoRefresco['$tabla:$eventoId'] = revision;
+  }
+
   void _notificar(String clave, int revision, void Function()? onActualizado) {
     _revisionAutoRefresco[clave] = revision + 1;
     onActualizado?.call();
@@ -385,6 +391,34 @@ class OfflineReadCache {
   /// Variante de [guardar] para tablas sin partición por evento.
   Future<void> guardarGlobal(String tabla, List<Map<String, dynamic>> filas) {
     return guardar(tabla, cacheAmbitoGlobal, filas);
+  }
+
+  /// Reescribe una fila ya cacheada. Si no hay copia local, no inventa una.
+  Future<bool> parchearFila({
+    required String tabla,
+    required String eventoId,
+    required String id,
+    required Map<String, dynamic> cambios,
+  }) async {
+    _migrarV2SiHaceFalta(tabla);
+    final key = _claveDatos(tabla, eventoId);
+    if (key == null) return false;
+    final filas = _filasCrudas(key);
+    if (filas == null) return false;
+    var encontro = false;
+    final actualizadas = <Map<String, dynamic>>[];
+    for (final item in filas) {
+      if (item is! Map) continue;
+      final fila = Map<String, dynamic>.from(item);
+      if (fila['id'] == id) {
+        encontro = true;
+        actualizadas.add({...fila, ...cambios});
+      } else {
+        actualizadas.add(fila);
+      }
+    }
+    if (!encontro) return false;
+    return _guardarSiCambia(tabla, eventoId, actualizadas);
   }
 
   /// Elimina inmediatamente una copia cuyo acceso fue rechazado por RLS.

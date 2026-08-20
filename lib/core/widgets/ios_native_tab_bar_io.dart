@@ -52,19 +52,23 @@ class IosNativeTabBar extends StatelessWidget {
       );
     }
 
+    final iconPt = GlassNavTokens.nativeIosIconSize;
     return CNTabBar(
       items: [
         for (final item in items)
           CNTabBarItem(
             label: item.label,
-            icon: CNSymbol(item.sfSymbol),
-            activeIcon: CNSymbol(item.sfSymbolActive ?? item.sfSymbol),
+            icon: CNSymbol(item.sfSymbol, size: iconPt),
+            activeIcon: CNSymbol(
+              item.sfSymbolActive ?? item.sfSymbol,
+              size: iconPt,
+            ),
           ),
       ],
       currentIndex: currentIndex,
       onTap: onTap,
       tint: accent,
-      iconSize: GlassNavTokens.nativeIosIconSize,
+      iconSize: iconPt,
     );
   }
 }

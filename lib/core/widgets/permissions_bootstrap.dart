@@ -55,7 +55,7 @@ class _PermissionsBootstrapState extends ConsumerState<PermissionsBootstrap> {
           await onboarding.marcarNotificacionesSolicitadas(userId);
         }
 
-        if (perfil.usesFullShell) {
+        if (perfil.canAccessAppUpdates) {
           await AppPermissions.requestInstallPackages();
         }
 

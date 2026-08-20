@@ -9,7 +9,8 @@ import '../theme/tw_tokens.dart';
 /// pantallas rediseñadas: se montan en el `Overlay` raíz, así que sobreviven a
 /// cambios de pantalla y nunca empujan el layout.
 ///
-/// Un solo toast a la vez: el nuevo reemplaza al anterior con un cross-fade.
+/// Un solo toast a la vez: el nuevo reemplaza al anterior. Entra deslizando
+/// desde abajo y sale con un fade en el sitio.
 enum TwToastKind { info, success, error, progress, link }
 
 class _TwToastData {
@@ -122,16 +123,66 @@ class _TwToastLayer extends StatefulWidget {
   State<_TwToastLayer> createState() => _TwToastLayerState();
 }
 
-class _TwToastLayerState extends State<_TwToastLayer> {
+class _TwToastLayerState extends State<_TwToastLayer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+  _TwToastData? _shown;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      reverseDuration: const Duration(milliseconds: 180),
+    );
+    _fade = CurvedAnimation(
+      parent: _ctrl,
+      curve: Curves.easeOut,
+      reverseCurve: Curves.easeIn,
+    );
+    _slide = _EnterOnlySlide(_ctrl);
+    _ctrl.addStatusListener((status) {
+      if (!mounted) return;
+      if (status == AnimationStatus.dismissed && widget.data == null) {
+        setState(() => _shown = null);
+      }
+    });
+    _sync(widget.data, fromInit: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TwToastLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.data, widget.data)) {
+      _sync(widget.data);
+    }
+  }
+
+  void _sync(_TwToastData? data, {bool fromInit = false}) {
+    if (data != null) {
+      _shown = data;
+      _ctrl.forward(from: 0);
+      if (!fromInit) setState(() {});
+      return;
+    }
+    if (_shown != null) {
+      _ctrl.reverse();
+    }
+  }
+
   @override
   void dispose() {
+    _ctrl.dispose();
     TwToast._onLayerDisposed();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = widget.data;
+    final data = _shown;
     final safe = MediaQuery.paddingOf(context).bottom;
     final bottom = (data?.bottomOffset ?? TwToast.kBottom) + safe;
 
@@ -140,27 +191,38 @@ class _TwToastLayerState extends State<_TwToastLayer> {
       right: 20,
       bottom: bottom,
       child: IgnorePointer(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          reverseDuration: const Duration(milliseconds: 180),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.28), // ~12 px hacia abajo
-                end: Offset.zero,
-              ).animate(anim),
-              child: child,
-            ),
-          ),
-          child: data == null
-              ? const SizedBox.shrink(key: ValueKey('tw-toast-empty'))
-              : _TwToastCard(key: ValueKey(data.seq), data: data),
-        ),
+        child: data == null
+            ? const SizedBox.shrink()
+            : FadeTransition(
+                key: const Key('tw-toast-fade'),
+                opacity: _fade,
+                child: SlideTransition(
+                  key: const Key('tw-toast-slide'),
+                  position: _slide,
+                  child: _TwToastCard(key: ValueKey(data.seq), data: data),
+                ),
+              ),
       ),
     );
+  }
+}
+
+/// El slide solo corre hacia adelante. En reverse el valor se queda en
+/// [Offset.zero] para que la salida sea un fade en el sitio.
+class _EnterOnlySlide extends Animation<Offset>
+    with AnimationWithParentMixin<double> {
+  _EnterOnlySlide(this.parent);
+
+  @override
+  final Animation<double> parent;
+
+  @override
+  Offset get value {
+    if (parent.status == AnimationStatus.reverse) {
+      return Offset.zero;
+    }
+    final t = Curves.easeOut.transform(parent.value.clamp(0.0, 1.0));
+    return Offset(0, 0.28 * (1 - t));
   }
 }
 

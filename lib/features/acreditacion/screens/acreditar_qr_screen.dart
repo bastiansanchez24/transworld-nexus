@@ -5,16 +5,22 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
+import '../../../core/network/offline_guard.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../data/models/capturar_lead_route_extra.dart';
+import '../../../data/models/lead_existente.dart';
 import '../../../data/models/lead_prefill.dart';
 import '../../../data/models/registrado.dart';
-import '../../../data/offline/sync_queue_service.dart';
+import '../../../data/offline/offline_read_cache.dart';
+import '../../../data/repositories/leads_repository.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../capturador/lead_comentario_flujo.dart';
+import '../../capturador/providers/capturador_providers.dart';
 import '../../capturador/services/evento_lead_interno_service.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
+import '../acreditacion_sesion_lock.dart';
 import '../scanner/qr_scanner_service.dart';
 import '../scanner/scanner_controller.dart';
 import '../scanner/widgets/scanner_view.dart';
@@ -35,7 +41,7 @@ class AcreditarQrScreen extends ConsumerStatefulWidget {
 class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     with WidgetsBindingObserver {
   late final ScannerController _scanner;
-  final Set<String> _acreditadosEnSesion = <String>{};
+  final AcreditacionSesionLock _sesion = AcreditacionSesionLock();
 
   @override
   void initState() {
@@ -89,22 +95,33 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
   }
 
   Future<Registrado?> _resolverRegistrado(String registradoId) async {
+    final id = registradoId.toLowerCase();
     final registrados = await _listaAsistentes();
     final enCache = registrados
-        .where((r) => r.id.toLowerCase() == registradoId)
+        .where((r) => r.id.toLowerCase() == id)
         .firstOrNull;
-    if (enCache != null) return enCache;
 
-    if (!ref.read(isOnlineProvider)) return null;
-
-    return ref
-        .read(registradosRepositoryProvider)
-        .obtenerPorIdEnEvento(registradoId, widget.eventoId);
+    return resolverRegistradoParaAcreditacion(
+      hayRed: ref.read(isOnlineProvider),
+      enCache: enCache,
+      obtenerDelServidor: () => ref
+          .read(registradosRepositoryProvider)
+          .obtenerPorIdEnEvento(registradoId, widget.eventoId),
+      escribirCache: (fresco) async {
+        await ref
+            .read(offlineReadCacheProvider)
+            .parchearFila(
+              tabla: SupabaseTables.registrados,
+              eventoId: widget.eventoId,
+              id: fresco.id,
+              cambios: fresco.toCacheMap(),
+            );
+      },
+    );
   }
 
   bool _yaEstaAcreditado(Registrado registrado) {
-    return registrado.acreditado ||
-        _acreditadosEnSesion.contains(registrado.id.toLowerCase());
+    return _sesion.yaEstaAcreditado(registrado);
   }
 
   Future<void> _acreditar(Registrado registrado) async {
@@ -115,24 +132,20 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
       );
     }
 
-    final isOnline = ref.read(isOnlineProvider);
-    if (isOnline && !esIdSoloLocal(registrado.id)) {
-      await ref
-          .read(registradosRepositoryProvider)
-          .acreditar(registrado.id, acreditadoPorId: userId);
-    } else {
-      await ref
-          .read(syncQueueServiceProvider.notifier)
-          .enqueueUpdate(
-            table: SupabaseTables.registrados,
-            entityId: registrado.id,
-            changes: {'acreditado': true, 'acreditado_por': userId},
-          );
-    }
     // Evita repetir el UPDATE si el mismo QR sigue en cuadro antes de que el
     // provider invalidado alcance a devolver la acreditación actualizada.
-    _acreditadosEnSesion.add(registrado.id.toLowerCase());
-    ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+    _sesion.marcarEnVuelo(registrado.id);
+    try {
+      await persistirAcreditacion(
+        ref,
+        registrado: registrado,
+        acreditado: true,
+        acreditadoPorId: userId,
+      );
+    } catch (_) {
+      _sesion.sincronizarConLista([registrado]);
+      rethrow;
+    }
   }
 
   Future<void> _acreditarSiEsNecesarioParaLead(Registrado registrado) async {
@@ -155,9 +168,31 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
       ),
     );
     if (!mounted) return;
-    // Si el usuario vuelve (guardar o cancelar), reanudar cámara y escaneo.
     await _scanner.resumeCamera();
     _scanner.resumeScanning();
+  }
+
+  Future<LeadExistente?> _buscarLeadExistente(
+    String eventoLeadId,
+    String? email,
+  ) async {
+    final perfilId = ref.read(currentPerfilProvider).valueOrNull?.id;
+    try {
+      final enCache = await ref.read(
+        leadsPorEventoProvider(eventoLeadId).future,
+      );
+      final local = leadExistenteEnLista(enCache, email, perfilId: perfilId);
+      if (local != null) return local;
+    } catch (_) {
+      // Sin caché ni red se sigue al RPC o al formulario.
+    }
+
+    if (!ref.read(isOnlineProvider)) return null;
+    final texto = email?.trim() ?? '';
+    if (texto.isEmpty) return null;
+    return ref
+        .read(leadsRepositoryProvider)
+        .buscarPorEmail(eventoId: eventoLeadId, email: texto);
   }
 
   Future<void> _procesarAcreditar(Registrado registrado) async {
@@ -179,6 +214,40 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
   Future<void> _procesarCapturarLead(Registrado registrado) async {
     await _acreditarSiEsNecesarioParaLead(registrado);
     if (!mounted) return;
+
+    final evento = await ref.read(eventoByIdProvider(widget.eventoId).future);
+    final eventoLead = await obtenerOCrearEventoLeadInterno(ref, evento);
+    final existente = await _buscarLeadExistente(
+      eventoLead.id,
+      registrado.email,
+    );
+    if (!mounted) return;
+
+    if (existente != null) {
+      _scanner.holdScanning();
+      final comentar = await confirmarAgregarComentarioLead(context);
+      if (!mounted) return;
+      if (comentar) {
+        if (!requireOnline(context, ref)) {
+          _scanner.resumeScanning();
+          return;
+        }
+        await _scanner.pauseCamera();
+        if (!mounted) return;
+        await irAComentariosLead(
+          context,
+          ref,
+          eventoId: eventoLead.id,
+          leadId: existente.leadId,
+          desdeEvento: widget.eventoId,
+        );
+        if (!mounted) return;
+        await _scanner.resumeCamera();
+      }
+      _scanner.resumeScanning();
+      return;
+    }
+
     await _navegarACaptura(registrado);
   }
 
@@ -259,19 +328,46 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(registradosPorEventoProvider(widget.eventoId), (_, next) {
+      final lista = next.valueOrNull;
+      if (lista == null) return;
+      _sesion.sincronizarConLista(lista);
+    });
     // Precarga asistentes sin reconstruir el preview de cámara.
     ref.watch(registradosPorEventoProvider(widget.eventoId));
 
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
+      // El gesto iOS de deslizar atrás exige canPop: el cierre (botón o
+      // swipe) corta la cámara en dispose / [_cerrarEscaner].
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        _cerrarEscaner();
+        await _cerrarEscaner();
       },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: ScannerView(controller: _scanner, onClose: _cerrarEscaner),
       ),
     );
+  }
+}
+
+/// Con red pide esa fila al servidor; sin red (o si el GET falla) usa el padrón
+/// local. Así el flag `acreditado` no se decide con una copia stale.
+@visibleForTesting
+Future<Registrado?> resolverRegistradoParaAcreditacion({
+  required bool hayRed,
+  required Registrado? enCache,
+  required Future<Registrado?> Function() obtenerDelServidor,
+  required Future<void> Function(Registrado fresco) escribirCache,
+}) async {
+  if (!hayRed) return enCache;
+  try {
+    final fresco = await obtenerDelServidor();
+    if (fresco == null) return enCache;
+    await escribirCache(fresco);
+    return fresco;
+  } catch (_) {
+    return enCache;
   }
 }

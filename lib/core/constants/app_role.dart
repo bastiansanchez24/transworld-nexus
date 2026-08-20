@@ -44,7 +44,10 @@ enum AppRole {
   bool get canRegisterAttendees => !isExterno;
   bool get canAccessNotifications => !isExterno;
   bool get canExportData => isAdmin || isOrganizador;
-  bool get canViewAllLeads => !isExterno;
+
+  /// Todos los roles autenticados ven el listado de la campaña que pueden
+  /// abrir. El externo queda acotado por RLS a sus eventos asignados.
+  bool get canViewAllLeads => true;
 
   /// Editar leads de cualquier capturador. Sin esto solo se editan los propios.
   bool get canEditAnyLead => isAdmin || isOrganizador;
@@ -53,6 +56,9 @@ enum AppRole {
   bool get canViewContactData => isAdmin || isOrganizador;
 
   bool get usesFullShell => !isExterno;
+
+  /// Actualizaciones OTA / historial de versiones: cualquier sesión autenticada.
+  bool get canAccessAppUpdates => true;
 
   String get label => switch (this) {
     AppRole.admin => 'Administrador',

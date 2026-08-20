@@ -25,6 +25,7 @@ import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/leads_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../externo/providers/externo_dashboard_provider.dart';
+import '../lead_comentario_flujo.dart';
 import '../providers/capturador_providers.dart';
 import '../widgets/foto_lead_identidad.dart';
 
@@ -455,7 +456,14 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
             await store.borrar(foto);
           }
           if (!mounted) return;
-          showAppSnackBar(context, result!.mensajeDuplicado, isError: true);
+          await ofrecerComentarLeadDuplicado(
+            context,
+            ref,
+            eventoId: widget.eventoId,
+            leadId: result!.leadId,
+            mensajeDuplicado: result.mensajeDuplicado,
+            desdeEvento: widget.eventoRegistroId,
+          );
           return;
         }
         if (result?.guardado == true &&
@@ -485,7 +493,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
           (false, true) =>
             'Guardado en modo local, pero sin la foto: se necesita '
                 'conexión para adjuntarla.',
-          (false, false) => 'Guardado en modo local. Se subirá solo.',
+          (false, false) => 'Guardado, se sincronizará cuando estés conectado.',
         }, isError: fotoDescartada);
         _finalizarFlujoGuardado();
       }
