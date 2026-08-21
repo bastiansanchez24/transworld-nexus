@@ -16,6 +16,7 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/registrado.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -158,6 +159,8 @@ class _EditarRegistradoScreenState
     final puedeVerContacto = ref.read(canViewContactDataProvider);
     setState(() => _guardando = true);
 
+    final cache = ref.read(offlineReadCacheProvider);
+
     final cambios = {
       'nombre_completo': _nombreController.text.trim(),
       'empresa': _empresaController.text.trim(),
@@ -176,6 +179,9 @@ class _EditarRegistradoScreenState
     }
 
     try {
+      // Una revalidación iniciada antes del UPDATE todavía puede traer la fila
+      // antigua. Se deja terminar antes de escribir y parchear la caché.
+      await cache.esperarRevalidaciones();
       if (!_esPendiente) {
         await ref
             .read(registradosRepositoryProvider)
@@ -191,7 +197,15 @@ class _EditarRegistradoScreenState
               changes: cambios,
             );
       }
-      ref.invalidate(registradosPorEventoProvider(widget.eventoId));
+      await publicarCambioEnLecturaCacheada(
+        ref,
+        tabla: SupabaseTables.registrados,
+        eventoId: widget.eventoId,
+        id: widget.registradoId,
+        cambios: cambios,
+        invalidar: () =>
+            ref.invalidate(registradosPorEventoProvider(widget.eventoId)),
+      );
       if (mounted) {
         showAppSnackBar(context, 'Cambios guardados.');
         volverALista(context, RoutePaths.verRegistrados(widget.eventoId));

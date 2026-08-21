@@ -4,6 +4,7 @@ import '../../../core/constants/supabase_tables.dart';
 import '../../../data/models/evento_lead.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/models/lead_comentario.dart';
+import '../../../data/models/perfil.dart';
 import '../../../data/offline/offline_cache_tables.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/sync_queue_item.dart';
@@ -13,19 +14,94 @@ import '../../../data/repositories/lead_comentarios_repository.dart';
 import '../../../data/repositories/leads_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 
+class _AlcanceActividadesCaptura {
+  const _AlcanceActividadesCaptura.global()
+    : sinRestriccion = true,
+      eventosAutorizados = const {};
+
+  const _AlcanceActividadesCaptura.restringido(this.eventosAutorizados)
+    : sinRestriccion = false;
+
+  final bool sinRestriccion;
+  final Set<String> eventosAutorizados;
+
+  bool permite(EventoLead actividad) {
+    if (sinRestriccion) return true;
+    final origen = actividad.eventoOrigenId;
+    return origen != null && eventosAutorizados.contains(origen);
+  }
+}
+
+/// Segunda barrera de la app para no pintar datos antiguos del disco antes de
+/// que Supabase revalide. La autorización formal siempre es por
+/// `evento_origen_id`; una coincidencia de nombres no otorga acceso.
+List<EventoLead> filtrarActividadesCapturaAutorizadas({
+  required Perfil? perfil,
+  required Set<String> eventosAutorizados,
+  required Iterable<EventoLead> actividades,
+}) {
+  if (perfil == null) return const [];
+  if (!perfil.requiresEventAssignment) return actividades.toList();
+  return actividades.where((actividad) {
+    final origen = actividad.eventoOrigenId;
+    return origen != null && eventosAutorizados.contains(origen);
+  }).toList();
+}
+
+Future<_AlcanceActividadesCaptura> _resolverAlcanceCaptura(Ref ref) async {
+  final perfil = await ref.watch(currentPerfilProvider.future);
+  if (perfil == null) {
+    return const _AlcanceActividadesCaptura.restringido({});
+  }
+  if (!perfil.requiresEventAssignment) {
+    return const _AlcanceActividadesCaptura.global();
+  }
+  if (perfil.rol.isUsuario) {
+    final ids = await ref.watch(usuarioEventosAutorizadosProvider.future);
+    return _AlcanceActividadesCaptura.restringido(ids);
+  }
+  final eventos = await ref.watch(externoEventosAutorizadosProvider.future);
+  return _AlcanceActividadesCaptura.restringido(
+    eventos.map((evento) => evento.id).toSet(),
+  );
+}
+
+Future<void> _purgarActividadesSinAcceso({
+  required OfflineReadCache cache,
+  required List<EventoLead> visibles,
+}) async {
+  final campanas = visibles.map((actividad) => actividad.id).toSet();
+  final origenes = visibles
+      .map((actividad) => actividad.eventoOrigenId)
+      .whereType<String>()
+      .toSet();
+  await cache.retenerEventos(OfflineCacheTables.eventoLeadDetalle, campanas);
+  await cache.retenerEventos(leadsCacheTabla(true), campanas);
+  await cache.retenerEventos(leadsCacheTabla(false), campanas);
+  await cache.retenerEventos(leadsResumenCacheTabla, campanas);
+  await cache.retenerEventos(OfflineCacheTables.eventoLeadPorOrigen, origenes);
+}
+
 /// Catálogo de actividades de captura, con respaldo en disco.
 final eventosLeadsListProvider = FutureProvider.autoDispose<List<EventoLead>>((
   ref,
 ) async {
   final cache = ref.watch(offlineReadCacheProvider);
   final repo = ref.watch(eventosLeadsRepositoryProvider);
+  final perfil = await ref.watch(currentPerfilProvider.future);
+  final alcance = await _resolverAlcanceCaptura(ref);
 
-  return leerCacheFirstConRef(
+  final actividades = await leerCacheFirstConRef(
     ref: ref,
     tabla: OfflineCacheTables.eventosLeads,
     desdeServidor: () async {
-      final actividades = await repo.listarTodos();
-      for (final actividad in actividades) {
+      final remotas = await repo.listarTodos();
+      final visibles = filtrarActividadesCapturaAutorizadas(
+        perfil: perfil,
+        eventosAutorizados: alcance.eventosAutorizados,
+        actividades: remotas,
+      );
+      for (final actividad in visibles) {
         await cache.guardar(
           OfflineCacheTables.eventoLeadDetalle,
           actividad.id,
@@ -38,16 +114,34 @@ final eventosLeadsListProvider = FutureProvider.autoDispose<List<EventoLead>>((
           ]);
         }
       }
-      return actividades;
+      return visibles;
     },
     aFila: (actividad) => actividad.toCacheMap(),
     desdeFila: EventoLead.fromMap,
   );
+
+  final visibles = filtrarActividadesCapturaAutorizadas(
+    perfil: perfil,
+    eventosAutorizados: alcance.eventosAutorizados,
+    actividades: actividades,
+  );
+  if (!alcance.sinRestriccion) {
+    if (visibles.length != actividades.length) {
+      await cache.guardarGlobal(
+        OfflineCacheTables.eventosLeads,
+        visibles.map((actividad) => actividad.toCacheMap()).toList(),
+      );
+    }
+    await _purgarActividadesSinAcceso(cache: cache, visibles: visibles);
+  }
+  return visibles;
 });
 
 final eventoLeadByIdProvider = FutureProvider.autoDispose
     .family<EventoLead, String>((ref, id) async {
       final repo = ref.watch(eventosLeadsRepositoryProvider);
+      final cache = ref.watch(offlineReadCacheProvider);
+      final alcance = await _resolverAlcanceCaptura(ref);
 
       final filas = await leerCacheFirstConRef(
         ref: ref,
@@ -58,7 +152,15 @@ final eventoLeadByIdProvider = FutureProvider.autoDispose
         desdeFila: EventoLead.fromMap,
       );
       if (filas.isEmpty) throw Exception('No se pudo cargar la actividad.');
-      return filas.first;
+      final actividad = filas.first;
+      if (!alcance.permite(actividad)) {
+        await cache.eliminarEvento(OfflineCacheTables.eventoLeadDetalle, id);
+        await cache.eliminarEvento(leadsCacheTabla(true), id);
+        await cache.eliminarEvento(leadsCacheTabla(false), id);
+        await cache.eliminarEvento(leadsResumenCacheTabla, id);
+        throw Exception('No tienes acceso a esta actividad.');
+      }
+      return actividad;
     });
 
 /// Evento de leads interno de un evento de registro, o `null` si todavía no se
@@ -70,6 +172,16 @@ final eventoLeadByIdProvider = FutureProvider.autoDispose
 final eventoLeadInternoProvider = FutureProvider.autoDispose
     .family<EventoLead?, String>((ref, eventoOrigenId) async {
       final repo = ref.watch(eventosLeadsRepositoryProvider);
+      final cache = ref.watch(offlineReadCacheProvider);
+      final alcance = await _resolverAlcanceCaptura(ref);
+      if (!alcance.sinRestriccion &&
+          !alcance.eventosAutorizados.contains(eventoOrigenId)) {
+        await cache.eliminarEvento(
+          OfflineCacheTables.eventoLeadPorOrigen,
+          eventoOrigenId,
+        );
+        return null;
+      }
 
       final filas = await leerCacheFirstConRef(
         ref: ref,
@@ -193,6 +305,7 @@ LeadsResumen aplicarColaAResumen({
 /// recorte a "mis leads" es de la lista, no del resumen. Se cachea sin PII.
 final leadsResumenRemotoProvider = FutureProvider.autoDispose
     .family<LeadsResumen, String>((ref, eventoId) async {
+      await ref.watch(eventoLeadByIdProvider(eventoId).future);
       final perfil = await ref.watch(currentPerfilProvider.future);
       if (perfil == null) {
         return const LeadsResumen(total: 0, empresas: 0);
@@ -236,9 +349,28 @@ final leadsResumenLocalProvider = Provider.autoDispose
       final cacheado = cacheados == null || cacheados.isEmpty
           ? null
           : cacheados.first;
-      final base = remoto ?? cacheado;
-      if (base != null) {
-        return aplicarColaAResumen(base: base, cola: cola, eventoId: eventoId);
+      if (remoto != null) {
+        return aplicarColaAResumen(
+          base: remoto,
+          cola: cola,
+          eventoId: eventoId,
+        );
+      }
+
+      // Un resumen remoto ya pasó por el RPC autorizado. Para reconstruirlo
+      // desde datos del disco, en cambio, los roles acotados deben haber
+      // validado primero la actividad contra su evento asignado.
+      if (perfil.requiresEventAssignment) {
+        final actividad = ref.watch(eventoLeadByIdProvider(eventoId));
+        if (!actividad.hasValue) return null;
+      }
+
+      if (cacheado != null) {
+        return aplicarColaAResumen(
+          base: cacheado,
+          cola: cola,
+          eventoId: eventoId,
+        );
       }
 
       // Sin resumen del servidor se cuenta la caché de leads de la campaña.
@@ -264,6 +396,7 @@ final leadsResumenLocalProvider = Provider.autoDispose
 /// copia en caché, para que la lista y el detalle funcionen sin conexión.
 final leadsPorEventoProvider = FutureProvider.autoDispose
     .family<List<Lead>, String>((ref, eventoId) async {
+      await ref.watch(eventoLeadByIdProvider(eventoId).future);
       final repo = ref.watch(leadsRepositoryProvider);
       final perfil = await ref.watch(currentPerfilProvider.future);
       if (perfil == null) return const [];

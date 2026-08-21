@@ -1,10 +1,91 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transworld_nexus/core/constants/app_role.dart';
 import 'package:transworld_nexus/core/constants/supabase_tables.dart';
+import 'package:transworld_nexus/data/models/evento_lead.dart';
 import 'package:transworld_nexus/data/models/lead.dart';
+import 'package:transworld_nexus/data/models/perfil.dart';
 import 'package:transworld_nexus/data/offline/sync_queue_item.dart';
 import 'package:transworld_nexus/features/capturador/providers/capturador_providers.dart';
 
 void main() {
+  group('filtrarActividadesCapturaAutorizadas', () {
+    final fecha = DateTime(2026, 8, 21);
+    late List<EventoLead> actividades;
+
+    setUp(() {
+      actividades = [
+        EventoLead(
+          id: 'campana-autorizada',
+          nombre: 'Evento autorizado',
+          fecha: fecha,
+          eventoOrigenId: 'evento-1',
+          tipo: TipoEventoLead.interno,
+        ),
+        EventoLead(
+          id: 'campana-ajena',
+          nombre: 'Evento ajeno',
+          fecha: fecha,
+          eventoOrigenId: 'evento-2',
+          tipo: TipoEventoLead.interno,
+        ),
+        EventoLead(
+          id: 'campana-sin-origen',
+          nombre: 'Evento autorizado',
+          fecha: fecha,
+        ),
+      ];
+    });
+
+    Perfil perfil(AppRole rol) =>
+        Perfil(id: 'usuario-1', nombreCompleto: 'Usuario', rol: rol);
+
+    test('user solo ve actividades vinculadas a eventos asignados', () {
+      final visibles = filtrarActividadesCapturaAutorizadas(
+        perfil: perfil(AppRole.user),
+        eventosAutorizados: const {'evento-1'},
+        actividades: actividades,
+      );
+
+      expect(visibles.map((actividad) => actividad.id), ['campana-autorizada']);
+    });
+
+    test('externo usa el mismo alcance y no autoriza por nombre', () {
+      final visibles = filtrarActividadesCapturaAutorizadas(
+        perfil: perfil(AppRole.externo),
+        eventosAutorizados: const {'evento-1'},
+        actividades: actividades,
+      );
+
+      expect(visibles.map((actividad) => actividad.id), ['campana-autorizada']);
+      expect(
+        visibles.any((actividad) => actividad.eventoOrigenId == null),
+        isFalse,
+      );
+    });
+
+    test('admin y organizador conservan alcance global', () {
+      for (final rol in [AppRole.admin, AppRole.organizador]) {
+        final visibles = filtrarActividadesCapturaAutorizadas(
+          perfil: perfil(rol),
+          eventosAutorizados: const {},
+          actividades: actividades,
+        );
+        expect(visibles, hasLength(3));
+      }
+    });
+
+    test('sin perfil falla cerrado', () {
+      expect(
+        filtrarActividadesCapturaAutorizadas(
+          perfil: null,
+          eventosAutorizados: const {'evento-1'},
+          actividades: actividades,
+        ),
+        isEmpty,
+      );
+    });
+  });
+
   test('un duplicado en conflicto no aparece como lead pendiente válido', () {
     final now = DateTime.utc(2026, 8, 12);
     SyncQueueItem item(String id, SyncStatus status) => SyncQueueItem(

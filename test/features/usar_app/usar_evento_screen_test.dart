@@ -1,18 +1,23 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:transworld_nexus/core/constants/app_role.dart';
 import 'package:transworld_nexus/core/network/connectivity_service.dart';
+import 'package:transworld_nexus/core/router/page_transitions.dart';
+import 'package:transworld_nexus/core/router/route_paths.dart';
 import 'package:transworld_nexus/core/widgets/app_widgets.dart';
 import 'package:transworld_nexus/data/models/evento.dart';
 import 'package:transworld_nexus/data/models/perfil.dart';
 import 'package:transworld_nexus/data/offline/sync_queue_service.dart';
 import 'package:transworld_nexus/features/auth/providers/auth_providers.dart';
+import 'package:transworld_nexus/features/capturador/providers/capturador_providers.dart';
 import 'package:transworld_nexus/features/eventos/providers/eventos_providers.dart';
 import 'package:transworld_nexus/features/registrados/providers/registrados_providers.dart';
 import 'package:transworld_nexus/features/usar_app/screens/usar_evento_screen.dart';
@@ -96,5 +101,71 @@ void main() {
     recarga.complete(evento);
     await tester.pumpAndSettle();
     expect(find.text('Lista de asistentes registrados'), findsOneWidget);
+  });
+
+  testWidgets('el back nativo Android sale del evento real a la primera', (
+    tester,
+  ) async {
+    final previousPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = previousPlatform);
+
+    final router = GoRouter(
+      initialLocation: RoutePaths.eventos,
+      routes: [
+        GoRoute(
+          path: RoutePaths.eventos,
+          builder: (_, _) => const Scaffold(body: Text('lista-eventos')),
+        ),
+        GoRoute(
+          path: '/eventos/:id/usar',
+          pageBuilder: (_, state) => sharedAxisPage(
+            key: state.pageKey,
+            child: UsarEventoScreen(eventoId: state.pathParameters['id']!),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          connectivityStreamProvider.overrideWith((ref) => Stream.value(true)),
+          authStateChangesProvider.overrideWith(
+            (ref) => const Stream<AuthState>.empty(),
+          ),
+          currentPerfilProvider.overrideWith((ref) async => perfil),
+          registradosPorEventoProvider.overrideWith((ref, id) async => []),
+          registradosResumenProvider.overrideWith(
+            (ref, id) => const RegistradosResumen(
+              total: 0,
+              acreditados: 0,
+              pendientes: 0,
+            ),
+          ),
+          eventoByIdProvider.overrideWith((ref, id) async => evento),
+          eventoLeadInternoProvider.overrideWith((ref, id) async => null),
+        ],
+        child: MaterialApp.router(
+          locale: const Locale('es'),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    router.push(RoutePaths.usarEvento(evento.id));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Evento de prueba'), findsWidgets);
+    expect(find.byType(BackButtonListener), findsOneWidget);
+    expect(await tester.binding.handlePopRoute(), isTrue);
+    await tester.pumpAndSettle();
+
+    expect(find.text('lista-eventos'), findsOneWidget);
+    expect(find.text('Evento de prueba'), findsNothing);
+
+    debugDefaultTargetPlatformOverride = previousPlatform;
   });
 }

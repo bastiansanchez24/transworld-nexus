@@ -27,6 +27,20 @@ String? destinoDeDatosPush(Map<String, dynamic> data) {
   );
 }
 
+/// Evita apilar dos veces la misma pantalla cuando Android entrega un toque de
+/// notificación a más de un callback durante el arranque.
+bool debeApilarDestinoNotificacion({
+  required String? ubicacionActual,
+  required String destino,
+  String? destinoPendiente,
+}) {
+  if (destinoPendiente == destino) return false;
+  final actual = ubicacionActual == null
+      ? null
+      : Uri.parse(ubicacionActual).path;
+  return actual != Uri.parse(destino).path;
+}
+
 String? _destino({
   required TipoNotificacion tipo,
   String? eventoId,

@@ -5,11 +5,13 @@ import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_paths.dart';
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../data/repositories/notificaciones_repository.dart';
 import '../../../firebase_options.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -71,14 +73,31 @@ class PushNotificationService {
   GoRouter? _router;
   String? _tokenActual;
   bool _inicializado = false;
+  Future<void>? _inicializando;
   StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<RemoteMessage>? _foregroundSub;
+  StreamSubscription<RemoteMessage>? _messageOpenedSub;
+  String? _destinoPendiente;
 
   void attachRouter(GoRouter router) => _router = router;
 
-  Future<void> initialize() async {
+  Future<void> initialize() {
     if (_inicializado || !_fcmDelSistema) {
-      return;
+      return Future<void>.value();
     }
+    final enCurso = _inicializando;
+    if (enCurso != null) return enCurso;
+
+    late final Future<void> future;
+    future = _initialize().whenComplete(() {
+      if (identical(_inicializando, future)) _inicializando = null;
+    });
+    _inicializando = future;
+    return future;
+  }
+
+  Future<void> _initialize() async {
+    if (_inicializado || !_fcmDelSistema) return;
     if (!DefaultFirebaseOptions.isConfigured) {
       debugPrint('Push: firebase_options sin configurar; solo inbox in-app.');
       return;
@@ -99,17 +118,16 @@ class PushNotificationService {
             _abrirDestino(_datosDePayload(respuesta.payload)),
       );
 
-      FirebaseMessaging.onMessage.listen(_mostrarForeground);
-      FirebaseMessaging.onMessageOpenedApp.listen(
+      _foregroundSub ??= FirebaseMessaging.onMessage.listen(_mostrarForeground);
+      _messageOpenedSub ??= FirebaseMessaging.onMessageOpenedApp.listen(
         (message) => _abrirDestino(message.data),
       );
 
       final initial = await FirebaseMessaging.instance.getInitialMessage();
+      _inicializado = true;
       if (initial != null) {
         Future.microtask(() => _abrirDestino(initial.data));
       }
-
-      _inicializado = true;
     } catch (e, st) {
       debugPrint('Push init falló: $e\n$st');
     }
@@ -194,7 +212,11 @@ class PushNotificationService {
 
   void dispose() {
     unawaited(_tokenRefreshSub?.cancel());
+    unawaited(_foregroundSub?.cancel());
+    unawaited(_messageOpenedSub?.cancel());
     _tokenRefreshSub = null;
+    _foregroundSub = null;
+    _messageOpenedSub = null;
   }
 
   Future<void> _configurarCanalAndroid() async {
@@ -245,7 +267,25 @@ class PushNotificationService {
   void _abrirDestino(Map<String, dynamic> data) {
     final perfil = _ref.read(currentPerfilProvider).valueOrNull;
     if (perfil?.canAccessNotifications != true) return;
-    _router?.push(destinoDeDatosPush(data) ?? RoutePaths.notificaciones);
+    final router = _router;
+    if (router == null) return;
+    final destino = destinoDeDatosPush(data) ?? RoutePaths.notificaciones;
+    final actual = locationOfRouter(router);
+    if (!debeApilarDestinoNotificacion(
+      ubicacionActual: actual,
+      destino: destino,
+      destinoPendiente: _destinoPendiente,
+    )) {
+      return;
+    }
+
+    // Dos inicializaciones simultáneas de FCM podían entregar el mismo toque a
+    // dos listeners antes de que GoRouter alcanzara a actualizar su ubicación.
+    _destinoPendiente = destino;
+    router.push(destino);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_destinoPendiente == destino) _destinoPendiente = null;
+    });
   }
 
   Map<String, dynamic> _datosDePayload(String? payload) {

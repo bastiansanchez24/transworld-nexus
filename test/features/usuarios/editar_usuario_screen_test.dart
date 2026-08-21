@@ -18,7 +18,7 @@ import 'package:transworld_nexus/features/usuarios/providers/usuarios_providers.
 import 'package:transworld_nexus/features/usuarios/screens/editar_usuario_screen.dart';
 
 class FakeAuthRepository extends AuthRepository {
-  FakeAuthRepository({this.sessionUserId})
+  FakeAuthRepository({this.sessionUserId, this.eliminarError})
     : super(
         SupabaseClient(
           'http://localhost',
@@ -28,6 +28,7 @@ class FakeAuthRepository extends AuthRepository {
       );
 
   final String? sessionUserId;
+  final Object? eliminarError;
 
   @override
   String? get currentUserId => sessionUserId;
@@ -59,6 +60,12 @@ class FakeAuthRepository extends AuthRepository {
 
   @override
   Future<List<Perfil>> obtenerTodosLosUsuarios() async => const [];
+
+  @override
+  Future<bool> eliminarUsuario(String usuarioId) async {
+    if (eliminarError != null) throw eliminarError!;
+    return true;
+  }
 }
 
 const _adminId = 'admin-1';
@@ -81,6 +88,7 @@ Future<void> _montar(
   required String usuarioId,
   required Perfil editado,
   String? sessionUserId,
+  Object? eliminarError,
 }) async {
   tester.view.physicalSize = const Size(1000, 2000);
   tester.view.devicePixelRatio = 1;
@@ -88,7 +96,10 @@ Future<void> _montar(
 
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
-  final repo = FakeAuthRepository(sessionUserId: sessionUserId ?? _adminId);
+  final repo = FakeAuthRepository(
+    sessionUserId: sessionUserId ?? _adminId,
+    eliminarError: eliminarError,
+  );
 
   final router = GoRouter(
     initialLocation: '/editar',
@@ -209,5 +220,24 @@ void main() {
 
     expect(find.text('lista-usuarios'), findsOneWidget);
     expect(router.routeInformationProvider.value.uri.path, RoutePaths.usuarios);
+  });
+
+  testWidgets('controla el error al eliminar un usuario con leads', (
+    tester,
+  ) async {
+    await _montar(
+      tester,
+      usuarioId: _otroId,
+      editado: _otroPerfil,
+      eliminarError: Exception('foreign key violation: leads_perfil_id_fkey'),
+    );
+
+    await tester.tap(find.byTooltip('Eliminar usuario'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Eliminar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No se puede eliminar este usuario'), findsOneWidget);
+    expect(find.textContaining('foreign key'), findsNothing);
   });
 }

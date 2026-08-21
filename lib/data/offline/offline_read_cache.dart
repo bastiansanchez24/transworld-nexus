@@ -614,6 +614,37 @@ Future<void> refrescarLecturas(
   await ref.read(offlineReadCacheProvider).esperarRevalidaciones();
 }
 
+/// Refleja una mutación confirmada en la copia que la lista pinta primero.
+///
+/// Las lecturas son cache-first: limitarse a invalidar el provider puede
+/// volver a mostrar por un instante —o hasta la próxima revalidación— la fila
+/// anterior. El parche y la revisión hacen visible el cambio inmediatamente;
+/// la siguiente lectura del servidor sigue siendo la autoridad final.
+Future<void> publicarCambioEnLecturaCacheada(
+  WidgetRef ref, {
+  required String tabla,
+  required String eventoId,
+  required String id,
+  required Map<String, dynamic> cambios,
+  required void Function() invalidar,
+}) async {
+  final cache = ref.read(offlineReadCacheProvider);
+  final parcheado = await cache.parchearFila(
+    tabla: tabla,
+    eventoId: eventoId,
+    id: id,
+    cambios: cambios,
+  );
+
+  if (parcheado) {
+    final clave = '$tabla:$eventoId';
+    final siguiente = ref.read(cacheRevisionProvider(clave)) + 1;
+    cache.omitirProximaRevalidacion(tabla, eventoId, siguiente);
+    ref.read(cacheRevisionProvider(clave).notifier).state = siguiente;
+  }
+  invalidar();
+}
+
 /// Revisión de una entrada de caché (`tabla:evento`).
 ///
 /// Sube cuando una revalidación en segundo plano trae datos distintos a los

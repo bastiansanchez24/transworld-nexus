@@ -146,7 +146,7 @@ class _ListarEventosLeadsScreenState
 
     try {
       await ref.read(eventosLeadsRepositoryProvider).eliminar(evento.id);
-      ref.read(storageCleanupServiceProvider).drenar();
+      await ref.read(storageCleanupServiceProvider).drenar();
       await ref.read(fijadosRepositoryProvider).desfijarCampana(evento.id);
       ref.invalidate(eventosLeadsListProvider);
       ref.invalidate(campanasFijadasProvider);

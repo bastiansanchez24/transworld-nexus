@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transworld_nexus/core/constants/app_role.dart';
+import 'package:transworld_nexus/data/models/evento_lead.dart';
 import 'package:transworld_nexus/data/models/lead.dart';
 import 'package:transworld_nexus/data/models/perfil.dart';
 import 'package:transworld_nexus/data/offline/offline_read_cache.dart';
@@ -38,12 +39,25 @@ void main() {
     required Perfil perfil,
     LeadsResumen? remoto,
     List<Lead> enCache = const [],
+    bool actividadAutorizada = true,
   }) async {
     final container = ProviderContainer(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(preferences),
         syncQueueActiveOwnerIdProvider.overrideWithValue(perfil.id),
         currentPerfilProvider.overrideWith((ref) async => perfil),
+        eventoLeadByIdProvider.overrideWith((ref, id) async {
+          if (!actividadAutorizada) {
+            throw Exception('actividad revocada');
+          }
+          return EventoLead(
+            id: id,
+            nombre: 'Actividad autorizada',
+            fecha: DateTime(2026, 8, 21),
+            eventoOrigenId: 'evento-autorizado',
+            tipo: TipoEventoLead.interno,
+          );
+        }),
         leadsResumenRemotoProvider.overrideWith((ref, id) async {
           if (remoto == null) {
             // Simula el RPC caído o todavía sin desplegar.
@@ -69,6 +83,9 @@ void main() {
     await container
         .read(leadsResumenRemotoProvider(eventoId).future)
         .then<void>((_) {}, onError: (_) {});
+    await container
+        .read(eventoLeadByIdProvider(eventoId).future)
+        .then<void>((_) {}, onError: (_) {});
     return container;
   }
 
@@ -88,19 +105,22 @@ void main() {
     expect(resumen?.empresas, 5);
   });
 
-  test('el externo también cuenta desde la caché completa de la campaña', () async {
-    final container = await contenedor(
-      perfil: perfilExterno,
-      enCache: [
-        lead('propio-1'),
-        lead('ajeno-2', empresa: 'Acme'),
-      ],
-    );
+  test(
+    'el externo también cuenta desde la caché completa de la campaña',
+    () async {
+      final container = await contenedor(
+        perfil: perfilExterno,
+        enCache: [
+          lead('propio-1'),
+          lead('ajeno-2', empresa: 'Acme'),
+        ],
+      );
 
-    final resumen = container.read(leadsResumenLocalProvider(eventoId));
-    expect(resumen?.total, 2);
-    expect(resumen?.empresas, 1);
-  });
+      final resumen = container.read(leadsResumenLocalProvider(eventoId));
+      expect(resumen?.total, 2);
+      expect(resumen?.empresas, 1);
+    },
+  );
 
   test('quien ve todos los leads sí puede contar desde la caché', () async {
     final container = await contenedor(
@@ -131,4 +151,17 @@ void main() {
     expect(resumen?.total, 2);
     expect(resumen?.empresas, 2);
   });
+
+  test(
+    'una actividad revocada no cuenta datos que quedaron en caché',
+    () async {
+      final container = await contenedor(
+        perfil: perfilUser,
+        actividadAutorizada: false,
+        enCache: [lead('propio', empresa: 'Acme')],
+      );
+
+      expect(container.read(leadsResumenLocalProvider(eventoId)), isNull);
+    },
+  );
 }

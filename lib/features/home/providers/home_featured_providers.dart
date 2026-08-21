@@ -9,6 +9,7 @@ import '../../../data/repositories/fijados_repository.dart';
 import '../../../data/repositories/leads_repository.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../capturador/providers/capturador_providers.dart';
 import '../../fijados/providers/fijados_providers.dart';
 import '../models/home_featured_item.dart';
 import 'home_dashboard_providers.dart';
@@ -26,13 +27,36 @@ import 'home_dashboard_providers.dart';
 /// exactamente lo que ya estaba guardado.
 final homeFeaturedItemsProvider =
     FutureProvider.autoDispose<List<HomeFeaturedItem>>((ref) async {
-      return leerCacheFirstConRef(
+      final items = await leerCacheFirstConRef(
         ref: ref,
         tabla: OfflineCacheTables.homeDestacados,
         desdeServidor: () => _construirDestacados(ref),
         aFila: (item) => item.toCacheMap(),
         desdeFila: HomeFeaturedItem.fromCacheMap,
       );
+      final perfil = await ref.watch(currentPerfilProvider.future);
+      if (perfil == null) return const [];
+      if (!perfil.requiresEventAssignment) return items;
+
+      final campanasAutorizadas = (await ref.watch(
+        eventosLeadsListProvider.future,
+      )).map((actividad) => actividad.id).toSet();
+      final visibles = items
+          .where(
+            (item) =>
+                !item.esActividadCaptura ||
+                campanasAutorizadas.contains(item.id),
+          )
+          .toList();
+      if (visibles.length != items.length) {
+        await ref
+            .read(offlineReadCacheProvider)
+            .guardarGlobal(
+              OfflineCacheTables.homeDestacados,
+              visibles.map((item) => item.toCacheMap()).toList(),
+            );
+      }
+      return visibles;
     });
 
 Future<List<HomeFeaturedItem>> _construirDestacados(Ref ref) async {

@@ -23,6 +23,7 @@ import '../../../core/widgets/pressable.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../data/models/lead.dart';
 import '../../../data/models/lead_write_result.dart';
+import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/offline/pending_photo_store.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/leads_repository.dart';
@@ -623,6 +624,8 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _guardando = true);
 
+    final cache = ref.read(offlineReadCacheProvider);
+
     String? valorOpcional(TextEditingController controller) =>
         _sinVacios(controller.text);
 
@@ -642,6 +645,9 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     Map<String, dynamic>? cambiosPreparados;
 
     try {
+      // Evita que una consulta iniciada antes de guardar termine después y
+      // vuelva a escribir la versión anterior sobre la caché de la lista.
+      await cache.esperarRevalidaciones();
       final fotoDescartada =
           _fotoNueva != null &&
           !isOnline &&
@@ -731,8 +737,33 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
           return;
         }
       }
+      final cambioFoto =
+          _fotoNueva != null ||
+          !const ListEquality<String>().equals(_fotos, _fotos0);
       await _borrarFotosLocalesHuerfanas(fotos);
-      ref.invalidate(leadsPorEventoProvider(widget.eventoId));
+      if (isOnline &&
+          result?.guardado == true &&
+          !fotoPendienteDeSync &&
+          cambioFoto) {
+        await ref.read(storageCleanupServiceProvider).drenar();
+      }
+      final cambiosCache = Map<String, dynamic>.from(cambios);
+      // Al subir una foto, el repositorio reemplaza el marcador local por la
+      // URL definitiva. Esa URL la incorpora la revalidación; el resto de los
+      // campos sí puede publicarse inmediatamente.
+      if (isOnline && _fotoNueva != null) {
+        cambiosCache.remove('fotos_urls');
+      }
+      final perfil = await ref.read(currentPerfilProvider.future);
+      await publicarCambioEnLecturaCacheada(
+        ref,
+        tabla: leadsCacheTabla(perfil?.canViewAllLeads ?? false),
+        eventoId: widget.eventoId,
+        id: widget.leadId,
+        cambios: cambiosCache,
+        invalidar: () =>
+            ref.invalidate(leadsPorEventoProvider(widget.eventoId)),
+      );
       if (mounted) {
         showAppSnackBar(
           context,
@@ -762,7 +793,16 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
                 entityId: widget.leadId,
                 changes: cambiosPreparados,
               );
-          ref.invalidate(leadsPorEventoProvider(widget.eventoId));
+          final perfil = await ref.read(currentPerfilProvider.future);
+          await publicarCambioEnLecturaCacheada(
+            ref,
+            tabla: leadsCacheTabla(perfil?.canViewAllLeads ?? false),
+            eventoId: widget.eventoId,
+            id: widget.leadId,
+            cambios: cambiosPreparados,
+            invalidar: () =>
+                ref.invalidate(leadsPorEventoProvider(widget.eventoId)),
+          );
           if (mounted) {
             final fotoNoPersistible =
                 _fotoNueva != null &&
@@ -818,7 +858,7 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     try {
       await ref.read(leadsRepositoryProvider).eliminar(widget.leadId);
       // Las fotos del lead ya no tienen fila que las referencie.
-      ref.read(storageCleanupServiceProvider).drenar();
+      await ref.read(storageCleanupServiceProvider).drenar();
       ref.invalidate(leadsPorEventoProvider(widget.eventoId));
       if (mounted) {
         volverALista(

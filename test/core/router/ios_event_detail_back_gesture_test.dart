@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transworld_nexus/core/router/page_transitions.dart';
 import 'package:transworld_nexus/core/router/refresh_on_visible.dart';
+import 'package:transworld_nexus/core/widgets/event_back_navigation_guard.dart';
 import 'package:transworld_nexus/core/widgets/ios_back_swipe_committer.dart';
 
 void main() {
@@ -15,30 +16,7 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = previousPlatform);
 
-    final router = GoRouter(
-      initialLocation: '/eventos',
-      routes: [
-        StatefulShellRoute.indexedStack(
-          builder: (context, state, shell) =>
-              PopScope(canPop: false, child: Scaffold(body: shell)),
-          branches: [
-            StatefulShellBranch(
-              routes: [
-                GoRoute(
-                  path: '/eventos',
-                  builder: (context, state) => const _ListaEventos(),
-                ),
-              ],
-            ),
-          ],
-        ),
-        GoRoute(
-          path: '/eventos/:id/usar',
-          pageBuilder: (context, state) =>
-              sharedAxisPage(key: state.pageKey, child: const _DetalleEvento()),
-        ),
-      ],
-    );
+    final router = _crearRouter();
     addTearDown(router.dispose);
 
     await tester.pumpWidget(
@@ -49,6 +27,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Detalle del evento'), findsOneWidget);
+    expect(find.byType(IosBackSwipeCommitter), findsOneWidget);
     final size = tester.getSize(find.byType(MaterialApp));
     final gesture = await tester.startGesture(Offset(1, size.height / 2));
     await tester.pump(const Duration(milliseconds: 500));
@@ -69,7 +48,62 @@ void main() {
 
     debugDefaultTargetPlatformOverride = previousPlatform;
   });
+
+  testWidgets('detalle de evento vuelve con el Atrás físico de Android', (
+    tester,
+  ) async {
+    final previousPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = previousPlatform);
+
+    final router = _crearRouter();
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+    );
+    await tester.pumpAndSettle();
+    router.push('/eventos/1/usar');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detalle del evento'), findsOneWidget);
+    expect(find.byType(IosBackSwipeCommitter), findsNothing);
+    expect(find.byType(BackButtonListener), findsOneWidget);
+    expect(await tester.binding.handlePopRoute(), isTrue);
+    await tester.pumpAndSettle();
+
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/eventos');
+    expect(find.text('Lista de eventos'), findsOneWidget);
+    expect(find.text('Detalle del evento'), findsNothing);
+
+    debugDefaultTargetPlatformOverride = previousPlatform;
+  });
 }
+
+GoRouter _crearRouter() => GoRouter(
+  initialLocation: '/eventos',
+  routes: [
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, shell) =>
+          PopScope(canPop: false, child: Scaffold(body: shell)),
+      branches: [
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/eventos',
+              builder: (context, state) => const _ListaEventos(),
+            ),
+          ],
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/eventos/:id/usar',
+      pageBuilder: (context, state) =>
+          sharedAxisPage(key: state.pageKey, child: const _DetalleEvento()),
+    ),
+  ],
+);
 
 class _ListaEventos extends ConsumerStatefulWidget {
   const _ListaEventos();
@@ -109,8 +143,12 @@ class _DetalleEventoState extends ConsumerState<_DetalleEvento>
 
   @override
   Widget build(BuildContext context) {
-    return const IosBackSwipeCommitter(
-      child: Scaffold(body: Center(child: Text('Detalle del evento'))),
+    return EventBackNavigationGuard(
+      onAndroidBack: () async {
+        volverALista(context, '/eventos');
+        return true;
+      },
+      child: const Scaffold(body: Center(child: Text('Detalle del evento'))),
     );
   }
 }

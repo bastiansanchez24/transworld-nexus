@@ -18,6 +18,7 @@ import '../../../data/models/lead.dart';
 import '../../../data/models/perfil.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/storage_cleanup_service.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/perfil_providers.dart';
@@ -134,6 +135,7 @@ class _MiPerfilBodyState extends ConsumerState<_MiPerfilBody> {
           .read(storageRepositoryProvider)
           .subirFotoPerfil(bytes, userId);
       await auth.actualizarFotoPropia(url);
+      await ref.read(storageCleanupServiceProvider).drenar();
       ref.invalidate(currentPerfilProvider);
       await ref.read(currentPerfilProvider.future);
 

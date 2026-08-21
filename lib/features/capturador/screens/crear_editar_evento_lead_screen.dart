@@ -152,6 +152,7 @@ class _CrearEditarEventoLeadFormState
             .read(storageRepositoryProvider)
             .subirImagenEvento(_imagenBytes!, 'jpg');
       }
+      final cambioImagen = _esEdicion && imagenUrl != _imagenUrl0;
 
       final evento = EventoLead(
         id: widget.eventoId ?? '',
@@ -175,9 +176,10 @@ class _CrearEditarEventoLeadFormState
       if (widget.eventoId != null) {
         ref.invalidate(eventoLeadByIdProvider(widget.eventoId!));
       }
-      // Cada subida de portada crea un objeto nuevo y deja huérfano el viejo.
-      if (_imagenBytes != null) {
-        ref.read(storageCleanupServiceProvider).drenar();
+      // Tanto reemplazar como quitar la portada deja el objeto anterior sin
+      // referencia. El trigger lo encola y la función lo borra de Storage.
+      if (cambioImagen) {
+        await ref.read(storageCleanupServiceProvider).drenar();
       }
 
       if (mounted) {
@@ -214,7 +216,7 @@ class _CrearEditarEventoLeadFormState
 
     try {
       await ref.read(eventosLeadsRepositoryProvider).eliminar(widget.eventoId!);
-      ref.read(storageCleanupServiceProvider).drenar();
+      await ref.read(storageCleanupServiceProvider).drenar();
       ref.invalidate(eventosLeadsListProvider);
       ref.invalidate(eventoLeadByIdProvider(widget.eventoId!));
       if (mounted) context.go(RoutePaths.capturador);

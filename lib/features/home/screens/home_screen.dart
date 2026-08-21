@@ -21,6 +21,7 @@ import '../../../data/models/perfil.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../capturador/providers/capturador_providers.dart';
 import '../../fijados/providers/fijados_providers.dart';
 import '../../notificaciones/providers/notificaciones_providers.dart';
 import '../../updates/services/update_platform.dart';
@@ -117,9 +118,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final perfilAsync = ref.watch(currentPerfilProvider);
     final perfil = perfilAsync.valueOrNull;
     final featuredAsync = ref.watch(homeFeaturedItemsProvider);
-    final featuredItems = featuredAsync.valueOrNull ?? _ultimosDestacados;
+    var featuredItems = featuredAsync.valueOrNull ?? _ultimosDestacados;
     if (featuredAsync.hasValue) {
       _ultimosDestacados = featuredAsync.requireValue;
+    }
+    if (perfil == null) {
+      featuredItems = featuredItems
+          .where((item) => !item.esActividadCaptura)
+          .toList();
+    } else if (perfil.requiresEventAssignment) {
+      final autorizadas = ref
+          .watch(eventosLeadsListProvider)
+          .valueOrNull
+          ?.map((actividad) => actividad.id)
+          .toSet();
+      // Mientras el alcance se resuelve, las cards de captura fallan cerradas
+      // en vez de reutilizar `_ultimosDestacados` de una asignación revocada.
+      featuredItems = featuredItems
+          .where(
+            (item) =>
+                !item.esActividadCaptura ||
+                (autorizadas?.contains(item.id) ?? false),
+          )
+          .toList();
     }
     ref.listen<int>(shellTabEpochProvider(ShellTabBranch.inicio), (prev, next) {
       if (prev == next) return;

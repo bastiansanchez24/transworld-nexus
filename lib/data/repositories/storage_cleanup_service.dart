@@ -22,11 +22,26 @@ class StorageCleanupService {
 
   /// Evita que cinco borrados seguidos disparen cinco invocaciones en paralelo.
   Future<void>? _enVuelo;
+  bool _repetirAlTerminar = false;
 
   /// Sin red no hay nada que pedir: la cola vive en el servidor y espera.
   Future<void> drenar() {
     if (!_ref.read(isOnlineProvider)) return Future<void>.value();
-    return _enVuelo ??= _drenar().whenComplete(() => _enVuelo = null);
+    _repetirAlTerminar = true;
+    return _enVuelo ??= _drenarSolicitudes().whenComplete(() {
+      _enVuelo = null;
+    });
+  }
+
+  /// Si llega otra edición mientras la función ya está trabajando, hace una
+  /// segunda pasada al terminar. Antes esas llamadas compartían el Future en
+  /// curso, pero la foto recién encolada podía quedar fuera del lote que la
+  /// función ya había tomado.
+  Future<void> _drenarSolicitudes() async {
+    while (_repetirAlTerminar) {
+      _repetirAlTerminar = false;
+      await _drenar();
+    }
   }
 
   Future<void> _drenar() async {

@@ -169,6 +169,7 @@ class _CrearEditarEventoFormState
             .read(storageRepositoryProvider)
             .subirImagenEvento(_imagenBytes!, 'jpg');
       }
+      final cambioImagen = _esEdicion && imagenUrl != _imagenUrl0;
 
       final evento = Evento(
         id: widget.eventoId ?? '',
@@ -195,10 +196,11 @@ class _CrearEditarEventoFormState
       if (widget.eventoId != null) {
         ref.invalidate(eventoByIdProvider(widget.eventoId!));
       }
-      // Cambiar la portada sube un objeto nuevo y deja huérfano el anterior:
-      // `subirImagenEvento` genera un UUID por subida, no sobrescribe.
-      if (_imagenBytes != null) {
-        ref.read(storageCleanupServiceProvider).drenar();
+      // Reemplazar la portada sube un UUID nuevo; quitarla también deja el
+      // objeto anterior sin referencia. El trigger lo encola y aquí esperamos
+      // el intento de borrado antes de abandonar el formulario.
+      if (cambioImagen) {
+        await ref.read(storageCleanupServiceProvider).drenar();
       }
 
       if (mounted) {
@@ -236,7 +238,7 @@ class _CrearEditarEventoFormState
 
     try {
       await ref.read(eventosRepositoryProvider).eliminar(widget.eventoId!);
-      ref.read(storageCleanupServiceProvider).drenar();
+      await ref.read(storageCleanupServiceProvider).drenar();
       ref.invalidate(eventosListProvider);
       ref.invalidate(eventoByIdProvider(widget.eventoId!));
       if (mounted) context.go(RoutePaths.eventos);

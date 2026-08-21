@@ -15,8 +15,8 @@ import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/action_lock.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/event_back_navigation_guard.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
-import '../../../core/widgets/ios_back_swipe_committer.dart';
 import '../../../core/widgets/tw_components.dart';
 import '../../../core/widgets/tw_detail_scaffold.dart';
 import '../../../core/widgets/tw_offline_notice_card.dart';
@@ -126,6 +126,15 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
     await Clipboard.setData(ClipboardData(text: link));
     if (!mounted) return;
     TwToast.link(context, 'Enlace del evento copiado');
+  }
+
+  Future<bool> _volverConBotonAndroid() async {
+    if (!mounted) return false;
+    if (currentLocationOf(context) != RoutePaths.usarEvento(widget.eventoId)) {
+      return false;
+    }
+    volverALista(context, RoutePaths.eventos);
+    return true;
   }
 
   @override
@@ -273,7 +282,10 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
         ),
       ),
     );
-    return IosBackSwipeCommitter(child: contenido);
+    return EventBackNavigationGuard(
+      onAndroidBack: _volverConBotonAndroid,
+      child: contenido,
+    );
   }
 
   Widget _hero(

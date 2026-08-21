@@ -5,6 +5,7 @@ import '../../../data/offline/offline_cache_tables.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/fijados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../capturador/providers/capturador_providers.dart';
 
 /// Los fijados son un `Set<String>`; en disco se guardan como filas con una
 /// sola columna para poder reusar el mismo mecanismo que el resto del
@@ -57,7 +58,9 @@ final campanasFijadasProvider = FutureProvider.autoDispose<Set<String>>((
   ref,
 ) async {
   ref.watch(authStateChangesProvider);
+  final isOnline = ref.read(isOnlineProvider);
   final repo = ref.watch(fijadosRepositoryProvider);
+  final perfil = await ref.watch(currentPerfilProvider.future);
 
   final fijadas = await leerCacheFirstConRef(
     ref: ref,
@@ -66,5 +69,26 @@ final campanasFijadasProvider = FutureProvider.autoDispose<Set<String>>((
     aFila: _aFila,
     desdeFila: _desdeFila,
   );
-  return fijadas.toSet();
+  final setFijadas = fijadas.toSet();
+  if (perfil == null || !perfil.requiresEventAssignment) return setFijadas;
+
+  final autorizadas = (await ref.watch(
+    eventosLeadsListProvider.future,
+  )).map((actividad) => actividad.id).toSet();
+  final obsoletas = setFijadas.difference(autorizadas);
+  if (isOnline) {
+    for (final campanaId in obsoletas) {
+      await repo.desfijarCampana(campanaId);
+    }
+  }
+  final visibles = setFijadas.intersection(autorizadas);
+  if (visibles.length != setFijadas.length) {
+    await ref
+        .read(offlineReadCacheProvider)
+        .guardarGlobal(
+          OfflineCacheTables.campanasFijadas,
+          visibles.map(_aFila).toList(),
+        );
+  }
+  return visibles;
 });

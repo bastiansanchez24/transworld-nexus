@@ -143,7 +143,7 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen>
       await ref.read(fijadosRepositoryProvider).desfijarEvento(evento.id);
       // La portada del evento se quedó sin dueño: el servidor ya la tiene
       // encolada, acá solo se pide el vaciado.
-      ref.read(storageCleanupServiceProvider).drenar();
+      await ref.read(storageCleanupServiceProvider).drenar();
       ref.invalidate(eventosListProvider);
       ref.invalidate(eventosFijadosProvider);
       ref.invalidate(homeFeaturedItemsProvider);

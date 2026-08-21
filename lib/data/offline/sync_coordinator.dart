@@ -6,6 +6,7 @@ import '../../core/constants/supabase_tables.dart';
 import '../../core/network/connectivity_service.dart';
 import '../repositories/leads_repository.dart';
 import '../repositories/registrados_repository.dart';
+import '../repositories/storage_cleanup_service.dart';
 import '../supabase/supabase_client_provider.dart';
 import 'sync_queue_service.dart';
 
@@ -75,6 +76,9 @@ class SyncCoordinator {
             queue.ownerId,
       );
       if (synced > 0) {
+        // Una edición offline puede haber quitado o reemplazado la foto de un
+        // lead. El trigger recién la encola cuando el UPDATE llega al servidor.
+        await _ref.read(storageCleanupServiceProvider).drenar();
         developer.log(
           'Sincronizados $synced ítems pendientes.',
           name: 'SyncCoordinator',

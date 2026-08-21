@@ -3,6 +3,22 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+/// Instala el corrector únicamente en iOS nativo.
+///
+/// En Android devuelve exactamente [child], sin agregar un elemento con estado
+/// ni escuchar la animación de la ruta. Así el botón Atrás queda completamente
+/// a cargo del Router/Navigator de Android.
+Widget iosBackSwipeGuard({
+  required Widget child,
+  bool? isWeb,
+  TargetPlatform? platform,
+}) {
+  final enabled =
+      !(isWeb ?? kIsWeb) &&
+      (platform ?? defaultTargetPlatform) == TargetPlatform.iOS;
+  return enabled ? IosBackSwipeCommitter(child: child) : child;
+}
+
 /// Confirma un pop Cupertino que ya cruzó la mitad de la pantalla.
 ///
 /// Flutter prioriza la velocidad del último instante sobre la distancia. En un
@@ -25,12 +41,10 @@ class _IosBackSwipeCommitterState extends State<IosBackSwipeCommitter> {
   double _lastValue = 1;
   double _furthestValue = 1;
 
-  bool get _enabled => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final next = _enabled ? ModalRoute.of(context)?.animation : null;
+    final next = ModalRoute.of(context)?.animation;
     if (identical(next, _routeAnimation)) return;
     _routeAnimation?.removeListener(_onAnimationTick);
     _routeAnimation = next;

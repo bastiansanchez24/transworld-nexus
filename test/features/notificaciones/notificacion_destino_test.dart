@@ -77,4 +77,44 @@ void main() {
       expect(destinoDeDatosPush(const {}), isNull);
     });
   });
+
+  group('debeApilarDestinoNotificacion', () {
+    test('no vuelve a apilar el mismo hilo de comentarios', () {
+      final destino = RoutePaths.comentariosLead('campana-9', 'lead-9');
+
+      expect(
+        debeApilarDestinoNotificacion(
+          ubicacionActual: destino,
+          destino: destino,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'bloquea el segundo callback antes de que el router cambie de ruta',
+      () {
+        final destino = RoutePaths.comentariosLead('campana-9', 'lead-9');
+
+        expect(
+          debeApilarDestinoNotificacion(
+            ubicacionActual: RoutePaths.home,
+            destino: destino,
+            destinoPendiente: destino,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('permite abrir un hilo distinto desde otra pantalla', () {
+      expect(
+        debeApilarDestinoNotificacion(
+          ubicacionActual: RoutePaths.home,
+          destino: RoutePaths.comentariosLead('campana-9', 'lead-9'),
+        ),
+        isTrue,
+      );
+    });
+  });
 }

@@ -267,6 +267,9 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
       } else if (_quitarFoto) {
         await repo.actualizarFotoUsuario(widget.usuarioId, null);
       }
+      if (_fotoBytes != null || _quitarFoto) {
+        await ref.read(storageCleanupServiceProvider).drenar();
+      }
 
       if (mounted) {
         ref.invalidate(usuariosListProvider);
@@ -320,7 +323,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
           .read(authRepositoryProvider)
           .eliminarUsuario(widget.usuarioId);
       // La foto de perfil se quedó sin dueño.
-      ref.read(storageCleanupServiceProvider).drenar();
+      await ref.read(storageCleanupServiceProvider).drenar();
       if (mounted) {
         ref.invalidate(usuariosListProvider);
         showAppSnackBar(
@@ -332,13 +335,11 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
         );
       }
       router.go(RoutePaths.usuarios);
-    } on PostgrestException catch (e) {
-      if (mounted) showAppSnackBar(context, e.message, isError: true);
     } catch (_) {
       if (mounted) {
         showAppSnackBar(
           context,
-          'No se pudo eliminar el usuario.',
+          'No se puede eliminar este usuario',
           isError: true,
         );
       }

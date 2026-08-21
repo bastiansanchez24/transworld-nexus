@@ -747,6 +747,27 @@ AS $$
   );
 $$;
 
+-- Alcance único del módulo de captura. Admin y organizador conservan acceso
+-- global; user y externo solo pueden operar actividades vinculadas por FK a
+-- un evento explícitamente asignado. El nombre no concede permisos: era un
+-- fallback legacy ambiguo que relacionaba campañas sin una FK real.
+CREATE OR REPLACE FUNCTION public.cl_campana_autorizada(p_campana_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT public.rpe_can_create_content()
+      OR EXISTS (
+        SELECT 1
+        FROM public.eventos_leads el
+        WHERE el.id = p_campana_id
+          AND el.evento_origen_id IS NOT NULL
+          AND public.rpe_puede_operar_evento(el.evento_origen_id)
+      );
+$$;
+
 -- Campos de identidad del lead controlados por servidor. El índice único
 -- resuelve carreras entre capturas nuevas y la consulta adicional detecta los
 -- duplicados históricos cuyo email_normalizado quedó NULL durante el backfill.
@@ -1646,11 +1667,7 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Campaña no encontrada';
   END IF;
 
-  IF v_rol NOT IN ('admin', 'organizador', 'user')
-     AND NOT (
-       v_rol = 'externo'
-       AND public.cl_externo_campana_autorizada(p_evento_id)
-     ) THEN
+  IF NOT public.cl_campana_autorizada(p_evento_id) THEN
     RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Sin acceso a la campaña';
   END IF;
 
@@ -1790,8 +1807,8 @@ EXCEPTION
 END;
 $$;
 
--- Conteos de campaña para quien puede abrirla: internos (admin/organizador/
--- user) y externos autorizados por evento homónimo. No expone filas.
+-- Conteos de campaña para quien puede abrirla. No expone filas, pero conserva
+-- exactamente el mismo alcance por evento que el catálogo y los leads.
 CREATE OR REPLACE FUNCTION public.cl_resumen_campana(p_evento_id uuid)
 RETURNS TABLE (total bigint, empresas bigint)
 LANGUAGE plpgsql
@@ -1804,10 +1821,7 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Campaña inválida';
   END IF;
 
-  IF NOT (
-    public.rpe_is_internal_user()
-    OR public.cl_externo_campana_autorizada(p_evento_id)
-  ) THEN
+  IF NOT public.cl_campana_autorizada(p_evento_id) THEN
     RAISE EXCEPTION USING
       ERRCODE = '42501',
       MESSAGE = 'Sin acceso al resumen de la campaña';
@@ -1865,11 +1879,7 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = 'P0002', MESSAGE = 'Campaña no encontrada';
   END IF;
 
-  IF v_rol NOT IN ('admin', 'organizador', 'user')
-     AND NOT (
-       v_rol = 'externo'
-       AND public.cl_externo_campana_autorizada(p_evento_id)
-     ) THEN
+  IF NOT public.cl_campana_autorizada(p_evento_id) THEN
     RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Sin acceso a la campaña';
   END IF;
 
@@ -2065,12 +2075,16 @@ GRANT EXECUTE ON FUNCTION public.cl_guardar_lead(
 ) TO authenticated;
 REVOKE ALL ON FUNCTION public.cl_resumen_campana(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.cl_resumen_campana(uuid) TO authenticated;
-REVOKE ALL ON FUNCTION public.cl_externo_evento_origen_autorizado(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.cl_externo_evento_origen_autorizado(uuid) TO authenticated;
-REVOKE ALL ON FUNCTION public.cl_externo_campana_autorizada(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.cl_externo_campana_autorizada(uuid) TO authenticated;
-REVOKE ALL ON FUNCTION public.cl_externo_nombre_campana_autorizado(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.cl_externo_nombre_campana_autorizado(text) TO authenticated;
+-- Helpers legacy retirados: no son API y el fallback por nombre ya no debe
+-- poder usarse ni siquiera como oráculo para sondear campañas.
+REVOKE ALL ON FUNCTION public.cl_externo_evento_origen_autorizado(uuid)
+  FROM PUBLIC, authenticated;
+REVOKE ALL ON FUNCTION public.cl_externo_campana_autorizada(uuid)
+  FROM PUBLIC, authenticated;
+REVOKE ALL ON FUNCTION public.cl_externo_nombre_campana_autorizado(text)
+  FROM PUBLIC, authenticated;
+REVOKE ALL ON FUNCTION public.cl_campana_autorizada(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cl_campana_autorizada(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.cl_buscar_lead_por_email(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.cl_buscar_lead_por_email(uuid, text) TO authenticated;
 
@@ -2228,27 +2242,24 @@ DROP POLICY IF EXISTS cl_eventos_leads_select ON public.eventos_leads;
 CREATE POLICY cl_eventos_leads_select ON public.eventos_leads
   FOR SELECT TO authenticated
   USING (
-    public.rpe_is_internal_user()
-    OR public.cl_externo_evento_origen_autorizado(evento_origen_id)
+    public.rpe_can_create_content()
     OR (
-      evento_origen_id IS NULL
-      AND public.cl_externo_nombre_campana_autorizado(nombre)
+      evento_origen_id IS NOT NULL
+      AND public.rpe_puede_operar_evento(evento_origen_id)
     )
   );
 
--- INSERT: internos conservan la capacidad de materializar eventos de leads; el
--- externo solo los internos de un evento que tenga autorizado (o, legacy, el
--- homónimo) desde el escáner.
+-- INSERT: admin/organizador pueden crear actividades independientes; user y
+-- externo solo pueden materializar la actividad interna de un evento asignado.
 DROP POLICY IF EXISTS cl_eventos_leads_insert ON public.eventos_leads;
 CREATE POLICY cl_eventos_leads_insert ON public.eventos_leads
   FOR INSERT TO authenticated
   WITH CHECK (
     (
-      public.rpe_is_internal_user()
-      OR public.cl_externo_evento_origen_autorizado(evento_origen_id)
+      public.rpe_can_create_content()
       OR (
-        evento_origen_id IS NULL
-        AND public.cl_externo_nombre_campana_autorizado(nombre)
+        evento_origen_id IS NOT NULL
+        AND public.rpe_puede_operar_evento(evento_origen_id)
       )
     )
     AND (perfil_id IS NULL OR perfil_id = auth.uid())
@@ -2265,29 +2276,19 @@ CREATE POLICY cl_eventos_leads_delete ON public.eventos_leads
   FOR DELETE TO authenticated
   USING (public.rpe_is_admin());
 
--- Los internos (admin/organizador/user) ven todos los leads de la campaña; el
--- rol `user` solo los lee, y el email y el teléfono le llegan enmascarados en
--- la app. El externo autorizado ve el mismo listado de su campaña (contacto
--- también enmascarado en la app); fuera de esas campañas sigue acotado a los
--- que capturó él.
+-- Todo acceso a leads hereda el alcance de su actividad. Ser el capturador de
+-- una fila no conserva acceso después de que se revoca el evento.
 DROP POLICY IF EXISTS cl_leads_select ON public.leads;
 CREATE POLICY cl_leads_select ON public.leads
   FOR SELECT TO authenticated
-  USING (
-    public.rpe_is_internal_user()
-    OR perfil_id = auth.uid()
-    OR public.cl_externo_campana_autorizada(evento_id)
-  );
+  USING (public.cl_campana_autorizada(evento_id));
 
 DROP POLICY IF EXISTS cl_leads_insert ON public.leads;
 CREATE POLICY cl_leads_insert ON public.leads
   FOR INSERT TO authenticated
   WITH CHECK (
     perfil_id = auth.uid()
-    AND (
-      public.rpe_is_internal_user()
-      OR public.cl_externo_campana_autorizada(evento_id)
-    )
+    AND public.cl_campana_autorizada(evento_id)
   );
 
 DROP POLICY IF EXISTS cl_leads_update ON public.leads;
@@ -2295,11 +2296,17 @@ CREATE POLICY cl_leads_update ON public.leads
   FOR UPDATE TO authenticated
   USING (
     public.rpe_can_create_content()
-    OR perfil_id = auth.uid()
+    OR (
+      perfil_id = auth.uid()
+      AND public.cl_campana_autorizada(evento_id)
+    )
   )
   WITH CHECK (
     public.rpe_can_create_content()
-    OR perfil_id = auth.uid()
+    OR (
+      perfil_id = auth.uid()
+      AND public.cl_campana_autorizada(evento_id)
+    )
   );
 
 DROP POLICY IF EXISTS cl_leads_delete ON public.leads;
@@ -2392,11 +2399,17 @@ CREATE POLICY rpe_usuarios_eventos_fijados_delete ON public.usuarios_eventos_fij
 
 DROP POLICY IF EXISTS rpe_usuarios_eventos_leads_fijados_select ON public.usuarios_eventos_leads_fijados;
 CREATE POLICY rpe_usuarios_eventos_leads_fijados_select ON public.usuarios_eventos_leads_fijados
-  FOR SELECT TO authenticated USING (usuario_id = auth.uid());
+  FOR SELECT TO authenticated USING (
+    usuario_id = auth.uid()
+    AND public.cl_campana_autorizada(evento_lead_id)
+  );
 
 DROP POLICY IF EXISTS rpe_usuarios_eventos_leads_fijados_insert ON public.usuarios_eventos_leads_fijados;
 CREATE POLICY rpe_usuarios_eventos_leads_fijados_insert ON public.usuarios_eventos_leads_fijados
-  FOR INSERT TO authenticated WITH CHECK (usuario_id = auth.uid());
+  FOR INSERT TO authenticated WITH CHECK (
+    usuario_id = auth.uid()
+    AND public.cl_campana_autorizada(evento_lead_id)
+  );
 
 DROP POLICY IF EXISTS rpe_usuarios_eventos_leads_fijados_delete ON public.usuarios_eventos_leads_fijados;
 CREATE POLICY rpe_usuarios_eventos_leads_fijados_delete ON public.usuarios_eventos_leads_fijados
@@ -2684,7 +2697,19 @@ SET search_path = public
 STABLE
 AS $$
   SELECT CASE
-    WHEN p_destinatario_id IS NOT NULL THEN p_destinatario_id = auth.uid()
+    -- Los avisos dirigidos de comentarios también pierden visibilidad al
+    -- revocarse el evento. Los históricos sin evento quedan solo para roles
+    -- globales; no se infiere autorización desde el nombre de la campaña.
+    WHEN p_destinatario_id IS NOT NULL THEN
+      p_destinatario_id = auth.uid()
+      AND public.rpe_is_internal_user()
+      AND (
+        public.rpe_can_create_content()
+        OR (
+          p_evento_id IS NOT NULL
+          AND public.rpe_puede_operar_evento(p_evento_id)
+        )
+      )
     ELSE public.rpe_puede_ver_notificacion(p_evento_id)
   END;
 $$;
@@ -2825,18 +2850,27 @@ SET search_path = public
 AS $$
 DECLARE
   v_sentinel constant uuid := '00000000-0000-0000-0000-000000000001';
-  v_lead           public.leads%ROWTYPE;
-  v_nombre_campana text;
-  v_cuerpo         text;
-  v_destinatarios  uuid[];
+  v_lead              public.leads%ROWTYPE;
+  v_nombre_campana    text;
+  v_evento_origen_id  uuid;
+  v_cuerpo            text;
+  v_destinatarios     uuid[];
 BEGIN
   SELECT * INTO v_lead FROM public.leads l WHERE l.id = NEW.lead_id;
   IF NOT FOUND THEN
     RETURN NEW;
   END IF;
 
-  -- El destinatario debe seguir siendo un usuario interno activo: si se dio de
-  -- baja o pasó a externo, la notificación no tendría dónde mostrarse.
+  SELECT el.nombre, el.evento_origen_id
+  INTO v_nombre_campana, v_evento_origen_id
+  FROM public.eventos_leads el
+  WHERE el.id = v_lead.evento_id;
+
+  v_nombre_campana := COALESCE(v_nombre_campana, 'Actividad de captura');
+
+  -- El destinatario debe seguir activo y, si es user, conservar la asignación
+  -- del evento de origen. Así una revocación tampoco filtra el nombre de la
+  -- actividad por push ni por el inbox.
   SELECT ARRAY(
     SELECT p.id
     FROM public.perfiles p
@@ -2844,6 +2878,19 @@ BEGIN
       AND p.rol IN ('admin', 'organizador', 'user')
       AND p.id <> v_sentinel
       AND p.id IS DISTINCT FROM NEW.autor_id
+      AND (
+        p.rol IN ('admin', 'organizador')
+        OR (
+          p.rol = 'user'
+          AND v_evento_origen_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM public.usuarios_eventos ue
+            WHERE ue.usuario_id = p.id
+              AND ue.evento_id = v_evento_origen_id
+          )
+        )
+      )
       AND (
         p.id = v_lead.perfil_id
         OR EXISTS (
@@ -2859,18 +2906,12 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT el.nombre INTO v_nombre_campana
-  FROM public.eventos_leads el
-  WHERE el.id = v_lead.evento_id;
-
-  v_nombre_campana := COALESCE(v_nombre_campana, 'Actividad de captura');
-
   v_cuerpo := NEW.autor_nombre || ' comentó sobre ' || v_lead.nombre_completo
     || ' (' || v_nombre_campana || ')';
 
   INSERT INTO public.notificaciones (
     tipo, titulo, cuerpo, destinatario_id,
-    lead_id, evento_lead_id,
+    lead_id, evento_lead_id, evento_id,
     nombre_registrado, nombre_evento
   )
   SELECT
@@ -2880,6 +2921,7 @@ BEGIN
     d.destinatario_id,
     v_lead.id,
     v_lead.evento_id,
+    v_evento_origen_id,
     v_lead.nombre_completo,
     v_nombre_campana
   FROM unnest(v_destinatarios) AS d(destinatario_id);
@@ -2998,7 +3040,9 @@ BEGIN
       RETURN public.rpe_can_create_content() OR EXISTS (
         SELECT 1
         FROM public.leads l
-        WHERE l.id = v_id AND l.perfil_id = auth.uid()
+        WHERE l.id = v_id
+          AND l.perfil_id = auth.uid()
+          AND public.cl_campana_autorizada(l.evento_id)
       );
     ELSE
       RETURN false;
