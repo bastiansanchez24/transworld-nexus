@@ -28,13 +28,13 @@ class _AlcanceActividadesCaptura {
   bool permite(EventoLead actividad) {
     if (sinRestriccion) return true;
     final origen = actividad.eventoOrigenId;
-    return origen != null && eventosAutorizados.contains(origen);
+    return origen == null || eventosAutorizados.contains(origen);
   }
 }
 
 /// Segunda barrera de la app para no pintar datos antiguos del disco antes de
-/// que Supabase revalide. La autorización formal siempre es por
-/// `evento_origen_id`; una coincidencia de nombres no otorga acceso.
+/// que Supabase revalide. Las actividades externas son globales; solo las
+/// internas se autorizan por `evento_origen_id`. El nombre no otorga acceso.
 List<EventoLead> filtrarActividadesCapturaAutorizadas({
   required Perfil? perfil,
   required Set<String> eventosAutorizados,
@@ -44,7 +44,7 @@ List<EventoLead> filtrarActividadesCapturaAutorizadas({
   if (!perfil.requiresEventAssignment) return actividades.toList();
   return actividades.where((actividad) {
     final origen = actividad.eventoOrigenId;
-    return origen != null && eventosAutorizados.contains(origen);
+    return origen == null || eventosAutorizados.contains(origen);
   }).toList();
 }
 

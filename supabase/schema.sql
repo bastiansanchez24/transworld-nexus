@@ -747,10 +747,10 @@ AS $$
   );
 $$;
 
--- Alcance único del módulo de captura. Admin y organizador conservan acceso
--- global; user y externo solo pueden operar actividades vinculadas por FK a
--- un evento explícitamente asignado. El nombre no concede permisos: era un
--- fallback legacy ambiguo que relacionaba campañas sin una FK real.
+-- Alcance único del módulo de captura. Las actividades externas no tienen
+-- granularidad y son visibles para todo perfil activo. Las internas heredan
+-- exclusivamente el permiso de su evento de origen; el nombre nunca concede
+-- acceso porque no representa una relación de autorización.
 CREATE OR REPLACE FUNCTION public.cl_campana_autorizada(p_campana_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -758,14 +758,24 @@ SECURITY DEFINER
 SET search_path = public
 STABLE
 AS $$
-  SELECT public.rpe_can_create_content()
-      OR EXISTS (
-        SELECT 1
-        FROM public.eventos_leads el
-        WHERE el.id = p_campana_id
-          AND el.evento_origen_id IS NOT NULL
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.eventos_leads el
+    WHERE el.id = p_campana_id
+      AND (
+        (
+          el.evento_origen_id IS NULL
+          AND (
+            public.rpe_is_internal_user()
+            OR public.rpe_is_externo()
+          )
+        )
+        OR (
+          el.evento_origen_id IS NOT NULL
           AND public.rpe_puede_operar_evento(el.evento_origen_id)
-      );
+        )
+      )
+  );
 $$;
 
 -- Campos de identidad del lead controlados por servidor. El índice único
@@ -2242,7 +2252,13 @@ DROP POLICY IF EXISTS cl_eventos_leads_select ON public.eventos_leads;
 CREATE POLICY cl_eventos_leads_select ON public.eventos_leads
   FOR SELECT TO authenticated
   USING (
-    public.rpe_can_create_content()
+    (
+      evento_origen_id IS NULL
+      AND (
+        public.rpe_is_internal_user()
+        OR public.rpe_is_externo()
+      )
+    )
     OR (
       evento_origen_id IS NOT NULL
       AND public.rpe_puede_operar_evento(evento_origen_id)
@@ -2679,7 +2695,11 @@ BEGIN
   INSERT INTO public.notificaciones_ocultas (usuario_id, notificacion_id)
   SELECT v_user_id, n.id
   FROM public.notificaciones n
-  WHERE public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
+  WHERE public.rpe_puede_ver_notificacion_row(
+    n.evento_id,
+    n.destinatario_id,
+    n.evento_lead_id
+  )
   ON CONFLICT (usuario_id, notificacion_id) DO NOTHING;
 END;
 $$;
@@ -2688,7 +2708,8 @@ GRANT EXECUTE ON FUNCTION public.rpe_ocultar_todas_notificaciones() TO authentic
 
 CREATE OR REPLACE FUNCTION public.rpe_puede_ver_notificacion_row(
   p_evento_id uuid,
-  p_destinatario_id uuid
+  p_destinatario_id uuid,
+  p_evento_lead_id uuid
 )
 RETURNS boolean
 LANGUAGE sql
@@ -2697,24 +2718,23 @@ SET search_path = public
 STABLE
 AS $$
   SELECT CASE
-    -- Los avisos dirigidos de comentarios también pierden visibilidad al
-    -- revocarse el evento. Los históricos sin evento quedan solo para roles
-    -- globales; no se infiere autorización desde el nombre de la campaña.
+    -- Los avisos dirigidos heredan el alcance de la actividad: externas para
+    -- todos e internas solo mientras se conserve el evento de origen.
     WHEN p_destinatario_id IS NOT NULL THEN
       p_destinatario_id = auth.uid()
       AND public.rpe_is_internal_user()
-      AND (
-        public.rpe_can_create_content()
-        OR (
-          p_evento_id IS NOT NULL
-          AND public.rpe_puede_operar_evento(p_evento_id)
-        )
-      )
+      AND p_evento_lead_id IS NOT NULL
+      AND public.cl_campana_autorizada(p_evento_lead_id)
     ELSE public.rpe_puede_ver_notificacion(p_evento_id)
   END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.rpe_puede_ver_notificacion_row(uuid, uuid)
+REVOKE ALL ON FUNCTION public.rpe_puede_ver_notificacion_row(
+  uuid, uuid, uuid
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rpe_puede_ver_notificacion_row(
+  uuid, uuid, uuid
+)
   TO authenticated;
 
 ALTER TABLE public.notificaciones ENABLE ROW LEVEL SECURITY;
@@ -2725,7 +2745,13 @@ ALTER TABLE public.device_tokens ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS rpe_notificaciones_select ON public.notificaciones;
 CREATE POLICY rpe_notificaciones_select ON public.notificaciones
   FOR SELECT TO authenticated
-  USING (public.rpe_puede_ver_notificacion_row(evento_id, destinatario_id));
+  USING (
+    public.rpe_puede_ver_notificacion_row(
+      evento_id,
+      destinatario_id,
+      evento_lead_id
+    )
+  );
 
 DROP POLICY IF EXISTS rpe_notificaciones_leidas_select ON public.notificaciones_leidas;
 CREATE POLICY rpe_notificaciones_leidas_select ON public.notificaciones_leidas
@@ -2736,7 +2762,11 @@ CREATE POLICY rpe_notificaciones_leidas_select ON public.notificaciones_leidas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
+        AND public.rpe_puede_ver_notificacion_row(
+          n.evento_id,
+          n.destinatario_id,
+          n.evento_lead_id
+        )
     )
   );
 
@@ -2749,7 +2779,11 @@ CREATE POLICY rpe_notificaciones_leidas_insert ON public.notificaciones_leidas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
+        AND public.rpe_puede_ver_notificacion_row(
+          n.evento_id,
+          n.destinatario_id,
+          n.evento_lead_id
+        )
     )
   );
 
@@ -2762,7 +2796,11 @@ CREATE POLICY rpe_notificaciones_leidas_update ON public.notificaciones_leidas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
+        AND public.rpe_puede_ver_notificacion_row(
+          n.evento_id,
+          n.destinatario_id,
+          n.evento_lead_id
+        )
     )
   )
   WITH CHECK (
@@ -2771,7 +2809,11 @@ CREATE POLICY rpe_notificaciones_leidas_update ON public.notificaciones_leidas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
+        AND public.rpe_puede_ver_notificacion_row(
+          n.evento_id,
+          n.destinatario_id,
+          n.evento_lead_id
+        )
     )
   );
 
@@ -2784,7 +2826,11 @@ CREATE POLICY rpe_notificaciones_ocultas_select ON public.notificaciones_ocultas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
+        AND public.rpe_puede_ver_notificacion_row(
+          n.evento_id,
+          n.destinatario_id,
+          n.evento_lead_id
+        )
     )
   );
 
@@ -2797,7 +2843,11 @@ CREATE POLICY rpe_notificaciones_ocultas_insert ON public.notificaciones_ocultas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
+        AND public.rpe_puede_ver_notificacion_row(
+          n.evento_id,
+          n.destinatario_id,
+          n.evento_lead_id
+        )
     )
   );
 
@@ -2810,7 +2860,11 @@ CREATE POLICY rpe_notificaciones_ocultas_delete ON public.notificaciones_ocultas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
+        AND public.rpe_puede_ver_notificacion_row(
+          n.evento_id,
+          n.destinatario_id,
+          n.evento_lead_id
+        )
     )
   );
 
@@ -2868,9 +2922,8 @@ BEGIN
 
   v_nombre_campana := COALESCE(v_nombre_campana, 'Actividad de captura');
 
-  -- El destinatario debe seguir activo y, si es user, conservar la asignación
-  -- del evento de origen. Así una revocación tampoco filtra el nombre de la
-  -- actividad por push ni por el inbox.
+  -- En actividades externas cualquier user participante puede recibir el
+  -- aviso. En internas debe conservar la asignación del evento de origen.
   SELECT ARRAY(
     SELECT p.id
     FROM public.perfiles p
@@ -2882,12 +2935,14 @@ BEGIN
         p.rol IN ('admin', 'organizador')
         OR (
           p.rol = 'user'
-          AND v_evento_origen_id IS NOT NULL
-          AND EXISTS (
-            SELECT 1
-            FROM public.usuarios_eventos ue
-            WHERE ue.usuario_id = p.id
-              AND ue.evento_id = v_evento_origen_id
+          AND (
+            v_evento_origen_id IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM public.usuarios_eventos ue
+              WHERE ue.usuario_id = p.id
+                AND ue.evento_id = v_evento_origen_id
+            )
           )
         )
       )

@@ -7,10 +7,13 @@ void main() {
       'supabase/migrations/'
       '202608211600_actividades_captura_por_evento_autorizado.sql';
 
-  test('la migración exige evento de origen autorizado en todas las capas', () {
+  test('externas son globales e internas exigen evento autorizado', () {
     final sql = File(migracion).readAsStringSync();
 
     expect(sql, contains('public.cl_campana_autorizada(evento_id)'));
+    expect(sql, contains('evento_origen_id IS NULL'));
+    expect(sql, contains('public.rpe_is_internal_user()'));
+    expect(sql, contains('public.rpe_is_externo()'));
     expect(sql, contains('evento_origen_id IS NOT NULL'));
     expect(sql, contains('public.rpe_puede_operar_evento(evento_origen_id)'));
     expect(sql, contains('public.cl_campana_autorizada(p_evento_id)'));
@@ -44,13 +47,18 @@ void main() {
     );
   });
 
-  test('notificaciones de comentarios respetan revocaciones del evento', () {
-    final sql = File(migracion).readAsStringSync();
+  test(
+    'notificaciones heredan el alcance externo o interno de la actividad',
+    () {
+      final sql = File(migracion).readAsStringSync();
 
-    expect(sql, contains('AND public.rpe_puede_operar_evento(p_evento_id)'));
-    expect(sql, contains('ue.evento_id = v_evento_origen_id'));
-    expect(sql, contains('lead_id, evento_lead_id, evento_id'));
-  });
+      expect(sql, contains('public.cl_campana_autorizada(p_evento_lead_id)'));
+      expect(sql, contains('n.evento_lead_id'));
+      expect(sql, contains('v_evento_origen_id IS NULL'));
+      expect(sql, contains('ue.evento_id = v_evento_origen_id'));
+      expect(sql, contains('lead_id, evento_lead_id, evento_id'));
+    },
+  );
 
   test('las fotos privadas de leads heredan el permiso de la campaña', () {
     final sql = File(migracion).readAsStringSync();

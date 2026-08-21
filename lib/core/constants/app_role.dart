@@ -45,8 +45,8 @@ enum AppRole {
   bool get canAccessNotifications => !isExterno;
   bool get canExportData => isAdmin || isOrganizador;
 
-  /// Todos los roles autenticados ven el listado de la campaña que pueden
-  /// abrir. El externo queda acotado por RLS a sus eventos asignados.
+  /// Todos los roles autenticados ven las actividades externas. Las internas
+  /// quedan acotadas por RLS a sus eventos asignados.
   bool get canViewAllLeads => true;
 
   /// Editar leads de cualquier capturador. Sin esto solo se editan los propios.

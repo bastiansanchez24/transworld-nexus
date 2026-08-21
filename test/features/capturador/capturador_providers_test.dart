@@ -39,28 +39,44 @@ void main() {
     Perfil perfil(AppRole rol) =>
         Perfil(id: 'usuario-1', nombreCompleto: 'Usuario', rol: rol);
 
-    test('user solo ve actividades vinculadas a eventos asignados', () {
+    test('user ve externas y solo internas de eventos asignados', () {
       final visibles = filtrarActividadesCapturaAutorizadas(
         perfil: perfil(AppRole.user),
         eventosAutorizados: const {'evento-1'},
         actividades: actividades,
       );
 
-      expect(visibles.map((actividad) => actividad.id), ['campana-autorizada']);
+      expect(visibles.map((actividad) => actividad.id), [
+        'campana-autorizada',
+        'campana-sin-origen',
+      ]);
     });
 
-    test('externo usa el mismo alcance y no autoriza por nombre', () {
+    test('externo ve externas y no autoriza internas por nombre', () {
       final visibles = filtrarActividadesCapturaAutorizadas(
         perfil: perfil(AppRole.externo),
         eventosAutorizados: const {'evento-1'},
         actividades: actividades,
       );
 
-      expect(visibles.map((actividad) => actividad.id), ['campana-autorizada']);
+      expect(visibles.map((actividad) => actividad.id), [
+        'campana-autorizada',
+        'campana-sin-origen',
+      ]);
       expect(
         visibles.any((actividad) => actividad.eventoOrigenId == null),
-        isFalse,
+        isTrue,
       );
+    });
+
+    test('sin eventos asignados aún conserva las actividades externas', () {
+      final visibles = filtrarActividadesCapturaAutorizadas(
+        perfil: perfil(AppRole.user),
+        eventosAutorizados: const {},
+        actividades: actividades,
+      );
+
+      expect(visibles.map((actividad) => actividad.id), ['campana-sin-origen']);
     });
 
     test('admin y organizador conservan alcance global', () {
