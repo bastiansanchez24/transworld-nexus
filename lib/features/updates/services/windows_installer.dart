@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'ota_debug_log.dart';
-
 /// Resultado de intentar aplicar una actualización Windows.
 enum WindowsInstallOutcome { launched, unsupportedPlatform, failed }
 
@@ -49,25 +47,7 @@ class WindowsInstaller {
     final exePath = Platform.resolvedExecutable;
     final installDir = File(exePath).parent.path;
     final exeName = _exeFileName(exePath);
-    final exeExists = await File(exePath).exists();
     final writable = await _isDirectoryWritable(installDir);
-    // #region agent log
-    otaDebugLog(
-      location: 'windows_installer.dart:install',
-      message: 'windows preflight',
-      hypothesisId: 'H-D',
-      data: {
-        'exeName': exeName,
-        'exeExists': exeExists,
-        'writable': writable,
-        'underLocalAppData': installDir.toLowerCase().contains(
-          '\\appdata\\local\\',
-        ),
-        'zipLen': await zipFile.length(),
-        'parentPid': pid,
-      },
-    );
-    // #endregion
 
     // Pre-flight: si no podemos escribir en el directorio de instalación
     // (típico en `C:\Program Files` sin elevación) abortamos ANTES de cerrar
@@ -138,19 +118,6 @@ class WindowsInstaller {
       } catch (_) {}
 
       if (launch.exitCode != 0) {
-        // #region agent log
-        otaDebugLog(
-          location: 'windows_installer.dart:install',
-          message: 'launcher Process.run failed',
-          hypothesisId: 'H-D',
-          data: {
-            'exitCode': launch.exitCode,
-            'stderr': launch.stderr.toString().trim(),
-            'installDir': installDir,
-            'exeName': exeName,
-          },
-        );
-        // #endregion
         return WindowsInstallResult(
           WindowsInstallOutcome.failed,
           message:
@@ -166,21 +133,6 @@ class WindowsInstaller {
       }
 
       final readyExists = await ready.exists();
-      // #region agent log
-      otaDebugLog(
-        location: 'windows_installer.dart:install',
-        message: 'updater handshake',
-        hypothesisId: 'H-D',
-        data: {
-          'readyExists': readyExists,
-          'launchExitCode': launch.exitCode,
-          'installDir': installDir,
-          'exeName': exeName,
-          'zipLen': await zipFile.length(),
-          'parentPid': pid,
-        },
-      );
-      // #endregion
 
       if (!readyExists) {
         return const WindowsInstallResult(
@@ -262,6 +214,7 @@ function ConvertTo-CmdQuoted([string]$Value) {
 $arguments = @(
   '-NoProfile',
   '-ExecutionPolicy Bypass',
+  '-WindowStyle Hidden',
   '-File', (ConvertTo-CmdQuoted $UpdaterScript),
   '-ZipPath', (ConvertTo-CmdQuoted $ZipPath),
   '-InstallDir', (ConvertTo-CmdQuoted $InstallDir),
@@ -271,13 +224,15 @@ $arguments = @(
   '-RemoteVersion', (ConvertTo-CmdQuoted $RemoteVersion)
 ) -join ' '
 
+# SW_HIDE (0): el updater no debe abrir consola. El progreso lo muestra el
+# diálogo WinForms del propio script, que es una ventana aparte.
 $shell = New-Object -ComObject Shell.Application
-$rc = $shell.ShellExecute($PowerShellPath, $arguments, $InstallDir, 'open', 1)
-$agentLog = 'c:\src\CODE\project_transworld-nexus\projects\transworld-nexus\debug-23a43f.log'
-$ts = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-$payload = '{"sessionId":"23a43f","runId":"pre-fix","hypothesisId":"H-D","location":"windows_installer.dart:launcher","message":"ShellExecute result","data":{"rc":' + [int]$rc + ',"argLen":' + $arguments.Length + '},"timestamp":' + $ts + '}'
-try { Add-Content -LiteralPath $agentLog -Value $payload -Encoding UTF8 } catch { }
-try { Add-Content -LiteralPath (Join-Path $env:TEMP 'nexus-update-launch.log') -Value $payload -Encoding UTF8 } catch { }
+$rc = $shell.ShellExecute($PowerShellPath, $arguments, $InstallDir, 'open', 0)
+$ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+try {
+  Add-Content -LiteralPath (Join-Path $env:TEMP 'nexus-update-launch.log') `
+    -Value ('[' + $ts + '] ShellExecute rc=' + [int]$rc) -Encoding UTF8
+} catch { }
 ''';
 
 /// Actualizador out-of-process.
@@ -309,26 +264,29 @@ function Write-Log([string]$Message) {
   try { Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8 } catch { }
 }
 
-function Write-AgentLog([string]$HypothesisId, [string]$Location, [string]$Message, [string]$DataJson) {
-  $ts = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-  $payload = '{"sessionId":"23a43f","runId":"pre-fix","hypothesisId":"' + $HypothesisId + '","location":"' + $Location + '","message":"' + $Message + '","data":' + $DataJson + ',"timestamp":' + $ts + '}'
-  try { Add-Content -LiteralPath 'c:\src\CODE\project_transworld-nexus\projects\transworld-nexus\debug-23a43f.log' -Value $payload -Encoding UTF8 } catch { }
-  Write-Log $Message
-}
-
+# El relanzamiento va por Explorer (Shell.Application), NO por Start-Process:
+# un proceso lanzado desde este PowerShell hereda su consola, y el runner de
+# Flutter hace AttachConsole(ATTACH_PARENT_PROCESS). Esa consola sobreviviría
+# al updater y su botón de cerrar mataría RegisPro (CTRL_CLOSE_EVENT).
 function Start-Nexus {
   try {
-    if (Test-Path -LiteralPath $exePath) {
+    if (-not (Test-Path -LiteralPath $exePath)) {
+      Write-Log ('ERROR: no existe el ejecutable para relanzar: ' + $exePath)
+      return
+    }
+    try {
+      $shell = New-Object -ComObject Shell.Application
+      $null = $shell.ShellExecute($exePath, '', $InstallDir, 'open', 1)
+      Write-Log ('RegisPro relanzado por el shell: ' + $exePath)
+    } catch {
+      # Sin Explorer disponible (sesión de servicio, shell reemplazado) queda
+      # el camino directo: mejor una consola heredada que ninguna app.
+      Write-Log ('Aviso: ShellExecute falló (' + $_.Exception.Message + '); usando Start-Process.')
       Start-Process -FilePath $exePath -WorkingDirectory $InstallDir
       Write-Log ('RegisPro relanzado: ' + $exePath)
-      Write-AgentLog 'H-D' 'windows_installer.dart:updater' 'relaunched' '{"ok":true}'
-    } else {
-      Write-Log ('ERROR: no existe el ejecutable para relanzar: ' + $exePath)
-      Write-AgentLog 'H-D' 'windows_installer.dart:updater' 'relaunch skipped missing exe' '{"ok":false}'
     }
   } catch {
     Write-Log ('ERROR al relanzar RegisPro: ' + $_.Exception.Message)
-    Write-AgentLog 'H-D' 'windows_installer.dart:updater' 'relaunch threw' '{"ok":false}'
   }
 }
 
@@ -397,16 +355,23 @@ $bar.Size = New-Object System.Drawing.Size(430, 22)
 $bar.Style = 'Marquee'
 $form.Controls.Add($label)
 $form.Controls.Add($bar)
+# La consola va oculta (SW_HIDE), así que este diálogo es la única señal de
+# que la actualización avanza: se fuerza visible y al frente en vez de
+# confiar en el `wShowWindow` heredado del proceso.
 $form.Show()
+$form.Visible = $true
+$form.WindowState = 'Normal'
+$form.Activate()
+$form.BringToFront()
 $form.Refresh()
+[System.Windows.Forms.Application]::DoEvents()
 function Set-UpdaterStatus([string]$Text) {
   if ($label -and -not $label.IsDisposed) { $label.Text = $Text }
   [System.Windows.Forms.Application]::DoEvents()
 }
 
 Write-Log '--- Inicio de actualización ---'
-Write-Log ('DBG-23a43f H-D/H-E InstallDirLen=' + $InstallDir.Length + ' ExeName=' + $ExeName + ' ZipExists=' + (Test-Path -LiteralPath $ZipPath) + ' Pid=' + $PID + ' ParentPid=' + $ParentPid)
-Write-AgentLog 'H-D' 'windows_installer.dart:updater' 'updater started' ('{"exeName":"' + $ExeName + '","zipExists":' + ($(if (Test-Path -LiteralPath $ZipPath) { 'true' } else { 'false' }).ToLower()) + ',"parentPid":' + $ParentPid + ',"exeExists":' + ($(if (Test-Path -LiteralPath $exePath) { 'true' } else { 'false' }).ToLower()) + '}')
+Write-Log ('Contexto: InstallDirLen=' + $InstallDir.Length + ' ExeName=' + $ExeName + ' ZipExists=' + (Test-Path -LiteralPath $ZipPath) + ' Pid=' + $PID + ' ParentPid=' + $ParentPid)
 
 # Handshake con Nexus: confirma que PowerShell inició y pudo interpretar todos
 # los parámetros antes de que la app se cierre y libere sus binarios.
@@ -442,14 +407,12 @@ while ((Get-Date) -lt $deadline) {
 }
 
 if (-not (Test-InstallDirUnlocked)) {
-  Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'files still locked' '{"waitedSec":180}'
   Write-Log 'ERROR: archivos de instalación siguen bloqueados tras 180s. Se aborta sin tocar la instalación.'
   Start-Nexus
   Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
   exit 1
 }
 
-Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'install dir unlocked' '{"ok":true}'
 
 # Margen extra para antivirus / indexador tras liberar handles.
 Start-Sleep -Milliseconds 800
@@ -477,7 +440,6 @@ try {
   if (-not (Test-Path -LiteralPath (Join-Path $source $ExeName))) {
     throw ('El paquete no contiene ' + $ExeName + '; se cancela la actualización.')
   }
-  Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'payload validated' ('{"sourceHasExe":true}')
 
   # 5. Backup de la instalación actual para poder revertir.
   Write-Log 'Creando backup de la instalación actual...'
@@ -491,7 +453,6 @@ try {
   Copy-Payload $source $InstallDir
   $restoreNeeded = $false
   Write-Log 'Actualización aplicada correctamente.'
-  Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'copy succeeded' ('{"ok":true}')
 
   if (-not [string]::IsNullOrWhiteSpace($RemoteVersion)) {
     try {
@@ -503,7 +464,6 @@ try {
   }
 } catch {
   Write-Log ('ERROR: ' + $_.Exception.Message)
-  Write-AgentLog 'H-E' 'windows_installer.dart:updater' 'updater error' ('{"restoreNeeded":' + ($(if ($restoreNeeded) { 'true' } else { 'false' }).ToLower()) + '}')
   if ($restoreNeeded) {
     try {
       Write-Log 'Restaurando backup...'

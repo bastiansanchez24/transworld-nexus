@@ -45,7 +45,7 @@ class DefaultFirebaseOptions {
     appId: _placeholder,
     messagingSenderId: _placeholder,
     projectId: 'tw-nexus-app',
-    storageBucket: 'tw-nexus-app.appspot.com',
+    storageBucket: 'tw-nexus-app.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -53,7 +53,7 @@ class DefaultFirebaseOptions {
     appId: _placeholder,
     messagingSenderId: _placeholder,
     projectId: 'tw-nexus-app',
-    storageBucket: 'tw-nexus-app.appspot.com',
+    storageBucket: 'tw-nexus-app.firebasestorage.app',
     iosBundleId: 'com.transworld.nexus',
   );
 
@@ -62,7 +62,7 @@ class DefaultFirebaseOptions {
     appId: _placeholder,
     messagingSenderId: _placeholder,
     projectId: 'tw-nexus-app',
-    storageBucket: 'tw-nexus-app.appspot.com',
+    storageBucket: 'tw-nexus-app.firebasestorage.app',
     iosBundleId: 'com.transworld.nexus',
   );
 
@@ -72,7 +72,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: _placeholder,
     projectId: 'tw-nexus-app',
     authDomain: 'tw-nexus-app.firebaseapp.com',
-    storageBucket: 'tw-nexus-app.appspot.com',
+    storageBucket: 'tw-nexus-app.firebasestorage.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
@@ -81,6 +81,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: _placeholder,
     projectId: 'tw-nexus-app',
     authDomain: 'tw-nexus-app.firebaseapp.com',
-    storageBucket: 'tw-nexus-app.appspot.com',
+    storageBucket: 'tw-nexus-app.firebasestorage.app',
   );
 }

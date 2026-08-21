@@ -22,7 +22,7 @@ Future<void> main() async {
   await bootstrapDesktopWindow();
 
   if (!kIsWeb &&
-      (Platform.isAndroid || Platform.isIOS) &&
+      Platform.isAndroid &&
       DefaultFirebaseOptions.isConfigured) {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }

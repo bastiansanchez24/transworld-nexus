@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -12,9 +13,15 @@ import '../../../core/router/route_paths.dart';
 import '../../../data/repositories/notificaciones_repository.dart';
 import '../../../firebase_options.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../notificacion_destino.dart';
 
 const _androidChannelId = 'nexus_registros';
 const _androidChannelName = 'Registros de eventos';
+
+/// Push del sistema (bandeja) solo en Android. iOS queda fuera: el equipo
+/// personal de Apple no firma Push Notifications, y el inbox in-app no lo
+/// necesita.
+bool get _fcmDelSistema => !kIsWeb && Platform.isAndroid;
 
 final pushNotificationServiceProvider = Provider<PushNotificationService>((
   ref,
@@ -26,7 +33,7 @@ final pushNotificationServiceProvider = Provider<PushNotificationService>((
 
 /// Arranca FCM y mantiene el token sincronizado con Supabase.
 final pushNotificationsBootstrapProvider = Provider<void>((ref) {
-  if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) return;
+  if (!_fcmDelSistema) return;
 
   final service = ref.watch(pushNotificationServiceProvider);
 
@@ -69,7 +76,7 @@ class PushNotificationService {
   void attachRouter(GoRouter router) => _router = router;
 
   Future<void> initialize() async {
-    if (_inicializado || kIsWeb || !(Platform.isAndroid || Platform.isIOS)) {
+    if (_inicializado || !_fcmDelSistema) {
       return;
     }
     if (!DefaultFirebaseOptions.isConfigured) {
@@ -85,18 +92,21 @@ class PushNotificationService {
       await _configurarCanalAndroid();
       await _localNotifications.initialize(
         const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings('@drawable/ic_notification'),
           iOS: DarwinInitializationSettings(),
         ),
-        onDidReceiveNotificationResponse: (_) => _abrirInbox(),
+        onDidReceiveNotificationResponse: (respuesta) =>
+            _abrirDestino(_datosDePayload(respuesta.payload)),
       );
 
       FirebaseMessaging.onMessage.listen(_mostrarForeground);
-      FirebaseMessaging.onMessageOpenedApp.listen((_) => _abrirInbox());
+      FirebaseMessaging.onMessageOpenedApp.listen(
+        (message) => _abrirDestino(message.data),
+      );
 
       final initial = await FirebaseMessaging.instance.getInitialMessage();
       if (initial != null) {
-        Future.microtask(_abrirInbox);
+        Future.microtask(() => _abrirDestino(initial.data));
       }
 
       _inicializado = true;
@@ -126,18 +136,11 @@ class PushNotificationService {
     try {
       final messaging = FirebaseMessaging.instance;
 
-      if (Platform.isIOS) {
-        final apns = await messaging.getAPNSToken();
-        if (apns == null) {
-          await Future<void>.delayed(const Duration(seconds: 1));
-        }
-      }
-
       final token = await messaging.getToken();
       if (token == null || token.isEmpty) return;
 
       _tokenActual = token;
-      final plataforma = Platform.isIOS ? 'ios' : 'android';
+      const plataforma = 'android';
       await _ref
           .read(notificacionesRepositoryProvider)
           .guardarDeviceToken(token: token, plataforma: plataforma);
@@ -231,12 +234,27 @@ class PushNotificationService {
       notification.title,
       notification.body,
       details,
+      // El `data` viaja en el payload para que tocar el aviso en primer plano
+      // lleve al mismo sitio que tocarlo desde la bandeja.
+      payload: jsonEncode(message.data),
     );
   }
 
-  void _abrirInbox() {
+  /// Navega a lo que la notificación referencia; si no apunta a nada abrible,
+  /// al inbox.
+  void _abrirDestino(Map<String, dynamic> data) {
     final perfil = _ref.read(currentPerfilProvider).valueOrNull;
     if (perfil?.canAccessNotifications != true) return;
-    _router?.push(RoutePaths.notificaciones);
+    _router?.push(destinoDeDatosPush(data) ?? RoutePaths.notificaciones);
+  }
+
+  Map<String, dynamic> _datosDePayload(String? payload) {
+    if (payload == null || payload.isEmpty) return const {};
+    try {
+      final decodificado = jsonDecode(payload);
+      return decodificado is Map<String, dynamic> ? decodificado : const {};
+    } catch (_) {
+      return const {};
+    }
   }
 }

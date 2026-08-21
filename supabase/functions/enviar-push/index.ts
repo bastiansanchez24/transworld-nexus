@@ -23,6 +23,10 @@ type NotificacionRecord = {
   cuerpo: string;
   evento_id: string | null;
   registrado_id: string | null;
+  /** Con valor, el aviso es para una sola persona (comentarios de lead). */
+  destinatario_id: string | null;
+  lead_id: string | null;
+  evento_lead_id: string | null;
 };
 
 type DeviceTokenRow = {
@@ -124,6 +128,21 @@ async function sendFcmMessage(
             tipo: notificacion.tipo,
             evento_id: notificacion.evento_id ?? "",
             registrado_id: notificacion.registrado_id ?? "",
+            lead_id: notificacion.lead_id ?? "",
+            evento_lead_id: notificacion.evento_lead_id ?? "",
+          },
+          // Sin `priority: HIGH` Android lo trata como normal y Doze / OEM
+          // lo aplazan o lo tiran. `channel_id` tiene que existir en la app
+          // (`nexus_registros`); si falta, va a "Misceláneas", a menudo muteado.
+          android: {
+            priority: "HIGH",
+            notification: {
+              channel_id: "nexus_registros",
+              sound: "default",
+              default_sound: true,
+              default_vibrate_timings: true,
+              notification_priority: "PRIORITY_HIGH",
+            },
           },
         },
       }),
@@ -138,6 +157,41 @@ async function sendFcmMessage(
     body.includes("NOT_FOUND");
   console.error(`FCM error for token ${token.slice(0, 12)}…: ${body}`);
   return { ok: false, invalidToken: invalid };
+}
+
+/** Envía a una lista de dispositivos y purga los tokens que FCM rechaza. */
+async function enviarA(
+  filas: DeviceTokenRow[],
+  account: ServiceAccount,
+  record: NotificacionRecord,
+): Promise<Response> {
+  if (filas.length === 0) {
+    return json({ ok: true, sent: 0, reason: "no_authorized_tokens" });
+  }
+
+  const accessToken = await getAccessToken(account);
+  const invalidTokens: string[] = [];
+  let sent = 0;
+
+  for (const row of filas) {
+    const result = await sendFcmMessage(
+      accessToken,
+      account.project_id,
+      row.token,
+      record,
+    );
+    if (result.ok) {
+      sent++;
+    } else if (result.invalidToken) {
+      invalidTokens.push(row.token);
+    }
+  }
+
+  if (invalidTokens.length > 0) {
+    await supabase.from("device_tokens").delete().in("token", invalidTokens);
+  }
+
+  return json({ ok: true, sent, invalid_removed: invalidTokens.length });
 }
 
 serve(async (req) => {
@@ -167,7 +221,9 @@ serve(async (req) => {
     // contenido real se vuelve a leer desde la tabla con service role.
     const { data: notification, error: notificationError } = await supabase
       .from("notificaciones")
-      .select("id, tipo, titulo, cuerpo, evento_id, registrado_id")
+      .select(
+        "id, tipo, titulo, cuerpo, evento_id, registrado_id, destinatario_id, lead_id, evento_lead_id",
+      )
       .eq("id", recordId)
       .maybeSingle();
 
@@ -181,11 +237,19 @@ serve(async (req) => {
       FIREBASE_SERVICE_ACCOUNT_JSON,
     ) as ServiceAccount;
 
-    const { data: tokens, error } = await supabase
+    // Aviso dirigido: solo los dispositivos de esa persona. El resto de la
+    // lógica de rol/evento no aplica, porque la RLS ya lo hizo privado.
+    let consulta = supabase
       .from("device_tokens")
       .select("token, usuario_id, perfiles!inner(rol, activo)")
       .in("perfiles.rol", ["admin", "organizador", "user"])
       .eq("perfiles.activo", true);
+
+    if (record.destinatario_id) {
+      consulta = consulta.eq("usuario_id", record.destinatario_id);
+    }
+
+    const { data: tokens, error } = await consulta;
 
     if (error) throw error;
     if (!tokens?.length) {
@@ -193,6 +257,11 @@ serve(async (req) => {
     }
 
     const tokenRows = tokens as unknown as DeviceTokenRow[];
+
+    if (record.destinatario_id) {
+      return await enviarA(tokenRows, account, record);
+    }
+
     const userIds = [
       ...new Set(
         tokenRows
@@ -224,33 +293,7 @@ serve(async (req) => {
       (row.perfiles?.rol === "user" && usersAutorizados.has(row.usuario_id))
     );
 
-    if (tokensAutorizados.length === 0) {
-      return json({ ok: true, sent: 0, reason: "no_authorized_tokens" });
-    }
-
-    const accessToken = await getAccessToken(account);
-    const invalidTokens: string[] = [];
-    let sent = 0;
-
-    for (const row of tokensAutorizados) {
-      const result = await sendFcmMessage(
-        accessToken,
-        account.project_id,
-        row.token as string,
-        record,
-      );
-      if (result.ok) {
-        sent++;
-      } else if (result.invalidToken) {
-        invalidTokens.push(row.token as string);
-      }
-    }
-
-    if (invalidTokens.length > 0) {
-      await supabase.from("device_tokens").delete().in("token", invalidTokens);
-    }
-
-    return json({ ok: true, sent, invalid_removed: invalidTokens.length });
+    return await enviarA(tokensAutorizados, account, record);
   } catch (e) {
     console.error("enviar-push error:", e);
     return json(

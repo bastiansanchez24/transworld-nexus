@@ -65,14 +65,22 @@ class TwIosGlassIconButton extends StatelessWidget {
       tint = AppColors.primary;
     }
 
+    // `prominentGlass` pinta el fondo con el color de marca: ahí el símbolo tiene
+    // que ir en blanco, igual que en [TwIconButton]. Sin esto el compartir del
+    // menú de evento quedaba en gris oscuro sobre azul.
+    final Color colorSimbolo;
+    if (isBrand) {
+      colorSimbolo = Colors.white;
+    } else if (danger) {
+      colorSimbolo = TwColors.danger;
+    } else {
+      colorSimbolo = TwColors.inkSoft;
+    }
+
     Widget boton = CNButton.icon(
       icon: symbolName == null
           ? null
-          : CNSymbol(
-              symbolName,
-              size: 17,
-              color: danger ? TwColors.danger : TwColors.inkSoft,
-            ),
+          : CNSymbol(symbolName, size: 17, color: colorSimbolo),
       customIcon: symbolName == null ? icon : null,
       tint: tint,
       enabled: onTap != null,

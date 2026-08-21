@@ -3,7 +3,8 @@ enum TipoNotificacion {
   acreditacion20,
   acreditacion50,
   acreditacion80,
-  acreditacion100;
+  acreditacion100,
+  leadComentario;
 
   static TipoNotificacion fromString(String? raw) {
     return switch (raw) {
@@ -11,14 +12,18 @@ enum TipoNotificacion {
       'acreditacion_50' => TipoNotificacion.acreditacion50,
       'acreditacion_80' => TipoNotificacion.acreditacion80,
       'acreditacion_100' => TipoNotificacion.acreditacion100,
+      'lead_comentario' => TipoNotificacion.leadComentario,
       _ => TipoNotificacion.registro,
     };
   }
 
   bool get esAcreditacion => switch (this) {
     TipoNotificacion.registro => false,
+    TipoNotificacion.leadComentario => false,
     _ => true,
   };
+
+  bool get esComentario => this == TipoNotificacion.leadComentario;
 }
 
 class NotificacionInbox {
@@ -31,6 +36,9 @@ class NotificacionInbox {
     required this.nombreEvento,
     this.registradoId,
     this.eventoId,
+    this.destinatarioId,
+    this.leadId,
+    this.eventoLeadId,
     this.createdAt,
     this.leida = false,
   });
@@ -43,6 +51,12 @@ class NotificacionInbox {
   final String nombreEvento;
   final String? registradoId;
   final String? eventoId;
+
+  /// Con valor, el aviso es solo para esa persona (comentarios de lead);
+  /// `null` es el aviso global de siempre (registros, hitos de acreditación).
+  final String? destinatarioId;
+  final String? leadId;
+  final String? eventoLeadId;
   final DateTime? createdAt;
   final bool leida;
 
@@ -59,6 +73,9 @@ class NotificacionInbox {
       nombreEvento: map['nombre_evento'] as String,
       registradoId: map['registrado_id'] as String?,
       eventoId: map['evento_id'] as String?,
+      destinatarioId: map['destinatario_id'] as String?,
+      leadId: map['lead_id'] as String?,
+      eventoLeadId: map['evento_lead_id'] as String?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,

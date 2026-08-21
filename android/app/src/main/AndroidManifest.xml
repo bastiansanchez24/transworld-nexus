@@ -51,6 +51,16 @@
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="true" />
+        <!-- FCM en segundo plano usa este canal e icono. Sin ellos Android 8+
+             tira el aviso al canal "Misceláneas" (a menudo silenciado) o lo
+             descarta porque el launcher es un icono adaptativo. Debe coincidir
+             con `nexus_registros` en MainActivity, Dart y enviar-push. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="nexus_registros" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
         <!-- FileProvider para exponer el APK OTA al instalador del sistema.
              open_filex también registra el suyo; este cubre rutas de cache
              propias si se abre el APK vía content URI. -->

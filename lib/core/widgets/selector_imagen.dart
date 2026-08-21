@@ -280,10 +280,6 @@ class SelectorImagen extends StatelessWidget {
       url: urlExistente!,
       fit: BoxFit.cover,
       memCacheWidth: kLadoMaximoSubida,
-      placeholder: Container(
-        color: AppColors.tintNavy,
-        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      ),
       errorWidget: Container(
         color: AppColors.tintNavy,
         child: const Icon(

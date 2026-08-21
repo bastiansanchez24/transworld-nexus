@@ -57,4 +57,15 @@ void main() {
     expect(permissions, contains(Permission.requestInstallPackages));
     expect(permissions, isNot(contains(Permission.notification)));
   });
+
+  test('en iOS no se pide el permiso de notificaciones del sistema', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    expect(AppPermissions.required, isNot(contains(Permission.notification)));
+    expect(
+      AppPermissions.requiredFor(includeNotifications: true),
+      isNot(contains(Permission.notification)),
+    );
+  });
 }

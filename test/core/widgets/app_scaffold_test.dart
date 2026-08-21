@@ -59,9 +59,9 @@ Future<void> _montarPantallaPush(
   }
 }
 
-/// Alto de la cabecera: el `BackdropFilter` envuelve exactamente la barra.
+/// Alto de la cabecera: la clave envuelve exactamente la barra.
 double _altoCabecera(WidgetTester tester) =>
-    tester.getSize(find.byType(BackdropFilter).first).height;
+    tester.getSize(find.byKey(appScaffoldHeaderKey)).height;
 
 void main() {
   testWidgets('el botón atrás y la acción son el mismo chip', (tester) async {
@@ -178,9 +178,7 @@ void main() {
       ),
     );
 
-    final headerBottom = tester
-        .getRect(find.byType(BackdropFilter).first)
-        .bottom;
+    final headerBottom = tester.getRect(find.byKey(appScaffoldHeaderKey)).bottom;
     final bodyTop = tester.getRect(find.byKey(cuerpo)).top;
     expect(bodyTop, closeTo(headerBottom, 0.5));
   });
@@ -213,30 +211,40 @@ void main() {
     expect(find.text('Editar algo'), findsNothing);
   });
 
-  test('en iOS el gesto atrás no se bloquea aunque haya onWillPop', () {
-    expect(
-      scaffoldAllowsInteractivePop(
-        hasWillPop: true,
-        isWeb: false,
-        platform: TargetPlatform.iOS,
-      ),
-      isTrue,
-    );
-    expect(
-      scaffoldAllowsInteractivePop(
-        hasWillPop: true,
-        isWeb: false,
-        platform: TargetPlatform.android,
-      ),
-      isFalse,
-    );
-    expect(
-      scaffoldAllowsInteractivePop(
-        hasWillPop: false,
-        isWeb: false,
-        platform: TargetPlatform.android,
-      ),
-      isTrue,
-    );
+  test('con onWillPop el gesto atrás se apaga en toda plataforma', () {
+    // Incluye iOS: el deslizamiento nativo descartaba el formulario sin pasar
+    // por el diálogo de confirmación.
+    for (final platform in TargetPlatform.values) {
+      expect(
+        scaffoldAllowsInteractivePop(
+          hasWillPop: true,
+          isWeb: false,
+          platform: platform,
+        ),
+        isFalse,
+        reason: 'con onWillPop no debe haber pop interactivo en $platform',
+      );
+      expect(
+        scaffoldAllowsInteractivePop(
+          hasWillPop: true,
+          isWeb: true,
+          platform: platform,
+        ),
+        isFalse,
+      );
+    }
+  });
+
+  test('sin onWillPop el gesto atrás queda intacto', () {
+    for (final platform in TargetPlatform.values) {
+      expect(
+        scaffoldAllowsInteractivePop(
+          hasWillPop: false,
+          isWeb: false,
+          platform: platform,
+        ),
+        isTrue,
+      );
+    }
   });
 }

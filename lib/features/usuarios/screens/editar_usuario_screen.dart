@@ -22,6 +22,7 @@ import '../../auth/providers/auth_providers.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../providers/usuarios_providers.dart';
 import '../widgets/selector_eventos_multiples.dart';
+import '../../../data/repositories/storage_cleanup_service.dart';
 
 /// Edición de usuario: nombre, rol, activo, regenerar contraseña y eliminar.
 class EditarUsuarioScreen extends StatelessWidget {
@@ -317,6 +318,8 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
       final eliminado = await ref
           .read(authRepositoryProvider)
           .eliminarUsuario(widget.usuarioId);
+      // La foto de perfil se quedó sin dueño.
+      ref.read(storageCleanupServiceProvider).drenar();
       if (mounted) {
         ref.invalidate(usuariosListProvider);
         showAppSnackBar(

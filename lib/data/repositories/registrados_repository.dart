@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/supabase_tables.dart';
 import '../../core/utils/registro_asistente.dart';
+import '../models/mi_acreditacion.dart';
 import '../models/registrado.dart';
 import '../offline/sync_queue_service.dart';
 import '../supabase/supabase_client_provider.dart';
@@ -271,11 +272,20 @@ class RegistradosRepository implements SyncExecutor {
         .eq('ingresado_por', perfilId);
   }
 
-  Future<int> contarPorAcreditadoPor(String perfilId) async {
-    return _client
-        .from(SupabaseTables.registrados)
-        .count(CountOption.exact)
-        .eq('acreditado_por', perfilId);
+  /// Acreditaciones del usuario en sesión, con su evento y ya ordenadas.
+  ///
+  /// Va por RPC `SECURITY DEFINER` y no por `select` directo: la política
+  /// `rpe_registrados_select` acota a `rpe_puede_operar_evento`, así que a un
+  /// `user` al que le retiraron un evento le desaparecerían acreditaciones que
+  /// sí hizo. Reemplaza también al conteo, para que la tarjeta de "Mi perfil"
+  /// y el listado no puedan discrepar.
+  Future<List<MiAcreditacion>> listarMisAcreditados() async {
+    final filas = await _client.rpc(SupabaseRpc.misAcreditados);
+    if (filas is! List) return const [];
+    return filas
+        .cast<Map<String, dynamic>>()
+        .map(MiAcreditacion.fromMap)
+        .toList();
   }
 }
 

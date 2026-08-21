@@ -2407,24 +2407,73 @@ GRANT SELECT, INSERT, DELETE ON public.usuarios_eventos_leads_fijados TO authent
 -- 5b. Notificaciones (inbox + tokens FCM)
 -- Webhook INSERT → Edge Function enviar-push.
 -- ----------------------------------------------------------------
+-- `destinatario_id IS NULL` = aviso global (registro, hitos). Con valor, el
+-- aviso es para una sola persona y solo ella lo ve (comentarios de lead).
 CREATE TABLE IF NOT EXISTS public.notificaciones (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tipo              text NOT NULL DEFAULT 'registro'
-                      CHECK (tipo = ANY (ARRAY[
-                        'registro',
-                        'acreditacion_20',
-                        'acreditacion_50',
-                        'acreditacion_80',
-                        'acreditacion_100'
-                      ])),
+  tipo              text NOT NULL DEFAULT 'registro',
   titulo            text NOT NULL,
   cuerpo            text NOT NULL,
   registrado_id     uuid REFERENCES public.registrados (id) ON DELETE SET NULL,
   evento_id         uuid REFERENCES public.eventos (id) ON DELETE SET NULL,
+  destinatario_id   uuid REFERENCES public.perfiles (id) ON DELETE CASCADE,
+  lead_id           uuid REFERENCES public.leads (id) ON DELETE CASCADE,
+  evento_lead_id    uuid REFERENCES public.eventos_leads (id) ON DELETE CASCADE,
   nombre_registrado text NOT NULL,
   nombre_evento     text NOT NULL,
   created_at        timestamptz NOT NULL DEFAULT timezone('utc', now())
 );
+
+-- Instalaciones previas: CREATE TABLE IF NOT EXISTS no agrega columnas.
+ALTER TABLE public.notificaciones
+  ADD COLUMN IF NOT EXISTS destinatario_id uuid,
+  ADD COLUMN IF NOT EXISTS lead_id uuid,
+  ADD COLUMN IF NOT EXISTS evento_lead_id uuid;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'notificaciones_destinatario_id_fkey'
+  ) THEN
+    ALTER TABLE public.notificaciones
+      ADD CONSTRAINT notificaciones_destinatario_id_fkey
+      FOREIGN KEY (destinatario_id)
+      REFERENCES public.perfiles (id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'notificaciones_lead_id_fkey'
+  ) THEN
+    ALTER TABLE public.notificaciones
+      ADD CONSTRAINT notificaciones_lead_id_fkey
+      FOREIGN KEY (lead_id)
+      REFERENCES public.leads (id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'notificaciones_evento_lead_id_fkey'
+  ) THEN
+    ALTER TABLE public.notificaciones
+      ADD CONSTRAINT notificaciones_evento_lead_id_fkey
+      FOREIGN KEY (evento_lead_id)
+      REFERENCES public.eventos_leads (id) ON DELETE CASCADE;
+  END IF;
+END;
+$$;
+
+ALTER TABLE public.notificaciones
+  DROP CONSTRAINT IF EXISTS notificaciones_tipo_check;
+ALTER TABLE public.notificaciones
+  ADD CONSTRAINT notificaciones_tipo_check CHECK (tipo = ANY (ARRAY[
+    'registro',
+    'acreditacion_20',
+    'acreditacion_50',
+    'acreditacion_80',
+    'acreditacion_100',
+    'lead_comentario'
+  ]));
 
 CREATE TABLE IF NOT EXISTS public.evento_hitos_acreditacion (
   evento_id     uuid NOT NULL REFERENCES public.eventos (id) ON DELETE CASCADE,
@@ -2459,6 +2508,9 @@ CREATE INDEX IF NOT EXISTS idx_notificaciones_created_at
   ON public.notificaciones (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notificaciones_ocultas_usuario_id
   ON public.notificaciones_ocultas (usuario_id);
+CREATE INDEX IF NOT EXISTS idx_notificaciones_destinatario
+  ON public.notificaciones (destinatario_id, created_at DESC)
+  WHERE destinatario_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_device_tokens_usuario_id
   ON public.device_tokens (usuario_id);
 
@@ -2612,12 +2664,31 @@ BEGIN
   INSERT INTO public.notificaciones_ocultas (usuario_id, notificacion_id)
   SELECT v_user_id, n.id
   FROM public.notificaciones n
-  WHERE public.rpe_puede_ver_notificacion(n.evento_id)
+  WHERE public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
   ON CONFLICT (usuario_id, notificacion_id) DO NOTHING;
 END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.rpe_ocultar_todas_notificaciones() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.rpe_puede_ver_notificacion_row(
+  p_evento_id uuid,
+  p_destinatario_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT CASE
+    WHEN p_destinatario_id IS NOT NULL THEN p_destinatario_id = auth.uid()
+    ELSE public.rpe_puede_ver_notificacion(p_evento_id)
+  END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.rpe_puede_ver_notificacion_row(uuid, uuid)
+  TO authenticated;
 
 ALTER TABLE public.notificaciones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notificaciones_leidas ENABLE ROW LEVEL SECURITY;
@@ -2627,7 +2698,7 @@ ALTER TABLE public.device_tokens ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS rpe_notificaciones_select ON public.notificaciones;
 CREATE POLICY rpe_notificaciones_select ON public.notificaciones
   FOR SELECT TO authenticated
-  USING (public.rpe_puede_ver_notificacion(evento_id));
+  USING (public.rpe_puede_ver_notificacion_row(evento_id, destinatario_id));
 
 DROP POLICY IF EXISTS rpe_notificaciones_leidas_select ON public.notificaciones_leidas;
 CREATE POLICY rpe_notificaciones_leidas_select ON public.notificaciones_leidas
@@ -2638,7 +2709,7 @@ CREATE POLICY rpe_notificaciones_leidas_select ON public.notificaciones_leidas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion(n.evento_id)
+        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
     )
   );
 
@@ -2651,7 +2722,7 @@ CREATE POLICY rpe_notificaciones_leidas_insert ON public.notificaciones_leidas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion(n.evento_id)
+        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
     )
   );
 
@@ -2664,7 +2735,7 @@ CREATE POLICY rpe_notificaciones_leidas_update ON public.notificaciones_leidas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion(n.evento_id)
+        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
     )
   )
   WITH CHECK (
@@ -2673,7 +2744,7 @@ CREATE POLICY rpe_notificaciones_leidas_update ON public.notificaciones_leidas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion(n.evento_id)
+        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
     )
   );
 
@@ -2686,7 +2757,7 @@ CREATE POLICY rpe_notificaciones_ocultas_select ON public.notificaciones_ocultas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion(n.evento_id)
+        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
     )
   );
 
@@ -2699,7 +2770,7 @@ CREATE POLICY rpe_notificaciones_ocultas_insert ON public.notificaciones_ocultas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion(n.evento_id)
+        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
     )
   );
 
@@ -2712,7 +2783,7 @@ CREATE POLICY rpe_notificaciones_ocultas_delete ON public.notificaciones_ocultas
       SELECT 1
       FROM public.notificaciones n
       WHERE n.id = notificacion_id
-        AND public.rpe_puede_ver_notificacion(n.evento_id)
+        AND public.rpe_puede_ver_notificacion_row(n.evento_id, n.destinatario_id)
     )
   );
 
@@ -2741,6 +2812,138 @@ GRANT SELECT ON public.notificaciones TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.notificaciones_leidas TO authenticated;
 GRANT SELECT, INSERT, DELETE ON public.notificaciones_ocultas TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.device_tokens TO authenticated;
+
+-- Aviso de comentario en un lead: al capturador y a quienes ya participaron
+-- del hilo, nunca al propio autor.
+CREATE OR REPLACE FUNCTION public.cl_notificar_comentario_lead()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_sentinel constant uuid := '00000000-0000-0000-0000-000000000001';
+  v_lead           public.leads%ROWTYPE;
+  v_nombre_campana text;
+  v_cuerpo         text;
+  v_destinatarios  uuid[];
+BEGIN
+  SELECT * INTO v_lead FROM public.leads l WHERE l.id = NEW.lead_id;
+  IF NOT FOUND THEN
+    RETURN NEW;
+  END IF;
+
+  -- El destinatario debe seguir siendo un usuario interno activo: si se dio de
+  -- baja o pasó a externo, la notificación no tendría dónde mostrarse.
+  SELECT ARRAY(
+    SELECT p.id
+    FROM public.perfiles p
+    WHERE p.activo = true
+      AND p.rol IN ('admin', 'organizador', 'user')
+      AND p.id <> v_sentinel
+      AND p.id IS DISTINCT FROM NEW.autor_id
+      AND (
+        p.id = v_lead.perfil_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.lead_comentarios c
+          WHERE c.lead_id = NEW.lead_id
+            AND c.autor_id = p.id
+        )
+      )
+  ) INTO v_destinatarios;
+
+  IF v_destinatarios IS NULL OR cardinality(v_destinatarios) = 0 THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT el.nombre INTO v_nombre_campana
+  FROM public.eventos_leads el
+  WHERE el.id = v_lead.evento_id;
+
+  v_nombre_campana := COALESCE(v_nombre_campana, 'Actividad de captura');
+
+  v_cuerpo := NEW.autor_nombre || ' comentó sobre ' || v_lead.nombre_completo
+    || ' (' || v_nombre_campana || ')';
+
+  INSERT INTO public.notificaciones (
+    tipo, titulo, cuerpo, destinatario_id,
+    lead_id, evento_lead_id,
+    nombre_registrado, nombre_evento
+  )
+  SELECT
+    'lead_comentario',
+    'Nuevo comentario',
+    v_cuerpo,
+    d.destinatario_id,
+    v_lead.id,
+    v_lead.evento_id,
+    v_lead.nombre_completo,
+    v_nombre_campana
+  FROM unnest(v_destinatarios) AS d(destinatario_id);
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_lead_comentarios_notificar ON public.lead_comentarios;
+CREATE TRIGGER trg_lead_comentarios_notificar
+  AFTER INSERT ON public.lead_comentarios
+  FOR EACH ROW EXECUTE FUNCTION public.cl_notificar_comentario_lead();
+
+-- Acreditaciones propias con historia completa: `rpe_registrados_select` acota
+-- a `rpe_puede_operar_evento`, así que sin este RPC a un `user` al que le
+-- retiraron un evento le desaparecerían acreditaciones que sí hizo.
+CREATE OR REPLACE FUNCTION public.rpe_mis_acreditados()
+RETURNS TABLE (
+  evento_id       uuid,
+  evento_nombre   text,
+  evento_fecha    date,
+  registrado_id   uuid,
+  nombre_completo text,
+  empresa         text,
+  cargo           text,
+  acreditado_en   timestamptz
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT
+    r.evento_id,
+    COALESCE(e.nombre, 'Evento eliminado'),
+    e.fecha,
+    r.id,
+    r.nombre_completo,
+    r.empresa,
+    r.cargo,
+    r.acreditado_en
+  FROM public.registrados r
+  LEFT JOIN public.eventos e ON e.id = r.evento_id
+  WHERE auth.uid() IS NOT NULL
+    AND r.acreditado_por = auth.uid()
+  ORDER BY e.fecha DESC NULLS LAST, r.acreditado_en DESC NULLS LAST;
+$$;
+
+REVOKE ALL ON FUNCTION public.rpe_mis_acreditados() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.rpe_mis_acreditados() TO authenticated;
+
+-- Realtime del inbox: sin esto el badge no se actualiza en vivo
+-- (notificacionesRealtimeSubscriptionProvider escucha INSERT).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime'
+         AND schemaname = 'public'
+         AND tablename = 'notificaciones'
+     ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.notificaciones;
+  END IF;
+END;
+$$;
 
 -- ----------------------------------------------------------------
 -- 6. Storage buckets (ejecutar una vez; el dashboard de Supabase también
@@ -2900,3 +3103,282 @@ BEGIN
     FOR UPDATE TO authenticated
     USING (bucket_id IN ('imagenes', 'leads-privados'));
 END $$;
+
+
+-- ----------------------------------------------------------------
+-- 7. Basura de Storage
+--
+-- Borrar una fila nunca tocaba el archivo: cada evento eliminado, cada lead
+-- borrado y **cada edición de portada** (la app sube un UUID nuevo en vez de
+-- sobrescribir) dejaba un objeto huérfano ocupando cuota para siempre.
+--
+-- El registro lo hacen triggers, porque son lo único que ve también los
+-- borrados en cascada, que nunca pasan por la app. El borrado real lo hace la
+-- Edge Function `limpiar-storage` con la service role: quitar la fila de
+-- `storage.objects` a mano dejaría el archivo físico igual de presente.
+--
+-- Idéntico a supabase/migrations/202608211200_storage_basura.sql.
+-- ----------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- 7.1 Cola
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.storage_basura (
+  id         uuid NOT NULL DEFAULT gen_random_uuid(),
+  bucket     text NOT NULL,
+  path       text NOT NULL,
+  creado_at  timestamptz NOT NULL DEFAULT timezone('utc', now()),
+  CONSTRAINT storage_basura_pkey PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_storage_basura_creado
+  ON public.storage_basura (creado_at);
+
+-- Sin políticas a propósito: RLS activo y ninguna regla = solo la service role
+-- (que las omite) puede leerla o vaciarla.
+ALTER TABLE public.storage_basura ENABLE ROW LEVEL SECURITY;
+
+-- ---------------------------------------------------------------------------
+-- 7.2 Normalización de rutas
+-- ---------------------------------------------------------------------------
+-- La base guarda tres formas de la misma imagen según de dónde venga: el path
+-- canónico (`leads/<uuid>.jpg`), la URL pública del bucket `imagenes` y la URL
+-- firmada de `leads-privados`. Espejo exacto de `pathFotoStorageLead` en
+-- lib/data/repositories/storage_repository.dart.
+CREATE OR REPLACE FUNCTION public.rpe_storage_path(p_url text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v_valor text := COALESCE(p_url, '');
+  v_marca text;
+  v_pos   int;
+BEGIN
+  IF v_valor = '' THEN
+    RETURN NULL;
+  END IF;
+
+  -- El `?v=` de invalidación de caché no forma parte del objeto.
+  v_valor := split_part(v_valor, '?', 1);
+
+  FOREACH v_marca IN ARRAY ARRAY[
+    '/object/public/imagenes/',
+    '/object/sign/leads-privados/',
+    '/object/public/leads-privados/'
+  ] LOOP
+    v_pos := position(v_marca IN v_valor);
+    IF v_pos > 0 THEN
+      RETURN NULLIF(
+        replace(
+          substring(v_valor FROM v_pos + length(v_marca)),
+          '%20', ' '
+        ),
+        ''
+      );
+    END IF;
+  END LOOP;
+
+  -- Ya venía canónico (`leads/<uuid>.jpg`, `eventos/…`, `perfiles/…`).
+  IF v_valor ~ '^(eventos|perfiles|leads)/' THEN
+    RETURN v_valor;
+  END IF;
+
+  -- Cualquier otra cosa (URL externa, dato viejo) no es nuestra: no se encola.
+  RETURN NULL;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 7.3 Encolado
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rpe_encolar_storage(
+  p_bucket text,
+  p_url    text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_path text := public.rpe_storage_path(p_url);
+BEGIN
+  IF v_path IS NULL THEN
+    RETURN;
+  END IF;
+  INSERT INTO public.storage_basura (bucket, path) VALUES (p_bucket, v_path);
+END;
+$$;
+
+-- Portadas de eventos y actividades: bucket `imagenes`.
+--
+-- La actividad de captura **interna** hereda `imagen_url` del evento ligado
+-- (ver `rpe_sync_actividad_interna_desde_evento`), así que su path puede seguir
+-- en uso por el evento. No se filtra acá: el filtro definitivo vive en
+-- `rpe_storage_basura_tomar`, que corre con la transacción ya cerrada y ve la
+-- base consistente —a mitad de un borrado en cascada, en cambio, una fila que
+-- está a punto de irse todavía se vería viva.
+CREATE OR REPLACE FUNCTION public.rpe_storage_basura_portada()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM public.rpe_encolar_storage('imagenes', OLD.imagen_url);
+    RETURN OLD;
+  END IF;
+
+  IF NEW.imagen_url IS DISTINCT FROM OLD.imagen_url THEN
+    PERFORM public.rpe_encolar_storage('imagenes', OLD.imagen_url);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.rpe_storage_basura_foto_perfil()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM public.rpe_encolar_storage('imagenes', OLD.foto_url);
+    RETURN OLD;
+  END IF;
+
+  IF NEW.foto_url IS DISTINCT FROM OLD.foto_url THEN
+    PERFORM public.rpe_encolar_storage('imagenes', OLD.foto_url);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- Fotos de leads: bucket privado `leads-privados`, y son un array.
+CREATE OR REPLACE FUNCTION public.rpe_storage_basura_fotos_lead()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_url text;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    FOREACH v_url IN ARRAY COALESCE(OLD.fotos_urls, '{}'::text[]) LOOP
+      PERFORM public.rpe_encolar_storage('leads-privados', v_url);
+    END LOOP;
+    RETURN OLD;
+  END IF;
+
+  -- Solo las que dejaron de estar referenciadas por esta fila.
+  FOREACH v_url IN ARRAY COALESCE(OLD.fotos_urls, '{}'::text[]) LOOP
+    IF NOT (v_url = ANY (COALESCE(NEW.fotos_urls, '{}'::text[]))) THEN
+      PERFORM public.rpe_encolar_storage('leads-privados', v_url);
+    END IF;
+  END LOOP;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_eventos_storage_basura ON public.eventos;
+CREATE TRIGGER trg_eventos_storage_basura
+  AFTER UPDATE OF imagen_url OR DELETE ON public.eventos
+  FOR EACH ROW EXECUTE FUNCTION public.rpe_storage_basura_portada();
+
+DROP TRIGGER IF EXISTS trg_eventos_leads_storage_basura ON public.eventos_leads;
+CREATE TRIGGER trg_eventos_leads_storage_basura
+  AFTER UPDATE OF imagen_url OR DELETE ON public.eventos_leads
+  FOR EACH ROW EXECUTE FUNCTION public.rpe_storage_basura_portada();
+
+DROP TRIGGER IF EXISTS trg_perfiles_storage_basura ON public.perfiles;
+CREATE TRIGGER trg_perfiles_storage_basura
+  AFTER UPDATE OF foto_url OR DELETE ON public.perfiles
+  FOR EACH ROW EXECUTE FUNCTION public.rpe_storage_basura_foto_perfil();
+
+DROP TRIGGER IF EXISTS trg_leads_storage_basura ON public.leads;
+CREATE TRIGGER trg_leads_storage_basura
+  AFTER UPDATE OF fotos_urls OR DELETE ON public.leads
+  FOR EACH ROW EXECUTE FUNCTION public.rpe_storage_basura_fotos_lead();
+
+-- ---------------------------------------------------------------------------
+-- 7.4 Drenaje
+-- ---------------------------------------------------------------------------
+-- ¿Queda alguna fila viva apuntando a este objeto? Cubre el caso de la
+-- actividad interna, que comparte portada con su evento, y el de una foto de
+-- lead reutilizada.
+CREATE OR REPLACE FUNCTION public.rpe_storage_en_uso(
+  p_bucket text,
+  p_path   text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+BEGIN
+  IF p_bucket = 'imagenes' THEN
+    RETURN EXISTS (
+      SELECT 1 FROM public.eventos
+      WHERE public.rpe_storage_path(imagen_url) = p_path
+    ) OR EXISTS (
+      SELECT 1 FROM public.eventos_leads
+      WHERE public.rpe_storage_path(imagen_url) = p_path
+    ) OR EXISTS (
+      SELECT 1 FROM public.perfiles
+      WHERE public.rpe_storage_path(foto_url) = p_path
+    );
+  END IF;
+
+  IF p_bucket = 'leads-privados' THEN
+    RETURN EXISTS (
+      SELECT 1
+      FROM public.leads l, unnest(l.fotos_urls) AS u(url)
+      WHERE public.rpe_storage_path(u.url) = p_path
+    );
+  END IF;
+
+  -- Bucket desconocido: no se toca.
+  RETURN true;
+END;
+$$;
+
+-- Entrega el siguiente lote realmente huérfano y descarta de la cola lo que
+-- resultó seguir en uso. Lo llama `limpiar-storage` con la service role.
+--
+-- El `DELETE` va en un CTE: Postgres ejecuta los CTE que modifican datos
+-- siempre y exactamente una vez, lea o no la consulta principal su salida.
+CREATE OR REPLACE FUNCTION public.rpe_storage_basura_tomar(p_limite int DEFAULT 200)
+RETURNS TABLE (id uuid, bucket text, path text)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  WITH lote AS (
+    SELECT b.id, b.bucket, b.path
+      FROM public.storage_basura b
+     ORDER BY b.creado_at
+     LIMIT GREATEST(COALESCE(p_limite, 200), 1)
+  ),
+  vivas AS (
+    SELECT l.id
+      FROM lote l
+     WHERE public.rpe_storage_en_uso(l.bucket, l.path)
+  ),
+  descartadas AS (
+    DELETE FROM public.storage_basura b
+     WHERE b.id IN (SELECT v.id FROM vivas v)
+    RETURNING b.id
+  )
+  SELECT l.id, l.bucket, l.path
+    FROM lote l
+   WHERE l.id NOT IN (SELECT v.id FROM vivas v);
+$$;
+
+REVOKE ALL ON FUNCTION public.rpe_storage_basura_tomar(int) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.rpe_storage_en_uso(text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.rpe_encolar_storage(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rpe_storage_basura_tomar(int) TO service_role;

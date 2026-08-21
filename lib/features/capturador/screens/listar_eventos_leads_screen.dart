@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/fijados_limits.dart';
+import '../../../core/network/connectivity_service.dart';
 import '../../../core/network/offline_guard.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
@@ -16,9 +17,11 @@ import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/shell_tab_scroll.dart';
 import '../../../core/widgets/tw_components.dart';
 import '../../../data/models/evento_lead.dart';
+import '../../../data/offline/offline_availability.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/eventos_leads_repository.dart';
 import '../../../data/repositories/fijados_repository.dart';
+import '../../../data/repositories/storage_cleanup_service.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../fijados/providers/fijados_providers.dart';
 import '../../home/providers/home_featured_providers.dart';
@@ -142,6 +145,7 @@ class _ListarEventosLeadsScreenState
 
     try {
       await ref.read(eventosLeadsRepositoryProvider).eliminar(evento.id);
+      ref.read(storageCleanupServiceProvider).drenar();
       await ref.read(fijadosRepositoryProvider).desfijarCampana(evento.id);
       ref.invalidate(eventosLeadsListProvider);
       ref.invalidate(campanasFijadasProvider);
@@ -280,6 +284,11 @@ class _ListarEventosLeadsScreenState
     final fijadosAsync = ref.watch(campanasFijadasProvider);
     final puedeCrear = ref.watch(canCreateContentProvider);
     final fijados = fijadosAsync.valueOrNull ?? const <String>{};
+    // Sin red solo se entra a lo que quedó en disco: la caché conserva el set
+    // activo y suelta lo vencido (ver `offline_retention_policy.dart`).
+    final sinRed = !ref.watch(isOnlineProvider);
+    final cache = ref.watch(offlineReadCacheProvider);
+    final verTodosLosLeads = ref.watch(canViewAllLeadsProvider);
 
     return CollapsingScrollScaffold(
       title: 'Captura de Leads',
@@ -365,15 +374,28 @@ class _ListarEventosLeadsScreenState
                   itemBuilder: (context, index) {
                     final evento = filtrados[index];
                     final fijado = fijados.contains(evento.id);
+                    final sinCache =
+                        sinRed &&
+                        !actividadDisponibleOffline(
+                          cache,
+                          evento.id,
+                          canViewAllLeads: verTodosLosLeads,
+                        );
                     return EventRow(
                       date: evento.fecha,
                       title: evento.nombre,
                       place: evento.pais ?? '',
                       finalizado: evento.yaOcurrio,
                       fijado: fijado,
+                      sinCache: sinCache,
                       chip: TwOriginPill(interno: evento.esInterno),
-                      onTap: () =>
-                          context.push(RoutePaths.usarEventoLead(evento.id)),
+                      onTap: () {
+                        if (sinCache) {
+                          showOfflineUnavailableToast(context);
+                          return;
+                        }
+                        context.push(RoutePaths.usarEventoLead(evento.id));
+                      },
                       onLongPress: () =>
                           _mostrarMenuEventoLead(evento, fijados),
                     );

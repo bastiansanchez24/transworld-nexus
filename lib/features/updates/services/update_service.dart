@@ -10,7 +10,6 @@ import '../../../data/models/github_release.dart';
 import '../../../data/repositories/github_release_repository.dart';
 import 'apk_downloader.dart';
 import 'apk_installer.dart';
-import 'ota_debug_log.dart';
 import 'update_platform.dart';
 import 'windows_installer.dart';
 
@@ -270,21 +269,6 @@ class UpdateService {
 
       // Check automático (home/resume): siempre obligatoria.
       // Check manual: respeta [FORCE_UPDATE] en el body de la Release.
-      // #region agent log
-      otaDebugLog(
-        location: 'update_service.dart:checkForUpdates',
-        message: 'update available',
-        hypothesisId: forWindows ? 'H-D' : 'H-A',
-        data: {
-          'installed': installed.toString(),
-          'buildNumber': packageInfo.buildNumber,
-          'remote': remote.toString(),
-          'assetName': asset.name,
-          'assetSize': asset.size,
-          'platform': forWindows ? 'windows' : 'android',
-        },
-      );
-      // #endregion
       return UpdateCheckOutcome.available(
         AppUpdateInfo(
           installedVersion: installed.toString(),

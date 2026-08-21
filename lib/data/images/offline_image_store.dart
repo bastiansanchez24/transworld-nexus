@@ -99,6 +99,24 @@ class OfflineImageStore {
     _resueltas.clear();
     await plataforma.borrarTodo();
   }
+
+  /// Deja en disco solo las imágenes de [urlsVigentes] y borra el resto.
+  ///
+  /// La llama el snapshot con el mismo conjunto que acaba de precargar: cuando
+  /// un evento sale del set activo, su portada deja de ocupar espacio. Devuelve
+  /// cuántos archivos se liberaron.
+  Future<int> retener(Set<String> urlsVigentes) async {
+    if (!disponible) return 0;
+    final nombres = {
+      for (final url in urlsVigentes)
+        if (url.isNotEmpty) _nombreDe(url),
+    };
+    final borrados = await plataforma.borrarSalvo(nombres);
+    if (borrados == 0) return 0;
+    // Las rutas memorizadas de lo purgado ya no existen.
+    _resueltas.removeWhere((url, _) => !urlsVigentes.contains(url));
+    return borrados;
+  }
 }
 
 final offlineImageStoreProvider = Provider<OfflineImageStore>((ref) {

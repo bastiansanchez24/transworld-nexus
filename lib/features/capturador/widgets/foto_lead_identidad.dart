@@ -131,7 +131,6 @@ class FotoLeadAvatar extends StatelessWidget {
       url: urlExistente!,
       fit: BoxFit.cover,
       memCacheWidth: (size * 3).round(),
-      placeholder: Container(color: AppColors.primaryLight),
       errorWidget: Container(
         color: AppColors.primaryLight,
         alignment: Alignment.center,
@@ -228,6 +227,9 @@ class _VisorFoto extends StatelessWidget {
             url: urlExistente ?? '',
             fit: BoxFit.contain,
             expandir: false,
+            // Visor a pantalla completa sobre fondo negro: un esqueleto claro
+            // ocuparía toda la pantalla. Aquí manda el spinner blanco.
+            esqueletoAlCargar: false,
             placeholder: const Center(
               child: CircularProgressIndicator(color: Colors.white),
             ),

@@ -45,3 +45,31 @@ Future<void> borrarTodo() async {
     );
   }
 }
+
+/// Borra del directorio todo lo que no esté en [nombres].
+///
+/// Es la contraparte del snapshot: sin esto, la portada de cada evento vivido
+/// se quedaba en Documentos para siempre. Silenciosa a propósito —liberar
+/// espacio nunca puede tumbar una sincronización— y devuelve cuántos archivos
+/// se fueron solo para el log.
+Future<int> borrarSalvo(Set<String> nombres) async {
+  try {
+    final dir = await _directorio();
+    if (!await dir.exists()) return 0;
+    var borrados = 0;
+    await for (final entidad in dir.list(followLinks: false)) {
+      if (entidad is! File) continue;
+      final nombre = entidad.uri.pathSegments.last;
+      if (nombres.contains(nombre)) continue;
+      await entidad.delete();
+      borrados++;
+    }
+    return borrados;
+  } catch (e) {
+    developer.log(
+      'No se pudieron purgar las imágenes offline: $e',
+      name: 'OfflineImageStore',
+    );
+    return 0;
+  }
+}

@@ -54,6 +54,7 @@ class SupabaseRpc {
   static const guardarLead = 'cl_guardar_lead';
   static const buscarLeadPorEmail = 'cl_buscar_lead_por_email';
   static const existeEmailRegistrado = 'rpe_existe_email_registrado';
+  static const misAcreditados = 'rpe_mis_acreditados';
 }
 
 class SupabaseFunctions {
@@ -64,4 +65,5 @@ class SupabaseFunctions {
   static const crearUsuario = 'crear-usuario';
   static const regenerarPasswordUsuario = 'regenerar-password-usuario';
   static const enviarPush = 'enviar-push';
+  static const limpiarStorage = 'limpiar-storage';
 }

@@ -104,6 +104,86 @@ void main() {
     expect(refrescos, 2);
   });
 
+  testWidgets('RefreshOnVisible recarga al volver con pop, no solo con go', (
+    tester,
+  ) async {
+    // Regresión: `GoRouteInformationProvider` notifica en `push` pero no en
+    // `pop` (asigna su valor sin `notifyListeners`), así que escuchando solo
+    // ese provider volver atrás nunca disparaba [onBecomeVisible]. El menú de
+    // evento se quedaba con el tile de la lista girando y sin poder reabrirla.
+    var refrescos = 0;
+
+    final router = GoRouter(
+      initialLocation: '/lista',
+      routes: [
+        GoRoute(
+          path: '/lista',
+          builder: (_, _) => _ListaStub(onRefresh: () => refrescos++),
+        ),
+        GoRoute(
+          path: '/detalle',
+          builder: (_, _) => const Scaffold(body: Text('detalle')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+    );
+    expect(refrescos, 1);
+
+    router.push('/detalle');
+    await tester.pumpAndSettle();
+    expect(find.text('detalle'), findsOneWidget);
+    expect(refrescos, 1);
+
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('lista'), findsOneWidget);
+    expect(refrescos, 2, reason: 'volver atrás debe recargar la lista');
+  });
+
+  testWidgets('RefreshOnVisible espera a que la transición termine', (
+    tester,
+  ) async {
+    // Invalidar en pleno slide reconstruye el árbol mientras la página se
+    // mueve: es lo que se sentía como tirones en el gesto de volver de iOS.
+    var refrescos = 0;
+
+    final router = GoRouter(
+      initialLocation: '/hub',
+      routes: [
+        GoRoute(
+          path: '/hub',
+          builder: (_, _) => const Scaffold(body: Text('hub')),
+        ),
+        GoRoute(
+          path: '/lista',
+          builder: (_, _) => _ListaStub(onRefresh: () => refrescos++),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+    );
+    expect(refrescos, 0);
+
+    router.push('/lista');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(
+      refrescos,
+      0,
+      reason: 'no debe recargar con la transición todavía corriendo',
+    );
+
+    await tester.pumpAndSettle();
+    expect(refrescos, 1, reason: 'al asentarse la ruta sí recarga');
+  });
+
   test('volverALista hace pop cuando hay historial', () async {
     expect(RoutePaths.verRegistrados('e1'), '/eventos/e1/registrados');
     expect(RoutePaths.verLeads('c1'), '/capturador/c1/leads');

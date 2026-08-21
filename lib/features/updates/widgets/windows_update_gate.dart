@@ -77,7 +77,11 @@ class _WindowsUpdaterScaffold extends ConsumerWidget {
         ? null
         : 'Buscando actualizaciones…';
 
-    return ColoredBox(
+    // `Material` (y no `ColoredBox`): este scaffold se monta desde
+    // `MaterialApp.builder`, fuera del Navigator. Sin un ancestro Material los
+    // `Text` heredan el estilo de error de `WidgetsApp` — rojo con doble
+    // subrayado amarillo.
+    return Material(
       color: AppColors.background,
       child: Center(
         child: ConstrainedBox(

@@ -19,6 +19,7 @@ import '../../../data/repositories/eventos_repository.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/eventos_providers.dart';
+import '../../../data/repositories/storage_cleanup_service.dart';
 
 /// Crear o editar un evento. Disponible para cualquier usuario autenticado.
 class CrearEditarEventoScreen extends StatelessWidget {
@@ -193,6 +194,11 @@ class _CrearEditarEventoFormState
       if (widget.eventoId != null) {
         ref.invalidate(eventoByIdProvider(widget.eventoId!));
       }
+      // Cambiar la portada sube un objeto nuevo y deja huérfano el anterior:
+      // `subirImagenEvento` genera un UUID por subida, no sobrescribe.
+      if (_imagenBytes != null) {
+        ref.read(storageCleanupServiceProvider).drenar();
+      }
 
       if (mounted) {
         if (_esEdicion) {
@@ -228,6 +234,7 @@ class _CrearEditarEventoFormState
 
     try {
       await ref.read(eventosRepositoryProvider).eliminar(widget.eventoId!);
+      ref.read(storageCleanupServiceProvider).drenar();
       ref.invalidate(eventosListProvider);
       ref.invalidate(eventoByIdProvider(widget.eventoId!));
       if (mounted) context.go(RoutePaths.eventos);

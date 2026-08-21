@@ -1,5 +1,7 @@
 package com.transworld.nexus
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
 import android.view.Display
@@ -8,6 +10,10 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    companion object {
+        const val CANAL_PUSH_ID = "nexus_registros"
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(
@@ -29,8 +35,27 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        crearCanalNotificacionesPush()
         skipSystemSplashExitAnimation()
         preferHighestRefreshRate()
+    }
+
+    /// El canal tiene que existir en el NotificationManager nativo: FCM pinta
+    /// el aviso en segundo plano sin pasar por Dart. Si el payload trae
+    /// `nexus_registros` y el canal no está creado, Android 8+ lo tira.
+    private fun crearCanalNotificacionesPush() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val canal = NotificationChannel(
+            CANAL_PUSH_ID,
+            "Registros de eventos",
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "Avisos cuando alguien se registra a un evento."
+            enableVibration(true)
+            setShowBadge(true)
+        }
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(canal)
     }
 
     /// Android 12+ anima el icono al salir del splash nativo. Esa animacion

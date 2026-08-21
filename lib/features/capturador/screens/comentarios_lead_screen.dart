@@ -146,7 +146,10 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
     final texto = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
+      // Hay texto en curso: ni el arrastre ni el toque fuera pueden tirarlo.
+      // Se sale con Cancelar o Guardar.
+      enableDrag: false,
+      isDismissible: false,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.header)),
@@ -292,7 +295,8 @@ class _EditarComentarioSheetState extends State<_EditarComentarioSheet> {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottom),
+      // El aire de arriba lo daba el drag handle, ya retirado.
+      padding: EdgeInsets.fromLTRB(16, 18, 16, 16 + bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

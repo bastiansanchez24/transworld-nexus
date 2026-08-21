@@ -2,7 +2,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_image_skeleton.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/lead.dart';
@@ -44,7 +44,7 @@ class AvatarLead extends ConsumerWidget {
           .watch(fotoLeadUrlProvider(foto))
           .when(
             data: _imagenRemota,
-            loading: () => _circulo(Container(color: AppColors.tintNavy)),
+            loading: () => _circulo(const AppImageSkeleton()),
             error: (_, _) => _iniciales(),
           );
     }
@@ -57,7 +57,6 @@ class AvatarLead extends ConsumerWidget {
       url: url,
       fit: BoxFit.cover,
       memCacheWidth: (size * 3).round(),
-      placeholder: Container(color: AppColors.tintNavy),
       errorWidget: _iniciales(),
     ),
   );

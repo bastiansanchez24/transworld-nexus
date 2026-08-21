@@ -33,7 +33,6 @@ class AppPermissions {
           Permission.microphone,
           Permission.photos,
           Permission.speech,
-          Permission.notification,
         ];
       default:
         return const [];

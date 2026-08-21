@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/network/offline_guard.dart';
+import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/password_policy.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -377,35 +379,38 @@ class _KpiSection extends ConsumerWidget {
         // capacidad que no tiene.
         final soloLeads =
             ref.watch(currentPerfilProvider).valueOrNull?.isExterno ?? false;
-        final cards = [
-          (
-            '${stats.leadsCapturados}',
-            'Leads capturados',
-            Symbols.person_search_rounded,
-            AppColors.tintNavy,
-            AppColors.primary,
+        final cards = <_KpiCardData>[
+          _KpiCardData(
+            value: '${stats.leadsCapturados}',
+            label: 'Leads capturados',
+            icon: Symbols.person_search_rounded,
+            tint: AppColors.tintNavy,
+            iconColor: AppColors.primary,
           ),
           if (!soloLeads) ...[
-            (
-              '${stats.asistentesRegistrados}',
-              'Asistentes registrados',
-              Symbols.group_rounded,
-              AppColors.successTint,
-              AppColors.success,
+            _KpiCardData(
+              value: '${stats.asistentesRegistrados}',
+              label: 'Asist. registrados',
+              icon: Symbols.group_rounded,
+              tint: AppColors.successTint,
+              iconColor: AppColors.success,
             ),
-            (
-              '${stats.acreditaciones}',
-              'Acreditaciones',
-              Symbols.verified_rounded,
-              AppColors.successTint,
-              AppColors.success,
+            _KpiCardData(
+              value: '${stats.acreditaciones}',
+              label: 'Acreditaciones',
+              icon: Symbols.verified_rounded,
+              tint: AppColors.successTint,
+              iconColor: AppColors.success,
+              // Única tarjeta con detalle propio: abre el listado de a quién
+              // acreditó esta persona, seccionado por evento.
+              onTap: () => context.push(RoutePaths.misAcreditados),
             ),
-            (
-              '${stats.eventosCreados}',
-              'Eventos creados',
-              Symbols.calendar_month_rounded,
-              AppColors.warningTint,
-              AppColors.warning,
+            _KpiCardData(
+              value: '${stats.eventosCreados}',
+              label: 'Eventos creados',
+              icon: Symbols.calendar_month_rounded,
+              tint: AppColors.warningTint,
+              iconColor: AppColors.warning,
             ),
           ],
         ];
@@ -423,13 +428,7 @@ class _KpiSection extends ConsumerWidget {
                     if (col > 0) const SizedBox(width: 12),
                     Expanded(
                       child: row * 2 + col < cards.length
-                          ? StatCard(
-                              value: cards[row * 2 + col].$1,
-                              label: cards[row * 2 + col].$2,
-                              icon: cards[row * 2 + col].$3,
-                              tint: cards[row * 2 + col].$4,
-                              iconColor: cards[row * 2 + col].$5,
-                            )
+                          ? cards[row * 2 + col].build()
                           : const SizedBox.shrink(),
                     ),
                   ],
@@ -441,6 +440,36 @@ class _KpiSection extends ConsumerWidget {
       },
     );
   }
+}
+
+/// Datos de una tarjeta del resumen. Antes era una tupla posicional de cinco
+/// campos; con el `onTap` de "Acreditaciones" indexarlos por `$1..$5` dejaba de
+/// leerse.
+class _KpiCardData {
+  const _KpiCardData({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.tint,
+    required this.iconColor,
+    this.onTap,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+  final Color tint;
+  final Color iconColor;
+  final VoidCallback? onTap;
+
+  StatCard build() => StatCard(
+    value: value,
+    label: label,
+    icon: icon,
+    tint: tint,
+    iconColor: iconColor,
+    onTap: onTap,
+  );
 }
 
 class _LeadsDetalle extends ConsumerWidget {

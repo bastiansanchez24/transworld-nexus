@@ -13,3 +13,5 @@ Future<bool> existe(String ruta) async => false;
 Future<void> escribir(String ruta, Uint8List bytes) async {}
 
 Future<void> borrarTodo() async {}
+
+Future<int> borrarSalvo(Set<String> nombres) async => 0;

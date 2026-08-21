@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/constants/fijados_limits.dart';
+import '../../../core/network/connectivity_service.dart';
 import '../../../core/network/offline_guard.dart';
 import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
@@ -15,9 +16,11 @@ import '../../../core/widgets/evento_list_context_menu.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/shell_tab_scroll.dart';
 import '../../../data/models/evento.dart';
+import '../../../data/offline/offline_availability.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/eventos_repository.dart';
 import '../../../data/repositories/fijados_repository.dart';
+import '../../../data/repositories/storage_cleanup_service.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../fijados/providers/fijados_providers.dart';
 import '../../home/providers/home_featured_providers.dart';
@@ -137,6 +140,9 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen>
     try {
       await ref.read(eventosRepositoryProvider).eliminar(evento.id);
       await ref.read(fijadosRepositoryProvider).desfijarEvento(evento.id);
+      // La portada del evento se quedó sin dueño: el servidor ya la tiene
+      // encolada, acá solo se pide el vaciado.
+      ref.read(storageCleanupServiceProvider).drenar();
       ref.invalidate(eventosListProvider);
       ref.invalidate(eventosFijadosProvider);
       ref.invalidate(homeFeaturedItemsProvider);
@@ -276,6 +282,11 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen>
     final esUsuario =
         ref.watch(currentPerfilProvider).valueOrNull?.rol.isUsuario ?? false;
     final fijados = fijadosAsync.valueOrNull ?? const <String>{};
+    // Sin red solo se puede entrar a lo que quedó en disco: la caché conserva
+    // el set activo y suelta los eventos vencidos (ver
+    // `offline_retention_policy.dart`).
+    final sinRed = !ref.watch(isOnlineProvider);
+    final cache = ref.watch(offlineReadCacheProvider);
 
     return CollapsingScrollScaffold(
       title: 'Eventos',
@@ -367,14 +378,22 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen>
                   itemBuilder: (context, index) {
                     final evento = filtrados[index];
                     final fijado = fijados.contains(evento.id);
+                    final sinCache =
+                        sinRed && !eventoDisponibleOffline(cache, evento.id);
                     return EventRow(
                       date: evento.fecha,
                       title: evento.nombre,
                       place: evento.lugar ?? evento.pais ?? '',
                       finalizado: evento.yaOcurrio,
                       fijado: fijado,
-                      onTap: () =>
-                          context.push(RoutePaths.usarEvento(evento.id)),
+                      sinCache: sinCache,
+                      onTap: () {
+                        if (sinCache) {
+                          showOfflineUnavailableToast(context);
+                          return;
+                        }
+                        context.push(RoutePaths.usarEvento(evento.id));
+                      },
                       onLongPress: () => _mostrarMenuEvento(evento, fijados),
                       actions: esAdmin
                           ? [

@@ -271,7 +271,10 @@ class CampoTelefonoInternacional extends StatelessWidget {
     final elegido = await showModalBottomSheet<PaisTelefono>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
+      // Sin arrastre: la hoja es una lista larga con buscador y el gesto de
+      // scroll cerca del borde superior la cerraba a media búsqueda. Se sale
+      // tocando fuera o eligiendo un país.
+      enableDrag: false,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
@@ -365,7 +368,8 @@ class _SelectorPaisSheetState extends State<_SelectorPaisSheet> {
         child: Column(
           children: [
             const Padding(
-              padding: EdgeInsets.fromLTRB(20, 4, 20, 8),
+              // El aire de arriba lo daba el drag handle, ya retirado.
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(

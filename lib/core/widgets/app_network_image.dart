@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../data/images/imagen_de_disco_stub.dart'
     if (dart.library.io) '../../data/images/imagen_de_disco_io.dart';
 import '../../data/images/offline_image_store.dart';
+import 'app_image_skeleton.dart';
 
 /// Imagen remota para toda la app: perfil, leads y portadas.
 ///
@@ -27,6 +28,7 @@ class AppNetworkImage extends StatelessWidget {
     this.memCacheWidth,
     this.filterQuality = FilterQuality.medium,
     this.expandir = true,
+    this.esqueletoAlCargar = true,
   });
 
   final String url;
@@ -40,6 +42,15 @@ class AppNetworkImage extends StatelessWidget {
   /// Llena el padre (avatares, portadas). En el visor a tamaño natural va
   /// en `false` para que [InteractiveViewer] reciba la imagen real.
   final bool expandir;
+
+  /// Muestra [AppImageSkeleton] mientras baja la foto. En `false` se usa el
+  /// [placeholder] también durante la carga, para las pantallas que ya tienen
+  /// su propio indicador (el visor a pantalla completa, por ejemplo).
+  final bool esqueletoAlCargar;
+
+  Widget get _cargando => esqueletoAlCargar
+      ? const AppImageSkeleton()
+      : (placeholder ?? const SizedBox.shrink());
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +86,36 @@ class AppNetworkImage extends StatelessWidget {
       expandir: expandir,
       cacheWidth: memCacheWidth,
       alFallar: _desdeRed,
+      mientrasCarga: () => _cargando,
+    );
+  }
+
+  /// Fundido de entrada, salvo cuando la imagen ya estaba en cache: ahí
+  /// aparecer de golpe es lo correcto y animar haría parpadear la lista.
+  /// Esqueleto hasta el primer frame decodificado, y de ahí a la foto con un
+  /// fundido corto.
+  ///
+  /// Va todo en `frameBuilder` y no en `loadingBuilder` a propósito: `Image`
+  /// envuelve el resultado del primero con el segundo
+  /// (`loadingBuilder(context, frameBuilder(...), progress)`), así que un
+  /// `loadingBuilder` que devuelva el esqueleto descarta el `AnimatedSwitcher`
+  /// mientras carga y lo vuelve a crear ya con la imagen dentro — que es
+  /// justamente el caso en que un switcher no anima. `frame == null` cubre lo
+  /// mismo que `progress != null`: todavía no hay nada que pintar.
+  Widget _conFundido(
+    BuildContext context,
+    Widget child,
+    int? frame,
+    bool sincrona,
+  ) {
+    // Ya estaba en cache: aparecer de golpe es lo correcto, y animar haría
+    // parpadear la lista entera en cada scroll.
+    if (sincrona) return child;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      child: frame == null
+          ? KeyedSubtree(key: const ValueKey('cargando'), child: _cargando)
+          : KeyedSubtree(key: const ValueKey('foto'), child: child),
     );
   }
 
@@ -88,10 +129,7 @@ class AppNetworkImage extends StatelessWidget {
       width: expandir ? double.infinity : null,
       height: expandir ? double.infinity : null,
       cacheWidth: kIsWeb ? null : memCacheWidth,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return placeholder ?? child;
-      },
+      frameBuilder: _conFundido,
       errorBuilder: (_, _, _) =>
           errorWidget ?? placeholder ?? const SizedBox.shrink(),
     );

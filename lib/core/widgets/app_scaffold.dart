@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -11,20 +10,23 @@ import 'tw_components.dart';
 
 /// El pop interactivo de iOS (deslizar desde el borde) exige `canPop: true`.
 ///
-/// Con [hasWillPop] el botón atrás de la cabecera sigue pidiendo confirmación;
-/// el gesto nativo no se apaga. En Android/web el sistema back sí se intercepta.
+/// Un formulario con [hasWillPop] lo apaga en **todas** las plataformas: en
+/// iPhone el gesto descartaba lo escrito sin pasar por el diálogo de "descartar
+/// cambios" que sí muestra el botón atrás, y perder un registro a medio llenar
+/// por un roce en el borde es peor que quedarse sin gesto. Sin [hasWillPop] no
+/// hay nada que confirmar y el gesto sigue intacto.
 bool scaffoldAllowsInteractivePop({
   required bool hasWillPop,
   bool? isWeb,
   TargetPlatform? platform,
 }) {
-  if (!hasWillPop) return true;
-  if (isWeb ?? kIsWeb) return false;
-  final resolved = platform ?? defaultTargetPlatform;
-  return resolved == TargetPlatform.iOS || resolved == TargetPlatform.macOS;
+  return !hasWillPop;
 }
 
-/// Plantilla push: header sticky con blur (HANDOFF §4.8).
+/// Caja exacta de la barra de cabecera. Los tests miden por aquí.
+const Key appScaffoldHeaderKey = Key('app_scaffold_header');
+
+/// Plantilla push: header sticky (HANDOFF §4.8).
 ///
 /// El cuerpo se ancla arriba, no al centro: un formulario corto
 /// arranca igual que crear o editar evento.
@@ -184,23 +186,28 @@ class _PushHeader extends StatelessWidget {
 
     final nativoIos = usesNativeIosChrome;
 
-    return ClipRect(
-      child: TwGlassFilter(
-        sigma: nativoIos ? 20 : 12,
-        child: Container(
+    // Sin `BackdropFilter`: el cuerpo vive en un `Column` **debajo** de la
+    // cabecera, nunca pasa por detrás, así que el blur solo difuminaba el fondo
+    // plano del Scaffold —el mismo [TwColors.bg] que ya pinta el contenedor— y
+    // el resultado era idéntico. Lo que sí costaba era un `saveLayer` por frame
+    // en cada transición de las pantallas push.
+    return RepaintBoundary(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: TwColors.bg,
+          border: nativoIos
+              ? null
+              : const Border(
+                  bottom: BorderSide(color: TwColors.border07, width: 1),
+                ),
+        ),
+        child: Padding(
+          key: appScaffoldHeaderKey,
           padding: EdgeInsets.fromLTRB(
             TwSpacing.screenH,
             top + 14,
             TwSpacing.screenH,
             14,
-          ),
-          decoration: BoxDecoration(
-            color: TwColors.bg.withValues(alpha: nativoIos ? 0.42 : 0.92),
-            border: nativoIos
-                ? null
-                : const Border(
-                    bottom: BorderSide(color: TwColors.border07, width: 1),
-                  ),
           ),
           child: Row(
             children: [

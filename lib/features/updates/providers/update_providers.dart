@@ -9,7 +9,6 @@ import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/github_release_repository.dart';
 import '../services/apk_downloader.dart';
 import '../services/apk_installer.dart';
-import '../services/ota_debug_log.dart';
 import '../services/update_platform.dart';
 import '../services/update_service.dart';
 import '../services/windows_installer.dart';
@@ -229,22 +228,6 @@ class UpdateController extends StateNotifier<UpdateState> {
 
         if (!mounted) return;
 
-        // #region agent log
-        otaDebugLog(
-          location: 'update_providers.dart:downloadAndInstall',
-          message: 'download finished',
-          hypothesisId: Platform.isWindows ? 'H-E' : 'H-B',
-          data: {
-            'assetName': info.asset.name,
-            'assetSize': info.asset.size,
-            'fileLen': await file.length(),
-            'hasDigest': info.asset.sha256Hex != null,
-            'installed': info.installedVersion,
-            'remote': info.remoteVersion,
-          },
-        );
-        // #endregion
-
         state = state.copyWith(status: UpdateStatus.verifying, progress: 1);
         final ok = await _service.verifyDownload(file, info);
         if (!ok) {
@@ -317,18 +300,6 @@ class UpdateController extends StateNotifier<UpdateState> {
   }
 
   void _applyInstallResult(UpdateInstallResult result, String filePath) {
-    // #region agent log
-    otaDebugLog(
-      location: 'update_providers.dart:_applyInstallResult',
-      message: 'install outcome',
-      hypothesisId: Platform.isWindows ? 'H-D' : 'H-A',
-      data: {
-        'outcome': result.outcome.name,
-        'errorMessage': result.message ?? '',
-        'platform': Platform.operatingSystem,
-      },
-    );
-    // #endregion
     switch (result.outcome) {
       case UpdateInstallOutcome.launched:
         state = state.copyWith(status: UpdateStatus.installing);

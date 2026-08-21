@@ -571,4 +571,40 @@ void main() {
       expect(local.single['acreditado'], isTrue);
     });
   });
+
+  group('tieneEvento', () {
+    test('responde por el índice, sin leer los datos', () async {
+      final cache = await nuevaCache();
+      await cache.guardar('registrados', 'evento-vigente', [
+        {'id': 'ana'},
+      ]);
+
+      expect(cache.tieneEvento('registrados', 'evento-vigente'), isTrue);
+      expect(cache.tieneEvento('registrados', 'evento-purgado'), isFalse);
+    });
+
+    test('una lista vacía sí cuenta como copia local', () async {
+      // Un evento activo sin inscritos igual está descargado: sin esto la UI
+      // lo marcaría como no disponible sin conexión.
+      final cache = await nuevaCache();
+      await cache.guardar('registrados', 'evento-sin-gente', []);
+
+      expect(cache.tieneEvento('registrados', 'evento-sin-gente'), isTrue);
+    });
+
+    test('tras retenerEventos lo purgado deja de figurar', () async {
+      final cache = await nuevaCache();
+      await cache.guardar('registrados', 'vigente', [
+        {'id': 'ana'},
+      ]);
+      await cache.guardar('registrados', 'vencido', [
+        {'id': 'luis'},
+      ]);
+
+      await cache.retenerEventos('registrados', {'vigente'});
+
+      expect(cache.tieneEvento('registrados', 'vigente'), isTrue);
+      expect(cache.tieneEvento('registrados', 'vencido'), isFalse);
+    });
+  });
 }

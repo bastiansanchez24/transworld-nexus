@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -9,6 +10,7 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/pressable.dart';
 import '../../../data/models/notificacion.dart';
 import '../../../data/repositories/notificaciones_repository.dart';
+import '../notificacion_destino.dart';
 import '../providers/notificaciones_providers.dart';
 
 class NotificacionesScreen extends ConsumerStatefulWidget {
@@ -49,6 +51,21 @@ class _NotificacionesScreenState extends ConsumerState<NotificacionesScreen> {
     } finally {
       if (mounted) setState(() => _marcandoTodas = false);
     }
+  }
+
+  /// Abre lo que la notificación referencia: el hilo del lead comentado o el
+  /// evento del registro. Sin destino (evento borrado, campaña eliminada) se
+  /// queda en el inbox en vez de navegar a una ruta rota.
+  void _abrir(NotificacionInbox notificacion) {
+    final destino = destinoDeNotificacion(notificacion);
+    if (destino == null) {
+      showAppSnackBar(
+        context,
+        'Esta notificación ya no tiene a dónde llevarte.',
+      );
+      return;
+    }
+    context.push(destino);
   }
 
   void _activarSeleccion(String id) {
@@ -204,7 +221,7 @@ class _NotificacionesScreenState extends ConsumerState<NotificacionesScreen> {
                       ? null
                       : _modoSeleccion
                       ? () => _alternarSeleccion(item.id)
-                      : null,
+                      : () => _abrir(item),
                 );
               },
             ),
@@ -216,9 +233,8 @@ class _NotificacionesScreenState extends ConsumerState<NotificacionesScreen> {
 }
 
 IconData _iconoParaTipo(TipoNotificacion tipo) {
-  if (tipo.esAcreditacion) {
-    return Symbols.verified_rounded;
-  }
+  if (tipo.esAcreditacion) return Symbols.verified_rounded;
+  if (tipo.esComentario) return Symbols.chat_bubble_rounded;
   return Symbols.person_add_rounded;
 }
 

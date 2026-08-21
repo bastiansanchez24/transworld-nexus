@@ -293,6 +293,7 @@ class StatCard extends StatelessWidget {
     required this.icon,
     this.tint = TwColors.blueTint,
     this.iconColor = TwColors.blueInk,
+    this.onTap,
   });
 
   final String value;
@@ -300,6 +301,7 @@ class StatCard extends StatelessWidget {
   final IconData icon;
   final Color tint;
   final Color iconColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -309,6 +311,7 @@ class StatCard extends StatelessWidget {
       icon: icon,
       tint: tint,
       iconColor: iconColor,
+      onTap: onTap,
     );
   }
 }
@@ -326,6 +329,7 @@ class EventRow extends StatelessWidget {
     this.trailing,
     this.actions,
     this.chip,
+    this.sinCache = false,
   });
 
   final DateTime date;
@@ -338,126 +342,140 @@ class EventRow extends StatelessWidget {
   final Widget? trailing;
   final List<Widget>? actions;
 
+  /// Sin conexión y sin copia local: la fila se ve apagada, con candado, y al
+  /// tocarla avisa en vez de abrir una pantalla que no tiene datos que mostrar.
+  final bool sinCache;
+
   /// Distintivo extra bajo el título, junto al estado (p. ej. el origen de un
   /// evento de leads).
   final Widget? chip;
 
   @override
   Widget build(BuildContext context) {
-    final chevron =
-        trailing ??
-        const Icon(
-          Symbols.chevron_right_rounded,
-          size: 22,
-          color: TwColors.chevron,
-        );
+    final chevron = sinCache
+        ? const Icon(Symbols.lock_rounded, size: 20, color: TwColors.muted)
+        : trailing ??
+              const Icon(
+                Symbols.chevron_right_rounded,
+                size: 22,
+                color: TwColors.chevron,
+              );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: TwColors.surface,
-        borderRadius: TwRadii.tile,
-        border: Border.all(
-          color: fijado ? TwColors.hero700 : TwColors.border07,
-          width: fijado ? 1.5 : 1,
+    return Opacity(
+      opacity: sinCache ? 0.55 : 1,
+      child: Container(
+        decoration: BoxDecoration(
+          color: TwColors.surface,
+          borderRadius: TwRadii.tile,
+          border: Border.all(
+            color: fijado ? TwColors.hero700 : TwColors.border07,
+            width: fijado ? 1.5 : 1,
+          ),
+          boxShadow: TwShadows.card,
         ),
-        boxShadow: TwShadows.card,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Pressable(
-              onTap: onTap,
-              onLongPress: onLongPress,
-              child: Padding(
-                padding: const EdgeInsets.all(13),
-                child: Row(
-                  children: [
-                    DateTile(date: date, muted: finalizado),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              if (fijado) ...[
-                                const Icon(
-                                  Symbols.push_pin_rounded,
-                                  size: 14,
-                                  fill: 1,
-                                  color: TwColors.hero700,
-                                ),
-                                const SizedBox(width: 6),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TwText.tileTitle.copyWith(
-                                    fontSize: 14,
-                                    height: 1.35,
-                                    color: finalizado
-                                        ? TwColors.secondary
-                                        : TwColors.ink,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (place.isNotEmpty) ...[
-                            const SizedBox(height: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Pressable(
+                onTap: onTap,
+                // Fijar, editar o eliminar exigen red: sin caché tampoco hay menú.
+                onLongPress: sinCache ? null : onLongPress,
+                child: Padding(
+                  padding: const EdgeInsets.all(13),
+                  child: Row(
+                    children: [
+                      DateTile(date: date, muted: finalizado),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Row(
                               children: [
-                                const Icon(
-                                  Symbols.location_on_rounded,
-                                  size: 14,
-                                  color: TwColors.muted,
-                                ),
-                                const SizedBox(width: 4),
+                                if (fijado) ...[
+                                  const Icon(
+                                    Symbols.push_pin_rounded,
+                                    size: 14,
+                                    fill: 1,
+                                    color: TwColors.hero700,
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
                                 Expanded(
                                   child: Text(
-                                    place,
-                                    maxLines: 1,
+                                    title,
+                                    maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TwText.tileSubtitle.copyWith(
-                                      fontSize: 12,
+                                    style: TwText.tileTitle.copyWith(
+                                      fontSize: 14,
+                                      height: 1.35,
+                                      color: finalizado
+                                          ? TwColors.secondary
+                                          : TwColors.ink,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                          if (chip != null || finalizado) ...[
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                ?chip,
-                                if (finalizado)
-                                  const StatusChip(
-                                    label: 'Evento finalizado',
-                                    variant: StatusChipVariant.danger,
+                            if (place.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Symbols.location_on_rounded,
+                                    size: 14,
+                                    color: TwColors.muted,
                                   ),
-                              ],
-                            ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      place,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TwText.tileSubtitle.copyWith(
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            if (chip != null || finalizado || sinCache) ...[
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  ?chip,
+                                  if (finalizado)
+                                    const StatusChip(
+                                      label: 'Evento finalizado',
+                                      variant: StatusChipVariant.danger,
+                                    ),
+                                  if (sinCache)
+                                    const StatusChip(
+                                      label: 'No descargado',
+                                      variant: StatusChipVariant.neutral,
+                                    ),
+                                ],
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                    if (actions == null) chevron,
-                  ],
+                      if (actions == null || sinCache) chevron,
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          if (actions != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: Row(mainAxisSize: MainAxisSize.min, children: actions!),
-            ),
-        ],
+            if (actions != null && !sinCache)
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Row(mainAxisSize: MainAxisSize.min, children: actions!),
+              ),
+          ],
+        ),
       ),
     );
   }

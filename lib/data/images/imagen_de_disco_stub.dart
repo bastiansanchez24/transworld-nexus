@@ -9,6 +9,7 @@ Widget imagenDeDisco({
   required bool expandir,
   int? cacheWidth,
   required Widget Function() alFallar,
+  Widget Function()? mientrasCarga,
 }) {
   return alFallar();
 }

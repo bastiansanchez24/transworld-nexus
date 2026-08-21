@@ -53,9 +53,6 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
   /// recarga la lista para que las tarjetas no queden con los conteos viejos.
   @override
   void onBecomeVisible() {
-    if (_abriendoRegistrados) {
-      setState(() => _abriendoRegistrados = false);
-    }
     ref.invalidate(eventoByIdProvider(widget.eventoId));
     ref.invalidate(registradosPorEventoProvider(widget.eventoId));
     ref.invalidate(eventoLeadInternoProvider(widget.eventoId));
@@ -89,16 +86,26 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
     }
   }
 
+  /// El indicador se apaga cuando la ruta empujada vuelve, no cuando
+  /// [onBecomeVisible] decide correr: si el refresco fallara, el tile quedaría
+  /// girando para siempre y sin forma de reabrir la lista.
   Future<void> _abrirRegistrados() async {
     if (_abriendoRegistrados) return;
     ActionLock.instance.deferUnlock();
     setState(() => _abriendoRegistrados = true);
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-    context.push(RoutePaths.verRegistrados(widget.eventoId));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ActionLock.instance.finishIfNoNav();
-    });
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      final navegacion = context.push(
+        RoutePaths.verRegistrados(widget.eventoId),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ActionLock.instance.finishIfNoNav();
+      });
+      await navegacion;
+    } finally {
+      if (mounted) setState(() => _abriendoRegistrados = false);
+    }
   }
 
   Future<void> _compartir(String nombreEvento) async {

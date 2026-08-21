@@ -29,6 +29,7 @@ import '../lead_comentario_flujo.dart';
 import '../providers/capturador_providers.dart';
 import '../widgets/avatar_lead.dart';
 import '../widgets/foto_lead_identidad.dart';
+import '../../../data/repositories/storage_cleanup_service.dart';
 
 enum _FiltroLead { todos, mios, deOtros }
 
@@ -796,6 +797,8 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
 
     try {
       await ref.read(leadsRepositoryProvider).eliminar(widget.leadId);
+      // Las fotos del lead ya no tienen fila que las referencie.
+      ref.read(storageCleanupServiceProvider).drenar();
       ref.invalidate(leadsPorEventoProvider(widget.eventoId));
       if (mounted) {
         volverALista(

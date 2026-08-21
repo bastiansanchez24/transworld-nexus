@@ -44,6 +44,9 @@ class OfflineCacheTables {
   /// Leads propios que muestra "Mi perfil".
   static const misLeads = 'mis_leads';
 
+  /// Asistentes que acreditó el usuario en sesión, con su evento.
+  static const misAcreditados = 'mis_acreditados';
+
   /// Total remoto de leads del externo.
   static const externoResumen = 'externo_resumen';
 

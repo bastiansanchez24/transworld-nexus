@@ -155,6 +155,7 @@ docs/
 | `reset-password` | Olvido de contraseña (invocar con `--no-verify-jwt`) |
 | `enviar-qr` | QR de acreditación por email (Brevo) |
 | `enviar-push` | Envía FCM al insertar en `notificaciones` (secret `FIREBASE_SERVICE_ACCOUNT_JSON`) |
+| `limpiar-storage` | Vacía la cola `storage_basura`: borra los objetos que ya no referencia ninguna fila |
 
 Desplegar con `supabase functions deploy`. El secret `BREVO_API_KEY` lo
 comparten las funciones de correo. Remitentes: `soporte@transworld.cl`

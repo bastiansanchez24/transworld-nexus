@@ -47,23 +47,27 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
 
   @override
   void onBecomeVisible() {
-    if (_abriendoLeads) {
-      setState(() => _abriendoLeads = false);
-    }
     ref.invalidate(eventoLeadByIdProvider(widget.eventoId));
     ref.invalidate(leadsResumenRemotoProvider(widget.eventoId));
   }
 
+  /// Ver la nota de `_abrirRegistrados` en el menú de evento: el indicador se
+  /// apaga al volver de la ruta, no desde [onBecomeVisible].
   Future<void> _abrirLeads() async {
     if (_abriendoLeads) return;
     ActionLock.instance.deferUnlock();
     setState(() => _abriendoLeads = true);
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-    context.push(RoutePaths.verLeads(widget.eventoId));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ActionLock.instance.finishIfNoNav();
-    });
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      final navegacion = context.push(RoutePaths.verLeads(widget.eventoId));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ActionLock.instance.finishIfNoNav();
+      });
+      await navegacion;
+    } finally {
+      if (mounted) setState(() => _abriendoLeads = false);
+    }
   }
 
   @override

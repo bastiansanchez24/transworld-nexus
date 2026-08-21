@@ -19,6 +19,7 @@ import '../../../data/repositories/eventos_leads_repository.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/capturador_providers.dart';
+import '../../../data/repositories/storage_cleanup_service.dart';
 
 class CrearEditarEventoLeadScreen extends StatelessWidget {
   const CrearEditarEventoLeadScreen({super.key, this.eventoId});
@@ -175,6 +176,10 @@ class _CrearEditarEventoLeadFormState
       if (widget.eventoId != null) {
         ref.invalidate(eventoLeadByIdProvider(widget.eventoId!));
       }
+      // Cada subida de portada crea un objeto nuevo y deja huérfano el viejo.
+      if (_imagenBytes != null) {
+        ref.read(storageCleanupServiceProvider).drenar();
+      }
 
       if (mounted) {
         showAppSnackBar(
@@ -209,6 +214,7 @@ class _CrearEditarEventoLeadFormState
 
     try {
       await ref.read(eventosLeadsRepositoryProvider).eliminar(widget.eventoId!);
+      ref.read(storageCleanupServiceProvider).drenar();
       ref.invalidate(eventosLeadsListProvider);
       ref.invalidate(eventoLeadByIdProvider(widget.eventoId!));
       if (mounted) context.go(RoutePaths.capturador);

@@ -26,6 +26,7 @@ import '../../features/home/screens/home_screen.dart';
 import '../../features/kpi/screens/kpi_screen.dart';
 import '../../features/notificaciones/screens/notificaciones_screen.dart';
 import '../../features/perfil/screens/mi_perfil_screen.dart';
+import '../../features/perfil/screens/mis_acreditados_screen.dart';
 import '../../features/updates/screens/actualizaciones_screen.dart';
 import '../../features/registrados/screens/editar_registrado_screen.dart';
 import '../../features/registrados/screens/ver_registrados_screen.dart';
@@ -50,6 +51,7 @@ import 'user_event_route_policy.dart';
 import '../widgets/action_lock.dart';
 import '../widgets/ios_native_tab_bar.dart';
 import '../widgets/main_shell_scaffold.dart';
+import '../widgets/sheet_depth_observer.dart';
 
 /// Rutas que no requieren sesión iniciada.
 bool _esRutaPublica(String location) {
@@ -110,7 +112,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: authClient.currentSession != null
         ? RoutePaths.splash
         : RoutePaths.login,
-    observers: [CNTabBarRouteObserver(), ActionLockObserver()],
+    observers: [
+      // Avisa al lado nativo cuándo hay una transición en curso: sin esto las
+      // vistas Liquid Glass siguen recalculándose durante el slide.
+      crearCNTransitionObserver(),
+      CNTabBarRouteObserver(),
+      SheetDepthObserver(),
+      ActionLockObserver(),
+    ],
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final location = state.matchedLocation;
@@ -595,6 +604,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.perfil,
         pageBuilder: (context, state) =>
             sharedAxisPage(key: state.pageKey, child: const MiPerfilScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.misAcreditados,
+        pageBuilder: (context, state) => sharedAxisPage(
+          key: state.pageKey,
+          child: const MisAcreditadosScreen(),
+        ),
       ),
       GoRoute(
         path: RoutePaths.sincronizacion,

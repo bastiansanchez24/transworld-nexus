@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/supabase_tables.dart';
 import '../../core/network/connectivity_service.dart';
 import '../../core/network/offline_policy.dart';
 import '../../features/auth/providers/auth_providers.dart';
@@ -13,10 +14,14 @@ import '../../features/home/providers/home_featured_providers.dart';
 import '../../features/registrados/providers/registrados_providers.dart';
 import '../../features/usuarios/providers/usuarios_providers.dart';
 import '../images/offline_image_store.dart';
+import '../repositories/storage_cleanup_service.dart';
 import '../models/evento.dart';
 import '../models/evento_lead.dart';
 import 'offline_cache_tables.dart';
 import 'offline_read_cache.dart';
+import 'offline_retention_policy.dart';
+import 'sync_queue_item.dart';
+import 'sync_queue_service.dart';
 
 /// Etapas del snapshot, en el orden en que se ejecutan.
 enum SnapshotEtapa {
@@ -152,10 +157,12 @@ class SnapshotService extends StateNotifier<SnapshotEstado> {
     return catalogo.where((e) => e.activo && !e.yaOcurrio).toList();
   }
 
-  /// Actividades de captura que se bajan enteras. Las finalizadas dejan de
-  /// refrescarse, pero su copia **no** se borra: si el evento termina a
-  /// medianoche mientras alguien sigue capturando, vaciarle la lista en plena
-  /// feria es peor que conservar un dato viejo.
+  /// Actividades de captura que se bajan enteras.
+  ///
+  /// Las finalizadas dejan de refrescarse aquí, pero su copia no se suelta el
+  /// mismo día: de eso se encarga [_purgar] con
+  /// [margenRetencionOffline], para no vaciarle la lista en plena feria a
+  /// quien siga capturando después de medianoche.
   static List<EventoLead> actividadesDelSnapshot(List<EventoLead> catalogo) {
     return catalogo.where((e) => !e.yaOcurrio).toList();
   }
@@ -236,19 +243,22 @@ class SnapshotService extends StateNotifier<SnapshotEstado> {
         return _ref.read(currentPerfilProvider.future);
       });
 
-      final catalogo =
-          await etapa(SnapshotEtapa.catalogo, () async {
-            _ref.invalidate(eventosListProvider);
-            return _ref.read(eventosListProvider.future);
-          }) ??
-          const <Evento>[];
+      // El resultado nullable se conserva: `null` es "la etapa falló", y la
+      // purga no puede confundir eso con "el usuario no tiene nada".
+      final catalogoBajado = await etapa(SnapshotEtapa.catalogo, () async {
+        _ref.invalidate(eventosListProvider);
+        return _ref.read(eventosListProvider.future);
+      });
+      final catalogo = catalogoBajado ?? const <Evento>[];
 
-      final actividades =
-          await etapa(SnapshotEtapa.actividades, () async {
-            _ref.invalidate(eventosLeadsListProvider);
-            return _ref.read(eventosLeadsListProvider.future);
-          }) ??
-          const <EventoLead>[];
+      final actividadesBajadas = await etapa(
+        SnapshotEtapa.actividades,
+        () async {
+          _ref.invalidate(eventosLeadsListProvider);
+          return _ref.read(eventosLeadsListProvider.future);
+        },
+      );
+      final actividades = actividadesBajadas ?? const <EventoLead>[];
 
       await etapa(SnapshotEtapa.usuarios, () async {
         _ref.invalidate(usuariosListProvider);
@@ -336,6 +346,7 @@ class SnapshotService extends StateNotifier<SnapshotEstado> {
         }
       });
 
+      await _purgar(catalogo: catalogoBajado, actividades: actividadesBajadas);
       await _guardarMarca();
     } finally {
       state = state.copyWith(
@@ -345,6 +356,172 @@ class SnapshotService extends StateNotifier<SnapshotEstado> {
         limpiarProgreso: true,
       );
     }
+  }
+
+  /// Purga con lo que ya hay en disco, sin pedirle nada al servidor.
+  ///
+  /// La decisión solo depende de la fecha del catálogo cacheado, así que puede
+  /// —y debe— correr también sin red: si no, un teléfono que pasa semanas en
+  /// modo avión nunca liberaría nada.
+  Future<void> purgarConCacheLocal() async {
+    if (!supportsOfflineCacheAqui) return;
+    final cache = _ref.read(offlineReadCacheProvider);
+
+    final catalogo = cache.leerGlobal(
+      tabla: OfflineCacheTables.eventos,
+      desdeFila: Evento.fromMap,
+    );
+    final actividades = cache.leerGlobal(
+      tabla: OfflineCacheTables.eventosLeads,
+      desdeFila: EventoLead.fromMap,
+    );
+    if (catalogo == null && actividades == null) return;
+
+    await _purgar(catalogo: catalogo, actividades: actividades);
+  }
+
+  /// Suelta del disco lo que ya no está activo.
+  ///
+  /// Sin esto el snapshot solo crecía: bajaba el set vigente y dejaba intacto
+  /// todo lo de las ferias anteriores. Cubre las tres capas —listas por evento,
+  /// detalles y portadas— y respeta dos reglas:
+  ///
+  /// * [margenRetencionOffline] de gracia tras la fecha del evento.
+  /// * Nada con escrituras pendientes en la cola se toca, aunque haya
+  ///   caducado: esa copia es lo único que sostiene lo capturado sin red.
+  ///
+  /// [catalogo] y [actividades] en `null` significan "no se pudo saber" —la
+  /// etapa del snapshot falló— y ahí esa familia de tablas no se toca. Una
+  /// lista vacía sí es una respuesta (el usuario no tiene nada) y purga.
+  Future<void> _purgar({
+    required List<Evento>? catalogo,
+    required List<EventoLead>? actividades,
+  }) async {
+    if (!supportsOfflineCacheAqui) return;
+    if (catalogo == null && actividades == null) return;
+
+    try {
+      final cache = _ref.read(offlineReadCacheProvider);
+      final protegidos = _idsConEscriturasPendientes();
+
+      if (catalogo != null) {
+        final eventos = eventosAConservar(catalogo, protegidos: protegidos);
+
+        await cache.retenerEventos(OfflineCacheTables.eventoDetalle, eventos);
+        await cache.retenerEventos(SupabaseTables.registrados, eventos);
+      }
+
+      if (actividades != null) {
+        final campanas = actividadesAConservar(
+          actividades,
+          protegidos: protegidos,
+        );
+        final origenes = origenesAConservar(actividades, campanas);
+
+        await cache.retenerEventos(
+          OfflineCacheTables.eventoLeadDetalle,
+          campanas,
+        );
+        // Las dos variantes por rol: un cambio de permisos deja atrás la tabla
+        // que ya no se lee y nadie más la limpia.
+        await cache.retenerEventos(leadsCacheTabla(true), campanas);
+        await cache.retenerEventos(leadsCacheTabla(false), campanas);
+        await cache.retenerEventos(leadsResumenCacheTabla, campanas);
+        await cache.retenerEventos(
+          OfflineCacheTables.eventoLeadPorOrigen,
+          origenes,
+        );
+      }
+
+      // Las portadas solo se pueden podar sabiéndolo todo: con medio catálogo
+      // se borrarían imágenes que siguen en uso.
+      if (catalogo != null && actividades != null) {
+        await _purgarImagenes(catalogo: catalogo, actividades: actividades);
+      }
+    } catch (e) {
+      // Liberar espacio jamás puede tumbar una sincronización que ya trajo
+      // datos buenos: se reintenta en la próxima pasada.
+      developer.log('Purga de caché pospuesta: $e', name: 'SnapshotService');
+    }
+  }
+
+  Future<void> _purgarImagenes({
+    required List<Evento> catalogo,
+    required List<EventoLead> actividades,
+  }) async {
+    final store = _ref.read(offlineImageStoreProvider);
+    if (!store.disponible) return;
+
+    final vigentes = <String>{
+      ...eventosDelSnapshot(catalogo).map((e) => e.imagenUrl ?? ''),
+      ...actividadesDelSnapshot(actividades).map((c) => c.imagenUrl ?? ''),
+      ...(_ref.read(usuariosListProvider).valueOrNull ?? const []).map(
+        (p) => p.fotoUrl ?? '',
+      ),
+    }..removeWhere((url) => url.isEmpty);
+
+    final borradas = await store.retener(vigentes);
+    if (borradas > 0) {
+      developer.log(
+        '$borradas portadas liberadas del disco',
+        name: 'SnapshotService',
+      );
+    }
+  }
+
+  Set<String> _idsConEscriturasPendientes() =>
+      idsConEscriturasPendientes(_ref.read(syncQueueServiceProvider));
+
+  /// Eventos y campañas con escrituras que todavía no llegaron al servidor.
+  ///
+  /// Su caché es la única prueba de lo capturado sin red: purgarla borraría el
+  /// contexto de una fila que aún está por subir.
+  static Set<String> idsConEscriturasPendientes(List<SyncQueueItem> cola) {
+    return {
+      for (final item in cola)
+        if (item.status != SyncStatus.synced)
+          item.payload['evento_id']?.toString() ?? '',
+    }..removeWhere((id) => id.isEmpty);
+  }
+
+  /// Eventos cuya copia local se conserva: los vigentes más los [protegidos].
+  static Set<String> eventosAConservar(
+    List<Evento> catalogo, {
+    Set<String> protegidos = const {},
+    DateTime? ahora,
+  }) {
+    return idsVigentes(
+      catalogo,
+      id: (Evento e) => e.id,
+      fecha: (Evento e) => e.fecha,
+      ahora: ahora,
+    )..addAll(protegidos);
+  }
+
+  static Set<String> actividadesAConservar(
+    List<EventoLead> actividades, {
+    Set<String> protegidos = const {},
+    DateTime? ahora,
+  }) {
+    return idsVigentes(
+      actividades,
+      id: (EventoLead e) => e.id,
+      fecha: (EventoLead e) => e.fecha,
+      ahora: ahora,
+    )..addAll(protegidos);
+  }
+
+  /// Claves a conservar en `eventoLeadPorOrigen`, que se indexa **por el id del
+  /// evento de origen**, no por el de la actividad.
+  static Set<String> origenesAConservar(
+    List<EventoLead> actividades,
+    Set<String> campanasVigentes,
+  ) {
+    return {
+      for (final actividad in actividades)
+        if (campanasVigentes.contains(actividad.id))
+          actividad.eventoOrigenId ?? '',
+    }..removeWhere((id) => id.isEmpty);
   }
 
   Future<void> _guardarMarca() async {
@@ -383,7 +560,14 @@ final esperandoPrimerSnapshotProvider = Provider<bool>((ref) {
 final snapshotAutoStartProvider = Provider<void>((ref) {
   void lanzar() {
     if (ref.read(currentPerfilProvider).valueOrNull == null) return;
-    ref.read(snapshotServiceProvider.notifier).ejecutar();
+    final servicio = ref.read(snapshotServiceProvider.notifier);
+    // Sin red `ejecutar` sale de inmediato, así que la purga va aparte: la
+    // decisión solo mira la fecha del catálogo que ya está en disco.
+    servicio.purgarConCacheLocal();
+    servicio.ejecutar();
+    // Drena también lo que encolaron otros dispositivos: la cola vive en el
+    // servidor y nadie más la vacía.
+    ref.read(storageCleanupServiceProvider).drenar();
   }
 
   // Perfil resuelto: primera bajada (o refresco) de la sesión.

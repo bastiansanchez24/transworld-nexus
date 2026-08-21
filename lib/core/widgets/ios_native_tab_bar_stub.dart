@@ -7,6 +7,9 @@ class CNTabBarRouteObserver extends NavigatorObserver {
   CNTabBarRouteObserver();
 }
 
+/// Stub de web: sin UIKit no hay nada a quien avisar de la transición.
+NavigatorObserver crearCNTransitionObserver() => NavigatorObserver();
+
 /// Contenedor de la tab bar nativa iOS. En web no se llega a construir.
 class IosNativeTabBar extends StatelessWidget {
   const IosNativeTabBar({

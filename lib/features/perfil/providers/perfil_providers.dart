@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/lead.dart';
+import '../../../data/models/mi_acreditacion.dart';
 import '../../../data/offline/offline_cache_tables.dart';
 import '../../../data/offline/offline_read_cache.dart';
 import '../../../data/repositories/eventos_repository.dart';
@@ -61,18 +62,22 @@ final miPerfilStatsProvider = FutureProvider.autoDispose<MiPerfilStats>((
     ref: ref,
     tabla: OfflineCacheTables.perfilStats,
     desdeServidor: () async {
+      // Las acreditaciones se cuentan con el mismo RPC que alimenta el
+      // listado: contarlas por `select` daría un número mayor o menor que la
+      // lista según los eventos que la persona tenga asignados hoy, y la
+      // tarjeta parecería rota.
       final results = await Future.wait([
         leadsRepo.contarPorPerfil(uid),
         registradosRepo.contarPorIngresadoPor(uid),
-        registradosRepo.contarPorAcreditadoPor(uid),
         eventosRepo.contarCreadosPor(uid),
       ]);
+      final acreditados = await registradosRepo.listarMisAcreditados();
       return [
         MiPerfilStats(
           leadsCapturados: results[0],
           asistentesRegistrados: results[1],
-          acreditaciones: results[2],
-          eventosCreados: results[3],
+          acreditaciones: acreditados.length,
+          eventosCreados: results[2],
         ),
       ];
     },
@@ -102,3 +107,20 @@ final misLeadsProvider = FutureProvider.autoDispose<List<Lead>>((ref) async {
     desdeFila: Lead.fromMap,
   );
 });
+
+/// Acreditaciones del usuario en sesión, agrupadas por evento: es la lista que
+/// abre la tarjeta "Acreditaciones" de Mi perfil.
+final misAcreditadosProvider =
+    FutureProvider.autoDispose<List<AcreditacionesPorEvento>>((ref) async {
+      final perfil = await ref.watch(currentPerfilProvider.future);
+      if (perfil == null) return const [];
+      final repo = ref.watch(registradosRepositoryProvider);
+      final filas = await leerCacheFirstConRef(
+        ref: ref,
+        tabla: OfflineCacheTables.misAcreditados,
+        desdeServidor: repo.listarMisAcreditados,
+        aFila: (acreditacion) => acreditacion.toCacheMap(),
+        desdeFila: MiAcreditacion.fromMap,
+      );
+      return AcreditacionesPorEvento.agrupar(filas);
+    });

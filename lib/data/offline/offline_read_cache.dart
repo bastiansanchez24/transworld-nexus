@@ -421,6 +421,15 @@ class OfflineReadCache {
     return _guardarSiCambia(tabla, eventoId, actualizadas);
   }
 
+  /// `true` si esta tabla tiene copia local de [eventoId].
+  ///
+  /// Sin red la UI la usa para distinguir lo que se puede abrir de lo que ya se
+  /// purgó: entrar a un evento sin caché solo lleva a una pantalla vacía.
+  bool tieneEvento(String tabla, String eventoId) {
+    _migrarV2SiHaceFalta(tabla);
+    return _indice(tabla).contains(eventoId);
+  }
+
   /// Elimina inmediatamente una copia cuyo acceso fue rechazado por RLS.
   Future<void> eliminarEvento(String tabla, String eventoId) async {
     _migrarV2SiHaceFalta(tabla);

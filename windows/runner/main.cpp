@@ -9,9 +9,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
+  //
+  // Solo en debug. En Release el updater OTA relanza RegisPro y, si el proceso
+  // se adjuntara a una consola ajena, esa consola sobreviviría al instalador y
+  // cerrarla mataría la app (CTRL_CLOSE_EVENT). Ver windows_installer.dart.
+#ifndef NDEBUG
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
     CreateAndAttachConsole();
   }
+#endif
 
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.

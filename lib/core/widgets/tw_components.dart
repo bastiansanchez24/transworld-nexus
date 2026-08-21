@@ -861,6 +861,7 @@ class TwKpiCard extends StatelessWidget {
     required this.icon,
     required this.tint,
     required this.iconColor,
+    this.onTap,
   });
 
   final String value;
@@ -869,9 +870,13 @@ class TwKpiCard extends StatelessWidget {
   final Color tint;
   final Color iconColor;
 
+  /// Con valor, la tarjeta abre un detalle: se vuelve pulsable y muestra el
+  /// chevron para que se lea como navegable y no como un número muerto.
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final tarjeta = Container(
       padding: const EdgeInsets.all(15),
       decoration: const BoxDecoration(
         color: TwColors.surface,
@@ -905,10 +910,23 @@ class TwKpiCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 5),
-          Text(label, style: TwText.kpiLabel),
+          Row(
+            children: [
+              Expanded(child: Text(label, style: TwText.kpiLabel)),
+              if (onTap != null)
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: TwColors.muted,
+                ),
+            ],
+          ),
         ],
       ),
     );
+
+    if (onTap == null) return tarjeta;
+    return TwPressable(onTap: onTap, child: tarjeta);
   }
 }
 
