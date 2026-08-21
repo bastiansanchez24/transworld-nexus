@@ -24,7 +24,9 @@ bool cupertinoOwnsBackSwipe({bool? isWeb, TargetPlatform? platform}) {
   return resolved == TargetPlatform.iOS || resolved == TargetPlatform.macOS;
 }
 
-/// Página push: Cupertino (gesto de atrás) en iOS nativo; SharedAxis en el resto.
+/// Página push separada por plataforma: Cupertino en iOS nativo, SharedAxis
+/// en Android, transición corta en Windows e historial sin animación inversa
+/// adicional en Web.
 Page<T> sharedAxisPage<T>({
   required LocalKey key,
   required Widget child,
@@ -36,12 +38,29 @@ Page<T> sharedAxisPage<T>({
     return CupertinoPage<T>(key: key, child: child);
   }
 
-  final browserBack = browserOwnsBackSwipe(isWeb: isWeb, platform: platform);
+  final resolvedIsWeb = isWeb ?? kIsWeb;
+  if (resolvedIsWeb) {
+    return _webPage(key: key, child: child);
+  }
+
+  final resolvedPlatform = platform ?? defaultTargetPlatform;
+  if (resolvedPlatform == TargetPlatform.windows) {
+    return _windowsPage(key: key, child: child);
+  }
+
+  return _androidAndFallbackPage(key: key, child: child, type: type);
+}
+
+CustomTransitionPage<T> _androidAndFallbackPage<T>({
+  required LocalKey key,
+  required Widget child,
+  required SharedAxisTransitionType type,
+}) {
   return CustomTransitionPage<T>(
     key: key,
     child: child,
     transitionDuration: AppMotion.pushIn,
-    reverseTransitionDuration: browserBack ? Duration.zero : AppMotion.pushIn,
+    reverseTransitionDuration: AppMotion.pushIn,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final reduce = AppMotion.reduceMotion(context);
       if (reduce) {
@@ -49,12 +68,68 @@ Page<T> sharedAxisPage<T>({
       }
       return SharedAxisTransition(
         animation: animation,
-        secondaryAnimation: browserBack
-            ? const AlwaysStoppedAnimation<double>(0)
-            : secondaryAnimation,
+        secondaryAnimation: secondaryAnimation,
         transitionType: type,
         fillColor: AppColors.background,
         child: child,
+      );
+    },
+  );
+}
+
+CustomTransitionPage<T> _windowsPage<T>({
+  required LocalKey key,
+  required Widget child,
+}) {
+  return CustomTransitionPage<T>(
+    key: key,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 180),
+    reverseTransitionDuration: const Duration(milliseconds: 160),
+    transitionsBuilder: (context, animation, _, child) {
+      if (AppMotion.reduceMotion(context)) return child;
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: AppMotion.ease,
+        reverseCurve: Curves.easeOutCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.035, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+CustomTransitionPage<T> _webPage<T>({
+  required LocalKey key,
+  required Widget child,
+}) {
+  return CustomTransitionPage<T>(
+    key: key,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 160),
+    // El historial del navegador ya representa visualmente el back. Una
+    // segunda transición inversa es la que se percibe como "salir y volver".
+    reverseTransitionDuration: Duration.zero,
+    transitionsBuilder: (context, animation, _, child) {
+      if (AppMotion.reduceMotion(context)) return child;
+      final curved = CurvedAnimation(parent: animation, curve: AppMotion.ease);
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.02, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
       );
     },
   );

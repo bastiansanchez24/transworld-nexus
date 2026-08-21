@@ -188,7 +188,7 @@ class _VerRegistradosScreenState extends ConsumerState<VerRegistradosScreen>
       overlayLeading: CollapsingNavButton(
         icon: Symbols.arrow_back_rounded,
         tooltip: 'Volver',
-        onTap: () => context.pop(),
+        onTap: () => volverAtras(context),
       ),
       pinnedContent: _buildPinnedControls(),
       pinnedContentHeight: 112,

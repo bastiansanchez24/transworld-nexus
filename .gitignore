@@ -77,6 +77,10 @@ windows/flutter/ephemeral/
 # Copias locales de assets OTA (alias android-nexus / windows-nexus).
 /dist/
 
+# Firebase CLI / hosting: el package.json solo trae el CLI, no es parte de la app.
+/node_modules/
+/package-lock.json
+
 # Android release signing — nunca versionar keystore ni key.properties.
 android/key.properties
 *.jks

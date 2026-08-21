@@ -45,6 +45,7 @@ import '../network/connectivity_service.dart';
 import 'external_route_policy.dart';
 import 'go_router_refresh_stream.dart';
 import 'page_transitions.dart';
+import 'refresh_on_visible.dart';
 import 'route_paths.dart';
 import 'session_boot_route.dart';
 import 'user_event_route_policy.dart';
@@ -108,7 +109,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     (_, _) => refreshListenable.refresh(),
   );
 
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: authClient.currentSession != null
         ? RoutePaths.splash
         : RoutePaths.login,
@@ -664,4 +665,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  // El atrás de la app consume historial del navegador solo por encima de
+  // esta marca; ver `sembrarBaseDeHistorial`.
+  sembrarBaseDeHistorial(router);
+  return router;
 });

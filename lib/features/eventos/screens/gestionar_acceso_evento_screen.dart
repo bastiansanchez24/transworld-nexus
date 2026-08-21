@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/network/offline_guard.dart';
+import '../../../core/router/refresh_on_visible.dart';
+import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/event_back_navigation_guard.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -66,7 +68,7 @@ class _GestionarAccesoEventoBodyState
       ref.invalidate(usuariosListProvider);
       if (!mounted) return;
       showAppSnackBar(context, 'Acceso al evento actualizado.');
-      context.pop();
+      volverAtras(context);
     } catch (e) {
       if (!mounted) return;
       showAppSnackBar(
@@ -77,6 +79,16 @@ class _GestionarAccesoEventoBodyState
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  Future<bool> _volverConBotonAndroid() async {
+    if (!mounted) return false;
+    if (currentLocationOf(context) !=
+        RoutePaths.accesoEvento(widget.eventoId)) {
+      return false;
+    }
+    volverALista(context, RoutePaths.eventos);
+    return true;
   }
 
   @override
@@ -94,69 +106,72 @@ class _GestionarAccesoEventoBodyState
         (usuariosAsync.isLoading && !usuariosAsync.hasValue) ||
         (autorizadosAsync.isLoading && !autorizadosAsync.hasValue);
 
-    return AppScaffold(
-      title: 'Acceso al evento',
-      body: cargando
-          ? const LoadingView()
-          : eventoAsync.hasError ||
-                usuariosAsync.hasError ||
-                autorizadosAsync.hasError
-          ? ErrorView(
-              message: 'No se pudo cargar el acceso del evento.',
-              onRetry: () {
-                ref.invalidate(eventoByIdProvider(widget.eventoId));
-                ref.invalidate(usuariosAsignablesAccesoProvider);
-                ref.invalidate(
-                  usuariosAutorizadosEventoProvider(widget.eventoId),
-                );
-                setState(() => _seleccionInicializada = false);
-              },
-            )
-          : SingleChildScrollView(
-              padding: AppSpacing.form,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    eventoAsync.valueOrNull?.nombre ?? 'Evento',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink,
+    return EventBackNavigationGuard(
+      onAndroidBack: _volverConBotonAndroid,
+      child: AppScaffold(
+        title: 'Acceso al evento',
+        body: cargando
+            ? const LoadingView()
+            : eventoAsync.hasError ||
+                  usuariosAsync.hasError ||
+                  autorizadosAsync.hasError
+            ? ErrorView(
+                message: 'No se pudo cargar el acceso del evento.',
+                onRetry: () {
+                  ref.invalidate(eventoByIdProvider(widget.eventoId));
+                  ref.invalidate(usuariosAsignablesAccesoProvider);
+                  ref.invalidate(
+                    usuariosAutorizadosEventoProvider(widget.eventoId),
+                  );
+                  setState(() => _seleccionInicializada = false);
+                },
+              )
+            : SingleChildScrollView(
+                padding: AppSpacing.form,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      eventoAsync.valueOrNull?.nombre ?? 'Evento',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Administradores y organizadores ya tienen acceso a todos los eventos. Aquí se autoriza a usuarios y usuarios externos.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Administradores y organizadores ya tienen acceso a todos los eventos. Aquí se autoriza a usuarios y usuarios externos.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  SelectorUsuariosAcceso(
-                    usuarios: usuariosAsync.valueOrNull ?? const [],
-                    seleccionados: _usuarioIds,
-                    enabled: !_guardando,
-                    permiteNuevosExternos:
-                        eventoAsync.valueOrNull != null &&
-                        eventoAsync.valueOrNull!.activo &&
-                        !eventoAsync.valueOrNull!.yaOcurrio,
-                    onChanged: (ids) => setState(() {
-                      _usuarioIds
-                        ..clear()
-                        ..addAll(ids);
-                    }),
-                  ),
-                  const SizedBox(height: 28),
-                  PrimaryGradientButton(
-                    label: _guardando ? 'Guardando…' : 'Guardar acceso',
-                    loading: _guardando,
-                    onPressed: _guardando ? null : _guardar,
-                  ),
-                ],
+                    const SizedBox(height: 18),
+                    SelectorUsuariosAcceso(
+                      usuarios: usuariosAsync.valueOrNull ?? const [],
+                      seleccionados: _usuarioIds,
+                      enabled: !_guardando,
+                      permiteNuevosExternos:
+                          eventoAsync.valueOrNull != null &&
+                          eventoAsync.valueOrNull!.activo &&
+                          !eventoAsync.valueOrNull!.yaOcurrio,
+                      onChanged: (ids) => setState(() {
+                        _usuarioIds
+                          ..clear()
+                          ..addAll(ids);
+                      }),
+                    ),
+                    const SizedBox(height: 28),
+                    PrimaryGradientButton(
+                      label: _guardando ? 'Guardando…' : 'Guardar acceso',
+                      loading: _guardando,
+                      onPressed: _guardando ? null : _guardar,
+                    ),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 }

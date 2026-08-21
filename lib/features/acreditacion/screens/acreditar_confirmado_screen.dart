@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/mascara_contacto.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -142,7 +142,7 @@ class _AcreditarConfirmadoScreenState
       overlayLeading: CollapsingNavButton(
         icon: Symbols.arrow_back_rounded,
         tooltip: 'Volver',
-        onTap: () => context.pop(),
+        onTap: () => volverAtras(context),
       ),
       pinnedContent: _buildSearchField(puedeVerContacto: puedeVerContacto),
       pinnedContentHeight: 60,

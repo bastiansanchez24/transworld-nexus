@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -313,6 +316,163 @@ void main() {
         expect(stackPaths(), ['/capturador', '/capturador/c1/usar']);
       },
     );
+  });
+
+  group('pushYEsperarSalida', () {
+    late GoRouter router;
+
+    setUp(() {
+      router = GoRouter(
+        initialLocation: '/eventos',
+        routes: [
+          GoRoute(
+            path: '/eventos',
+            builder: (_, _) => const Scaffold(body: Text('lista')),
+          ),
+          GoRoute(
+            path: '/eventos/:id/registrados',
+            builder: (_, _) => const Scaffold(body: Text('registrados')),
+          ),
+        ],
+      );
+    });
+
+    tearDown(() => router.dispose());
+
+    testWidgets('resuelve con el pop normal del Navigator', (tester) async {
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      final context = tester.element(find.text('lista'));
+
+      var resuelto = false;
+      unawaited(
+        pushYEsperarSalida(
+          context,
+          '/eventos/e1/registrados',
+        ).then((_) => resuelto = true),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('registrados'), findsOneWidget);
+      expect(resuelto, isFalse);
+
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(resuelto, isTrue);
+    });
+
+    testWidgets(
+      'resuelve cuando la ruta sale de la pila sin pop (atrás del navegador)',
+      (tester) async {
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        final context = tester.element(find.text('lista'));
+
+        var resuelto = false;
+        unawaited(
+          pushYEsperarSalida(
+            context,
+            '/eventos/e1/registrados',
+          ).then((_) => resuelto = true),
+        );
+        await tester.pumpAndSettle();
+        expect(resuelto, isFalse);
+
+        // El atrás del navegador no hace pop: reemplaza el `RouteMatchList`
+        // completo, y go_router deja huérfano el `Completer` del push. Un `go`
+        // recorre exactamente ese camino (`NavigatingType.go`).
+        router.go('/eventos');
+        await tester.pumpAndSettle();
+
+        expect(find.text('lista'), findsOneWidget);
+        expect(
+          resuelto,
+          isTrue,
+          reason: 'el futuro del push queda huérfano y el spinner no se apaga',
+        );
+      },
+    );
+  });
+
+  group('volverAtras', () {
+    late GoRouter router;
+    final reemplazos = <bool>[];
+
+    setUp(() {
+      reemplazos.clear();
+      TestDefaultBinaryMessengerBinding
+          .instance
+          .defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.navigation, (call) async {
+            if (call.method == 'routeInformationUpdated') {
+              final args = call.arguments as Map<Object?, Object?>;
+              reemplazos.add(args['replace'] as bool);
+            }
+            return null;
+          });
+
+      router = GoRouter(
+        initialLocation: '/eventos',
+        routes: [
+          GoRoute(
+            path: '/eventos',
+            builder: (_, _) => const Scaffold(body: Text('lista')),
+          ),
+          GoRoute(
+            path: '/eventos/:id/usar',
+            builder: (context, _) => Scaffold(
+              body: Column(
+                children: [
+                  const Text('evento'),
+                  TextButton(
+                    onPressed: () => volverAtras(context),
+                    child: const Text('atrás'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.navigation, null);
+      router.dispose();
+    });
+
+    testWidgets('vuelve sin añadir una entrada nueva al historial', (
+      tester,
+    ) async {
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      router.push('/eventos/e1/usar');
+      await tester.pumpAndSettle();
+      expect(find.text('evento'), findsOneWidget);
+
+      reemplazos.clear();
+      await tester.tap(find.text('atrás'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('lista'), findsOneWidget);
+      expect(
+        reemplazos,
+        isNotEmpty,
+        reason: 'el pop tiene que reportar la ruta al motor',
+      );
+      expect(
+        reemplazos,
+        everyElement(isTrue),
+        reason: 'sin replace, el atrás de la app apila historial en web',
+      );
+    });
+
+    testWidgets('en la raíz no hace nada', (tester) async {
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      final context = tester.element(find.text('lista'));
+
+      volverAtras(context);
+      await tester.pumpAndSettle();
+
+      expect(find.text('lista'), findsOneWidget);
+    });
   });
 }
 

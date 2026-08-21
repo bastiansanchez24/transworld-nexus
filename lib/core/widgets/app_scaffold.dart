@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/tw_tokens.dart';
 import '../theme/browser_theme_color.dart';
+import '../router/refresh_on_visible.dart';
 import 'ios_native_chrome.dart';
 import 'tw_components.dart';
 
@@ -61,7 +62,7 @@ class AppScaffold extends StatelessWidget {
       final salir = await onWillPop!();
       if (!salir || !context.mounted) return;
     }
-    if (context.mounted) context.pop();
+    if (context.mounted) volverAtras(context);
   }
 
   @override
@@ -73,7 +74,7 @@ class AppScaffold extends StatelessWidget {
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop || onWillPop == null) return;
         final salir = await onWillPop!();
-        if (salir && context.mounted) context.pop();
+        if (salir && context.mounted) volverAtras(context);
       },
       child: BrowserThemeColor(
         color: TwColors.bg,

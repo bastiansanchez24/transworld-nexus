@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/network/offline_guard.dart';
 import '../../../core/router/route_paths.dart';
@@ -209,7 +210,7 @@ class _CrearEditarEventoFormState
         } else {
           showAppSnackBar(context, 'Evento creado correctamente');
         }
-        context.pop();
+        volverAtras(context);
       }
     } catch (e) {
       if (mounted) {

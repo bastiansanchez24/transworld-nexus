@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/network/offline_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tw_tokens.dart';
@@ -58,7 +58,7 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (requireOnline(context, ref)) return;
-      if (context.canPop()) context.pop();
+      volverAtras(context);
     });
   }
 

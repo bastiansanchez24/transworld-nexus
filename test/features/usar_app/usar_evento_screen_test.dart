@@ -168,4 +168,80 @@ void main() {
 
     debugDefaultTargetPlatformOverride = previousPlatform;
   });
+
+  testWidgets(
+    'el tile de la lista se reactiva al volver sin pop (atrás del navegador)',
+    (tester) async {
+      final router = GoRouter(
+        initialLocation: RoutePaths.usarEvento('evento-1'),
+        routes: [
+          GoRoute(
+            path: '/eventos/:id/usar',
+            pageBuilder: (_, state) => sharedAxisPage(
+              key: state.pageKey,
+              child: UsarEventoScreen(eventoId: state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
+            path: '/eventos/:id/registrados',
+            pageBuilder: (_, state) => sharedAxisPage(
+              key: state.pageKey,
+              child: const Scaffold(body: Text('registrados')),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            connectivityStreamProvider.overrideWith(
+              (ref) => Stream.value(true),
+            ),
+            authStateChangesProvider.overrideWith(
+              (ref) => const Stream<AuthState>.empty(),
+            ),
+            currentPerfilProvider.overrideWith((ref) async => perfil),
+            registradosPorEventoProvider.overrideWith((ref, id) async => []),
+            registradosResumenProvider.overrideWith(
+              (ref, id) => const RegistradosResumen(
+                total: 0,
+                acreditados: 0,
+                pendientes: 0,
+              ),
+            ),
+            eventoByIdProvider.overrideWith((ref, id) async => evento),
+            eventoLeadInternoProvider.overrideWith((ref, id) async => null),
+          ],
+          child: MaterialApp.router(
+            locale: const Locale('es'),
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Lista de asistentes registrados'));
+      await tester.pumpAndSettle();
+      expect(find.text('registrados'), findsOneWidget);
+
+      // El atrás del navegador saca la ruta de la pila sin pasar por `pop`:
+      // el futuro de `context.push` queda huérfano y el spinner del tile no
+      // se apagaba nunca, dejándolo además sin `onTap`.
+      router.go(RoutePaths.usarEvento('evento-1'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Lista de asistentes registrados'), findsOneWidget);
+      await tester.tap(find.text('Lista de asistentes registrados'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('registrados'),
+        findsOneWidget,
+        reason: 'el tile quedó girando y sin onTap tras volver sin pop',
+      );
+    },
+  );
 }

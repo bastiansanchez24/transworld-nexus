@@ -90,6 +90,10 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
   /// El indicador se apaga cuando la ruta empujada vuelve, no cuando
   /// [onBecomeVisible] decide correr: si el refresco fallara, el tile quedaría
   /// girando para siempre y sin forma de reabrir la lista.
+  ///
+  /// La espera va por [pushYEsperarSalida] y no por el futuro de
+  /// `context.push`: en web el atrás del navegador no hace pop y ese futuro
+  /// nunca resuelve, que era justo el spinner eterno que se veía al volver.
   Future<void> _abrirRegistrados() async {
     if (_abriendoRegistrados) return;
     ActionLock.instance.deferUnlock();
@@ -97,7 +101,8 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
     try {
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
-      final navegacion = context.push(
+      final navegacion = pushYEsperarSalida(
+        context,
         RoutePaths.verRegistrados(widget.eventoId),
       );
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -164,7 +169,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
             data: (evento) => TwDetailScaffold(
               eyebrow: 'Detalle del evento',
               title: evento.nombre,
-              onBack: () => context.pop(),
+              onBack: () => volverAtras(context),
               onRefresh: () => refrescarLecturas(
                 ref,
                 invalidar: () {

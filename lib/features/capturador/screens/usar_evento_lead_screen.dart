@@ -60,7 +60,10 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
     try {
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
-      final navegacion = context.push(RoutePaths.verLeads(widget.eventoId));
+      final navegacion = pushYEsperarSalida(
+        context,
+        RoutePaths.verLeads(widget.eventoId),
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ActionLock.instance.finishIfNoNav();
       });
@@ -92,7 +95,7 @@ class _UsarEventoLeadScreenState extends ConsumerState<UsarEventoLeadScreen>
             data: (evento) => TwDetailScaffold(
               eyebrow: 'Detalle de la actividad',
               title: evento.nombre,
-              onBack: () => context.pop(),
+              onBack: () => volverAtras(context),
               onRefresh: () => refrescarLecturas(
                 ref,
                 invalidar: () {

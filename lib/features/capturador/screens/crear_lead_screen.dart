@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:uuid/uuid.dart';
 
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/route_paths.dart';
@@ -348,7 +349,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     final eventoRegistroId = widget.eventoRegistroId;
     if (eventoRegistroId != null) {
       if (context.canPop()) {
-        context.pop();
+        volverAtras(context);
       } else {
         context.go(RoutePaths.acreditarQr(eventoRegistroId));
       }
@@ -372,7 +373,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     }
 
     if (context.canPop()) {
-      context.pop();
+      volverAtras(context);
     } else {
       context.go(RoutePaths.usarEventoLead(widget.eventoId));
     }

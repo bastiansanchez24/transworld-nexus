@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/supabase_tables.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/network/offline_guard.dart';
+import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../data/models/capturar_lead_route_extra.dart';
 import '../../../data/models/lead_existente.dart';
@@ -148,7 +149,11 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     if (!mounted) return;
     await _scanner.pauseCamera();
     if (!mounted) return;
-    await context.push(
+    // `pushYEsperarSalida` y no `context.push`: en web el atrás del navegador
+    // no hace pop y el futuro del push nunca resuelve, así que la cámara se
+    // quedaba pausada para siempre al volver del formulario.
+    await pushYEsperarSalida(
+      context,
       RoutePaths.capturarLead(eventoLead.id, desdeEvento: widget.eventoId),
       extra: CapturarLeadRouteExtra(
         prefill: LeadPrefill.fromRegistrado(registrado),
@@ -251,7 +256,7 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     await _scanner.stopCamera();
     if (!mounted) return;
     if (context.canPop()) {
-      context.pop();
+      volverAtras(context);
       return;
     }
     // Fallback si el stack quedó sin historial (p. ej. un go previo).

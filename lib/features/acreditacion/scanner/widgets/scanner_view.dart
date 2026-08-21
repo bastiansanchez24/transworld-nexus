@@ -1,9 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../../../core/router/refresh_on_visible.dart';
 import '../scanner_controller.dart';
 import '../scanner_geometry.dart';
 import '../scanner_models.dart';
@@ -134,7 +134,7 @@ class _ScannerCameraLayerState extends State<_ScannerCameraLayer> {
                     onClose:
                         widget.onClose ??
                         () {
-                          if (context.canPop()) context.pop();
+                          volverAtras(context);
                         },
                     onToggleTorch: widget.controller.toggleTorch,
                     onToggleCaptureLead:
@@ -178,7 +178,7 @@ class ScannerPermissionDeniedView extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   minimumSize: Size.zero,
                   onPressed: () {
-                    if (context.canPop()) context.pop();
+                    volverAtras(context);
                   },
                   child: const Icon(
                     CupertinoIcons.xmark,

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,11 +13,21 @@ import 'permissions_bootstrap.dart';
 import 'shell_tab_scroll.dart';
 import 'tw_bottom_nav_bar.dart';
 
+/// Solo Android nativo necesita interceptar el back en la raíz para confirmar
+/// el cierre. En Windows el único back admitido es X1 y en web manda el
+/// historial del navegador; hacer que el shell los capture provoca un pop
+/// rechazado y la animación de rebote.
+bool shellConfirmsNativeExit({bool? isWeb, TargetPlatform? platform}) {
+  return !(isWeb ?? kIsWeb) &&
+      (platform ?? defaultTargetPlatform) == TargetPlatform.android;
+}
+
 /// Shell con la navegación del rediseño: `UITabBar` nativo en iOS, barra
 /// flotante en Android y web móvil, y rail izquierdo en Windows y web de PC.
 ///
-/// Un único [PopScope] en el shell (no por rama) evita que el diálogo de
-/// salida deje de aparecer tras cambiar de tab o volver de rutas hijas.
+/// En Android, un único [PopScope] en el shell (no por rama) evita que el
+/// diálogo de salida deje de aparecer tras cambiar de tab o volver de rutas
+/// hijas. Windows y web no pasan por ese interceptor.
 class MainShellScaffold extends ConsumerWidget {
   const MainShellScaffold({super.key, required this.navigationShell});
 
@@ -71,6 +82,31 @@ class MainShellScaffold extends ConsumerWidget {
     final selectedVisual = tabs.indexWhere((t) => t.branch == branchActual);
     final selectedIndex = selectedVisual < 0 ? 0 : selectedVisual;
 
+    final contenido = ShellNavScope(
+      child: PermissionsBootstrap(
+        child: MainShellNavHost(
+          selectedIndex: selectedIndex,
+          onItemSelected: (index) {
+            final branch = tabs[index].branch;
+            navigationShell.goBranch(branch, initialLocation: true);
+            ref.read(shellTabEpochProvider(branch).notifier).state++;
+          },
+          items: [
+            for (final tab in tabs)
+              TwNavItemData(
+                icon: tab.icon,
+                label: tab.label,
+                sfSymbol: tab.sfSymbol,
+                sfSymbolActive: tab.sfSymbolActive,
+              ),
+          ],
+          body: navigationShell,
+        ),
+      ),
+    );
+
+    if (!shellConfirmsNativeExit()) return contenido;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -85,28 +121,7 @@ class MainShellScaffold extends ConsumerWidget {
           SystemNavigator.pop();
         }
       },
-      child: ShellNavScope(
-        child: PermissionsBootstrap(
-          child: MainShellNavHost(
-            selectedIndex: selectedIndex,
-            onItemSelected: (index) {
-              final branch = tabs[index].branch;
-              navigationShell.goBranch(branch, initialLocation: true);
-              ref.read(shellTabEpochProvider(branch).notifier).state++;
-            },
-            items: [
-              for (final tab in tabs)
-                TwNavItemData(
-                  icon: tab.icon,
-                  label: tab.label,
-                  sfSymbol: tab.sfSymbol,
-                  sfSymbolActive: tab.sfSymbolActive,
-                ),
-            ],
-            body: navigationShell,
-          ),
-        ),
-      ),
+      child: contenido,
     );
   }
 }

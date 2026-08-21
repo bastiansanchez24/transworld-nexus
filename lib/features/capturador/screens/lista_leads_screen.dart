@@ -238,7 +238,7 @@ class _ListaLeadsScreenState extends ConsumerState<ListaLeadsScreen>
       overlayLeading: CollapsingNavButton(
         icon: Symbols.arrow_back_rounded,
         tooltip: 'Volver',
-        onTap: () => context.pop(),
+        onTap: () => volverAtras(context),
       ),
       pinnedContent: _buildPinnedControls(canViewAllLeads: canViewAllLeads),
       pinnedContentHeight: canViewAllLeads ? 112 : 60,
