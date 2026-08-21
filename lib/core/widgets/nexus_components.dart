@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -759,6 +760,9 @@ class NexusFormTextField extends StatelessWidget {
     this.textInputAction,
     this.suffixIcon,
     this.helperText,
+    this.inputFormatters,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
   });
 
   final String label;
@@ -772,6 +776,9 @@ class NexusFormTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final Widget? suffixIcon;
   final String? helperText;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool autocorrect;
+  final bool enableSuggestions;
 
   @override
   Widget build(BuildContext context) {
@@ -787,6 +794,9 @@ class NexusFormTextField extends StatelessWidget {
           keyboardType: keyboardType,
           maxLines: maxLines,
           textInputAction: textInputAction,
+          inputFormatters: inputFormatters,
+          autocorrect: autocorrect,
+          enableSuggestions: enableSuggestions,
           decoration:
               (readOnly
                       ? twReadOnlyDecoration(hintText: hintText)

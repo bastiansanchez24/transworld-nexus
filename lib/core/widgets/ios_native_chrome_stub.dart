@@ -18,6 +18,7 @@ class TwIosGlassIconButton extends StatelessWidget {
     this.danger = false,
     this.loading = false,
     this.sfSymbol,
+    this.badgeCount,
   });
 
   final IconData icon;
@@ -31,6 +32,7 @@ class TwIosGlassIconButton extends StatelessWidget {
 
   /// Homólogo SF Symbol; en web se ignora.
   final String? sfSymbol;
+  final int? badgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +45,7 @@ class TwIosGlassIconButton extends StatelessWidget {
       tooltip: tooltip,
       danger: danger,
       loading: loading,
+      badgeCount: badgeCount,
     );
   }
 }

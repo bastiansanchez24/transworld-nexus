@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'camera_service.dart';
 import 'qr_scanner_service.dart';
+import 'scanner_geometry.dart';
 import 'scanner_models.dart';
 
 /// Controlador de presentación del escáner.
@@ -24,8 +25,9 @@ class ScannerController extends ChangeNotifier {
   final CameraService _camera;
   final QRScannerService _qr;
 
-  /// Callback de dominio: se invoca una vez por detección válida/inválida
-  /// mientras [phase] == [ScannerPhase.idle] → pasa a processing.
+  /// Callback de dominio: se invoca en cada detección mientras [phase] ==
+  /// [ScannerPhase.idle] → pasa a processing. El mismo QR se vuelve a
+  /// entregar cuando el escáner retoma idle; no se memoriza el último código.
   final Future<void> Function(QrScanDecode decode)? onCodeDetected;
 
   CameraService get camera => _camera;
@@ -115,13 +117,30 @@ class ScannerController extends ChangeNotifier {
   }
 
   /// Entrada desde el widget de cámara. Ignora frames mientras no esté idle.
-  Future<void> handleDetection(BarcodeCapture capture) async {
+  /// No compara con el QR anterior: el mismo código, todavía en cuadro,
+  /// vuelve a disparar [onCodeDetected] en la siguiente ventana idle.
+  Future<void> handleDetection(
+    BarcodeCapture capture, {
+    Size? previewSize,
+    Rect? scanWindow,
+    DeviceOrientation? orientation,
+  }) async {
     if (_disposed) return;
     if (_phase != ScannerPhase.idle) return;
     if (_permission != ScannerPermissionStatus.granted) return;
     if (capture.barcodes.isEmpty) return;
 
-    final decode = _qr.decode(capture);
+    final constrainedCapture = previewSize != null && scanWindow != null
+        ? captureFullyInsideScanWindow(
+            capture,
+            previewSize: previewSize,
+            scanWindow: scanWindow,
+            orientation: orientation,
+          )
+        : capture;
+    if (constrainedCapture.barcodes.isEmpty) return;
+
+    final decode = _qr.decode(constrainedCapture);
 
     _phase = ScannerPhase.processing;
     notifyListeners();

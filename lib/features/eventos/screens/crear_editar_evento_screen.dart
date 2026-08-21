@@ -8,9 +8,11 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/network/offline_guard.dart';
 import '../../../core/router/route_paths.dart';
+import '../../../core/constants/paises_evento.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campo_pais_evento.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/selector_imagen.dart';
 import '../../../core/widgets/require_permission.dart';
@@ -52,12 +54,12 @@ class _CrearEditarEventoFormState
     extends ConsumerState<_CrearEditarEventoForm> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
-  final _paisController = TextEditingController();
   final _tematicaController = TextEditingController();
   final _direccionController = TextEditingController();
   final _lugarController = TextEditingController();
 
   DateTime _fecha = DateTime.now();
+  String _pais = kPaisEventoChile;
   bool _certificacion = false;
   bool _activo = true;
   TipoRegistroEvento _tipoRegistro = TipoRegistroEvento.comercial;
@@ -82,7 +84,7 @@ class _CrearEditarEventoFormState
   bool get _hayCambios {
     if (!_esEdicion || !_cargado) return false;
     return _nombreController.text != _nombre0 ||
-        _paisController.text != _pais0 ||
+        _pais != _pais0 ||
         _tematicaController.text != _tematica0 ||
         _direccionController.text != _direccion0 ||
         _lugarController.text != _lugar0 ||
@@ -97,7 +99,6 @@ class _CrearEditarEventoFormState
   @override
   void dispose() {
     _nombreController.dispose();
-    _paisController.dispose();
     _tematicaController.dispose();
     _direccionController.dispose();
     _lugarController.dispose();
@@ -108,7 +109,7 @@ class _CrearEditarEventoFormState
     if (_cargado) return;
     _cargado = true;
     _nombreController.text = evento.nombre;
-    _paisController.text = evento.pais ?? '';
+    _pais = normalizarPaisEvento(evento.pais);
     _tematicaController.text = evento.tematica ?? '';
     _direccionController.text = evento.direccion ?? '';
     _lugarController.text = evento.lugar ?? '';
@@ -118,7 +119,7 @@ class _CrearEditarEventoFormState
     _tipoRegistro = evento.tipoRegistro;
     _imagenUrlExistente = evento.imagenUrl;
     _nombre0 = _nombreController.text;
-    _pais0 = _paisController.text;
+    _pais0 = _pais;
     _tematica0 = _tematicaController.text;
     _direccion0 = _direccionController.text;
     _lugar0 = _lugarController.text;
@@ -173,7 +174,7 @@ class _CrearEditarEventoFormState
         id: widget.eventoId ?? '',
         nombre: _nombreController.text.trim(),
         fecha: _fecha,
-        pais: _paisController.text.trim(),
+        pais: _pais,
         tematica: _tematicaController.text.trim(),
         direccion: _direccionController.text.trim(),
         lugar: _lugarController.text.trim(),
@@ -229,6 +230,7 @@ class _CrearEditarEventoFormState
       message:
           'Esta acción no se puede deshacer. ¿Eliminar el evento y sus registrados?',
       confirmLabel: 'Eliminar',
+      destructive: true,
     );
     if (!confirmado) return;
 
@@ -338,12 +340,11 @@ class _CrearEditarEventoFormState
                               children: [
                                 _FieldLabel('País'),
                                 const SizedBox(height: 6),
-                                TextFormField(
-                                  controller: _paisController,
+                                CampoPaisEvento(
+                                  value: _pais,
                                   enabled: !_guardando && hayRed,
-                                  decoration: const InputDecoration(
-                                    hintText: 'Chile',
-                                  ),
+                                  onChanged: (pais) =>
+                                      setState(() => _pais = pais),
                                 ),
                               ],
                             ),

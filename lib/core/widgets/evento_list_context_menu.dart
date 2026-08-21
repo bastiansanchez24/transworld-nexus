@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/app_theme.dart';
+import 'app_modals.dart';
 
 /// Menú inferior al mantener presionado un evento o evento de leads.
 Future<EventoListMenuAction?> showEventoListContextMenu(
@@ -11,7 +12,7 @@ Future<EventoListMenuAction?> showEventoListContextMenu(
   required bool puedeEditar,
   required bool puedeEliminar,
 }) {
-  return showModalBottomSheet<EventoListMenuAction>(
+  return showAppModalBottomSheet<EventoListMenuAction>(
     context: context,
     showDragHandle: true,
     backgroundColor: AppColors.surface,

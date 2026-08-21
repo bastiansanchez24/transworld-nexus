@@ -140,6 +140,7 @@ class _ListarEventosLeadsScreenState
       message:
           'Esta acción no se puede deshacer. ¿Eliminar la actividad de captura?',
       confirmLabel: 'Eliminar',
+      destructive: true,
     );
     if (!confirmado || !mounted) return;
 

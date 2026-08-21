@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'app_modals.dart';
 import 'tw_toast.dart';
 
 /// Colección pequeña de widgets reutilizables para no repetir boilerplate
@@ -180,10 +181,11 @@ Future<bool> confirmDialog(
   String confirmLabel = 'Confirmar',
   String cancelLabel = 'Cancelar',
   bool destructive = false,
+  bool? barrierDismissible,
 }) async {
-  final result = await showDialog<bool>(
+  final result = await showAppDialog<bool>(
     context: context,
-    barrierDismissible: !destructive,
+    barrierDismissible: barrierDismissible ?? !destructive,
     builder: (context) => AlertDialog(
       icon: destructive
           ? const Icon(
@@ -227,7 +229,7 @@ Future<bool> confirmDiscardCreate(BuildContext context) {
 
 /// Editar: hay cambios. Seguir, descartar o guardar.
 Future<FormExitAction> confirmSaveEdits(BuildContext context) async {
-  final result = await showDialog<FormExitAction>(
+  final result = await showAppDialog<FormExitAction>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('¿Guardar los cambios?'),

@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -12,8 +11,10 @@ import '../../../core/network/connectivity_service.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/mascara_contacto.dart';
+import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/selector_imagen.dart';
@@ -70,6 +71,10 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
   final _telefonoController = TextEditingController();
   final _emailController = TextEditingController();
   final _descripcionController = TextEditingController();
+  PaisTelefono _paisTelefono = kPaisTelefonoChile;
+  PaisTelefono _paisTelefonoEvento = kPaisTelefonoChile;
+  bool _paisTelefonoEventoInicializado = false;
+  bool _telefonoTienePaisExplicito = false;
 
   final _speech = stt.SpeechToText();
   bool _speechDisponible = false;
@@ -159,7 +164,15 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     }
     if (prefill.telefono != null) {
       _telefonoPrefill = prefill.telefono;
-      _telefonoController.text = prefill.telefono!;
+      final detectado = detectarPaisTelefono(prefill.telefono);
+      if (detectado != null) {
+        _paisTelefono = detectado;
+        _telefonoTienePaisExplicito = true;
+      }
+      _telefonoController.text = formatearTelefonoNacional(
+        prefill.telefono!,
+        _paisTelefono,
+      );
     }
     if (prefill.email != null) {
       _emailPrefill = prefill.email;
@@ -181,8 +194,22 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     final telefono = _telefonoPrefill;
     if (telefono != null) {
       _telefonoController.text = puedeVerContacto
-          ? telefono
+          ? formatearTelefonoNacional(telefono, _paisTelefono)
           : enmascararTelefono(telefono);
+    }
+  }
+
+  void _inicializarPaisTelefonoEvento(String? paisEvento) {
+    if (_paisTelefonoEventoInicializado) return;
+    _paisTelefonoEvento = paisTelefonoPorPaisEvento(paisEvento);
+    _paisTelefonoEventoInicializado = true;
+    if (_telefonoTienePaisExplicito) return;
+    _paisTelefono = _paisTelefonoEvento;
+    if (_contactoEnmascarado != true) {
+      _telefonoController.text = formatearTelefonoNacional(
+        _telefonoPrefill ?? _telefonoController.text,
+        _paisTelefono,
+      );
     }
   }
 
@@ -257,6 +284,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
   }
 
   void _limpiarFormulario() {
+    FocusManager.instance.primaryFocus?.unfocus();
     _formKey.currentState?.reset();
     _nombreController.clear();
     _empresaController.clear();
@@ -267,9 +295,29 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     // Sin esto la captura en cadena arrastraría el contacto del lead anterior.
     _emailPrefill = null;
     _telefonoPrefill = null;
+    _telefonoTienePaisExplicito = false;
+    _paisTelefono = _paisTelefonoEvento;
     // Tras guardar se sigue capturando en cadena: si la foto no se limpia,
     // el siguiente lead se llevaría la del anterior.
     _fotoBytes = null;
+    _leadGuardadoPendienteFotoId = null;
+  }
+
+  String? _telefonoAGuardar({required bool puedeVerContacto}) {
+    if (_contactoBloqueado(_telefonoPrefill, puedeVerContacto)) {
+      return _telefonoPrefill;
+    }
+    if (_sinVacios(_telefonoController.text) == null) return null;
+    return telefonoInternacional(_telefonoController.text, _paisTelefono);
+  }
+
+  String? _emailAGuardar({required bool puedeVerContacto}) {
+    if (_contactoBloqueado(_emailPrefill, puedeVerContacto)) {
+      final email = _emailPrefill;
+      return email == null ? null : formatearEmail(email);
+    }
+    if (_sinVacios(_emailController.text) == null) return null;
+    return formatearEmail(_emailController.text);
   }
 
   Future<void> _elegirFoto() async {
@@ -296,21 +344,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     return const [];
   }
 
-  String? _validarEmail(String? raw) {
-    final value = raw?.trim() ?? '';
-    if (value.isEmpty) return 'Requerido';
-    final partes = value.split('@');
-    if (partes.length != 2 ||
-        partes.first.isEmpty ||
-        !partes.last.contains('.') ||
-        partes.last.startsWith('.') ||
-        partes.last.endsWith('.')) {
-      return 'Ingresa un email válido';
-    }
-    return null;
-  }
-
-  void _finalizarFlujoGuardado() {
+  Future<void> _finalizarFlujoGuardado() async {
     final eventoRegistroId = widget.eventoRegistroId;
     if (eventoRegistroId != null) {
       if (context.canPop()) {
@@ -318,8 +352,29 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
       } else {
         context.go(RoutePaths.acreditarQr(eventoRegistroId));
       }
-    } else {
+      return;
+    }
+
+    final agregarOtro = await confirmDialog(
+      context,
+      title: 'Lead guardado',
+      message: '¿Quieres agregar otro lead?',
+      confirmLabel: 'Agregar otro',
+      cancelLabel: 'No, salir',
+      barrierDismissible: false,
+    );
+    if (!mounted) return;
+
+    if (agregarOtro) {
       _limpiarFormulario();
+      setState(() {});
+      return;
+    }
+
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.usarEventoLead(widget.eventoId));
     }
   }
 
@@ -349,7 +404,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
           _leadGuardadoPendienteFotoId = null;
           if (mounted) {
             showAppSnackBar(context, 'Lead y foto guardados.');
-            _finalizarFlujoGuardado();
+            await _finalizarFlujoGuardado();
           }
         } catch (_) {
           if (mounted) {
@@ -402,12 +457,8 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
             : _cargoController.text.trim(),
         // Un campo bloqueado muestra la máscara: el valor que se guarda es el
         // que trajo el QR.
-        telefono: _contactoBloqueado(_telefonoPrefill, puedeVerContacto)
-            ? _telefonoPrefill
-            : _sinVacios(_telefonoController.text),
-        email: _contactoBloqueado(_emailPrefill, puedeVerContacto)
-            ? _emailPrefill?.toLowerCase()
-            : _sinVacios(_emailController.text)?.toLowerCase(),
+        telefono: _telefonoAGuardar(puedeVerContacto: puedeVerContacto),
+        email: _emailAGuardar(puedeVerContacto: puedeVerContacto),
         descripcion: _descripcionController.text.trim().isEmpty
             ? null
             : _descripcionController.text.trim(),
@@ -495,7 +546,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                 'conexión para adjuntarla.',
           (false, false) => 'Guardado, se sincronizará cuando estés conectado.',
         }, isError: fotoDescartada);
-        _finalizarFlujoGuardado();
+        await _finalizarFlujoGuardado();
       }
     } catch (e) {
       if (isOnline && leadPreparado != null && isNetworkTransportError(e)) {
@@ -515,7 +566,7 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
               context,
               'Sin conexión real. El lead quedó guardado localmente.',
             );
-            _finalizarFlujoGuardado();
+            await _finalizarFlujoGuardado();
           }
           return;
         } catch (_) {
@@ -564,6 +615,9 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     TextInputType? keyboardType,
     int maxLines = 1,
     bool protegido = false,
+    bool autocorrect = true,
+    bool enableSuggestions = true,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     final escuchando = campoVoz != null && _escuchandoCampo == campoVoz;
     return NexusFormTextField(
@@ -575,6 +629,9 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
       keyboardType: keyboardType,
       maxLines: maxLines,
       validator: validator,
+      autocorrect: autocorrect,
+      enableSuggestions: enableSuggestions,
+      inputFormatters: inputFormatters,
       helperText: protegido
           ? 'Solo visible para administradores y organizadores'
           : null,
@@ -603,6 +660,8 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
     });
 
     final eventoAsync = ref.watch(eventoLeadByIdProvider(widget.eventoId));
+    final evento = eventoAsync.valueOrNull;
+    if (evento != null) _inicializarPaisTelefonoEvento(evento.pais);
     final puedeVerContacto = ref.watch(canViewContactDataProvider);
     final emailBloqueado = _contactoBloqueado(_emailPrefill, puedeVerContacto);
     final telefonoBloqueado = _contactoBloqueado(
@@ -680,13 +739,31 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                 campoVoz: _CampoVoz.cargo,
               ),
               const SizedBox(height: 14),
-              _campoTexto(
-                label: 'Teléfono',
-                controller: _telefonoController,
-                hintText: '+56 9 1234 5678',
-                keyboardType: TextInputType.phone,
-                protegido: telefonoBloqueado,
-              ),
+              if (telefonoBloqueado)
+                _campoTexto(
+                  label: 'Teléfono',
+                  controller: _telefonoController,
+                  hintText: 'Contacto protegido',
+                  keyboardType: TextInputType.phone,
+                  protegido: true,
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const NexusFieldLabel('Teléfono'),
+                    const SizedBox(height: 6),
+                    CampoTelefonoInternacional(
+                      controller: _telefonoController,
+                      pais: _paisTelefono,
+                      onPaisChanged: (pais) =>
+                          setState(() => _paisTelefono = pais),
+                      enabled: !_guardando,
+                      requerido: false,
+                      labelText: null,
+                    ),
+                  ],
+                ),
               const SizedBox(height: 14),
               _campoTexto(
                 label: 'Email',
@@ -694,8 +771,11 @@ class _CrearLeadScreenState extends ConsumerState<CrearLeadScreen> {
                 hintText: 'correo@empresa.com',
                 campoVoz: emailBloqueado ? null : _CampoVoz.email,
                 keyboardType: TextInputType.emailAddress,
-                validator: emailBloqueado ? null : _validarEmail,
+                validator: emailBloqueado ? null : validarEmailRegistro,
                 protegido: emailBloqueado,
+                autocorrect: false,
+                enableSuggestions: false,
+                inputFormatters: const [LowerCaseTextFormatter()],
               ),
               const SizedBox(height: 14),
               _campoTexto(

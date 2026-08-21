@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../network/offline_policy.dart';
 import '../theme/tw_tokens.dart';
 import '../../features/updates/services/update_platform.dart';
+import 'app_modals.dart';
 import 'app_widgets.dart';
 import 'tw_components.dart';
 
@@ -18,7 +19,7 @@ Future<void> showCuentaSettingsSheet({
   required VoidCallback onCerrarSesion,
   VoidCallback? onDesinstalar,
 }) {
-  return showModalBottomSheet<void>(
+  return showAppModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: TwColors.surface,

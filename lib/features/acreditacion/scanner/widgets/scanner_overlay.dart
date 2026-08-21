@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../scanner_geometry.dart';
 
 /// Overlay premium del escáner: blur exterior, esquinas animadas, controles y pill.
 ///
@@ -21,7 +22,7 @@ class ScannerOverlay extends StatefulWidget {
     this.feedbackMessage,
     this.feedbackIsError = false,
     this.showTorch = true,
-    this.scanWindowFraction = 0.68,
+    this.scanWindowFraction = kScannerScanWindowFraction,
   });
 
   final bool animateCorners;
@@ -79,15 +80,6 @@ class _ScannerOverlayState extends State<ScannerOverlay>
     super.dispose();
   }
 
-  Rect _scanWindowFor(Size size) {
-    final side = size.shortestSide * widget.scanWindowFraction;
-    return Rect.fromCenter(
-      center: Offset(size.width / 2, size.height * 0.42),
-      width: side,
-      height: side,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
@@ -96,7 +88,10 @@ class _ScannerOverlayState extends State<ScannerOverlay>
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
-        final scanWindow = _scanWindowFor(size);
+        final scanWindow = scannerScanWindowFor(
+          size,
+          fraction: widget.scanWindowFraction,
+        );
 
         return Stack(
           fit: StackFit.expand,

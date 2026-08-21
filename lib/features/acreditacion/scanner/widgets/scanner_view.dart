@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../scanner_controller.dart';
+import '../scanner_geometry.dart';
 import '../scanner_models.dart';
 import 'scanner_overlay.dart';
 
@@ -79,52 +80,71 @@ class _ScannerCameraLayerState extends State<_ScannerCameraLayer> {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: Colors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          MobileScanner(
-            controller: widget.controller.mobileController,
-            onDetect: widget.controller.handleDetection,
-            tapToFocus: !kIsWeb,
-            // Lifecycle lo maneja AcreditarQrScreen vía el controller.
-            useAppLifecycleState: false,
-            errorBuilder: (context, error) {
-              final isPermission =
-                  error.errorCode == MobileScannerErrorCode.permissionDenied;
-              final detail = error.errorDetails?.message?.trim();
-              final message = (detail != null && detail.isNotEmpty)
-                  ? detail
-                  : error.errorCode.message;
-              return ScannerPermissionDeniedView(
-                message: message,
-                onOpenSettings: widget.controller.openSettings,
-                onRetry: isPermission
-                    ? widget.controller.retryPermission
-                    : () => widget.controller.startAfterAttach(),
-              );
-            },
-          ),
-          ListenableBuilder(
-            listenable: widget.controller,
-            builder: (context, _) {
-              return ScannerOverlay(
-                animateCorners: widget.controller.isAnimatingCorners,
-                torchOn: widget.controller.torchOn,
-                captureLeadMode: widget.controller.captureLeadMode,
-                showTorch: !kIsWeb,
-                feedbackMessage: widget.controller.feedbackMessage,
-                feedbackIsError: widget.controller.feedbackIsError,
-                onClose:
-                    widget.onClose ??
-                    () {
-                      if (context.canPop()) context.pop();
-                    },
-                onToggleTorch: widget.controller.toggleTorch,
-                onToggleCaptureLead: widget.controller.toggleCaptureLeadMode,
-              );
-            },
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final previewSize = constraints.biggest;
+          final scanWindow = scannerScanWindowFor(previewSize);
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              MobileScanner(
+                controller: widget.controller.mobileController,
+                scanWindow: scanWindow,
+                onDetect: (capture) => widget.controller.handleDetection(
+                  capture,
+                  previewSize: previewSize,
+                  scanWindow: scanWindow,
+                  orientation: widget
+                      .controller
+                      .mobileController
+                      .value
+                      .deviceOrientation,
+                ),
+                tapToFocus: !kIsWeb,
+                // Lifecycle lo maneja AcreditarQrScreen vía el controller.
+                useAppLifecycleState: false,
+                errorBuilder: (context, error) {
+                  final isPermission =
+                      error.errorCode ==
+                      MobileScannerErrorCode.permissionDenied;
+                  final detail = error.errorDetails?.message?.trim();
+                  final message = (detail != null && detail.isNotEmpty)
+                      ? detail
+                      : error.errorCode.message;
+                  return ScannerPermissionDeniedView(
+                    message: message,
+                    onOpenSettings: widget.controller.openSettings,
+                    onRetry: isPermission
+                        ? widget.controller.retryPermission
+                        : () => widget.controller.startAfterAttach(),
+                  );
+                },
+              ),
+              ListenableBuilder(
+                listenable: widget.controller,
+                builder: (context, _) {
+                  return ScannerOverlay(
+                    animateCorners: widget.controller.isAnimatingCorners,
+                    torchOn: widget.controller.torchOn,
+                    captureLeadMode: widget.controller.captureLeadMode,
+                    showTorch: !kIsWeb,
+                    feedbackMessage: widget.controller.feedbackMessage,
+                    feedbackIsError: widget.controller.feedbackIsError,
+                    onClose:
+                        widget.onClose ??
+                        () {
+                          if (context.canPop()) context.pop();
+                        },
+                    onToggleTorch: widget.controller.toggleTorch,
+                    onToggleCaptureLead:
+                        widget.controller.toggleCaptureLeadMode,
+                  );
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }

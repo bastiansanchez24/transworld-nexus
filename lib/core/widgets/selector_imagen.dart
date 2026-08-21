@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../data/images/image_compressor.dart';
 import '../theme/app_theme.dart';
 import 'app_network_image.dart';
+import 'app_modals.dart';
 import 'app_widgets.dart';
 import 'modal_recorte_imagen.dart';
 import 'nexus_components.dart';
@@ -83,7 +84,7 @@ Future<Uint8List?> elegirImagenComprimida(
 }
 
 Future<ImageSource?> _preguntarFuente(BuildContext context) {
-  return showModalBottomSheet<ImageSource>(
+  return showAppModalBottomSheet<ImageSource>(
     context: context,
     backgroundColor: AppColors.surface,
     shape: const RoundedRectangleBorder(

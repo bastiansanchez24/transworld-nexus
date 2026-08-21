@@ -70,4 +70,40 @@ void main() {
         .top;
     expect(cardTop, greaterThan(8));
   });
+
+  testWidgets('un evento de Perú preselecciona el prefijo +51', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          connectivityStreamProvider.overrideWith((ref) => Stream.value(true)),
+          currentPerfilProvider.overrideWith(
+            (ref) async => const Perfil(
+              id: 'admin-1',
+              nombreCompleto: 'Admin Demo',
+              rol: AppRole.admin,
+            ),
+          ),
+          eventoByIdProvider.overrideWith(
+            (ref, id) async => Evento(
+              id: id,
+              nombre: 'Evento Lima',
+              fecha: DateTime(2026, 8, 20),
+              pais: 'Perú',
+            ),
+          ),
+        ],
+        child: const MaterialApp(
+          home: RegistrarConfirmadoScreen(eventoId: 'evento-1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('+51'), findsOneWidget);
+  });
 }

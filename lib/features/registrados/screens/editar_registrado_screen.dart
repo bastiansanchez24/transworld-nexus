@@ -13,11 +13,13 @@ import '../../../core/utils/mascara_contacto.dart';
 import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/registrado.dart';
 import '../../../data/offline/sync_queue_service.dart';
 import '../../../data/repositories/registrados_repository.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../eventos/providers/eventos_providers.dart';
 import '../providers/registrados_providers.dart';
 
 class EditarRegistradoScreen extends ConsumerStatefulWidget {
@@ -44,6 +46,10 @@ class _EditarRegistradoScreenState
   final _telefonoController = TextEditingController();
   final _rutController = TextEditingController();
   final _patenteController = TextEditingController();
+  PaisTelefono _paisTelefono = kPaisTelefonoChile;
+  PaisTelefono _paisTelefonoEvento = kPaisTelefonoChile;
+  bool _paisTelefonoEventoInicializado = false;
+  bool _telefonoTienePaisExplicito = false;
   bool _acreditado = false;
   bool _cargado = false;
   bool _guardando = false;
@@ -83,6 +89,11 @@ class _EditarRegistradoScreenState
     _empresaController.text = r.empresa ?? '';
     _cargoController.text = r.cargo ?? '';
     _telefonoGuardado = (r.telefono ?? '').trim();
+    final paisDetectado = detectarPaisTelefono(_telefonoGuardado);
+    if (paisDetectado != null) {
+      _paisTelefono = paisDetectado;
+      _telefonoTienePaisExplicito = true;
+    }
     _sincronizarTelefono(puedeVerContacto);
     _rutController.text = r.rut ?? '';
     _patenteController.text = r.patente ?? '';
@@ -106,13 +117,28 @@ class _EditarRegistradoScreenState
   void _sincronizarTelefono(bool puedeVerContacto) {
     _telefonoController.text = _telefonoProtegido(puedeVerContacto)
         ? enmascararTelefono(_telefonoGuardado)
-        : _telefonoGuardado;
+        : formatearTelefonoNacional(_telefonoGuardado, _paisTelefono);
+  }
+
+  void _inicializarPaisTelefonoEvento(
+    String? paisEvento, {
+    required bool puedeVerContacto,
+  }) {
+    if (_paisTelefonoEventoInicializado) return;
+    _paisTelefonoEvento = paisTelefonoPorPaisEvento(paisEvento);
+    _paisTelefonoEventoInicializado = true;
+    if (_telefonoTienePaisExplicito) return;
+    _paisTelefono = _paisTelefonoEvento;
+    if (_cargado && !_telefonoProtegido(puedeVerContacto)) {
+      _sincronizarTelefono(puedeVerContacto);
+      _telefono0 = _telefonoController.text;
+    }
   }
 
   String _telefonoAGuardar({required bool puedeVerContacto}) {
     return _telefonoProtegido(puedeVerContacto)
         ? _telefonoGuardado
-        : _telefonoController.text.trim();
+        : telefonoInternacional(_telefonoController.text, _paisTelefono);
   }
 
   bool get _hayCambios {
@@ -137,7 +163,9 @@ class _EditarRegistradoScreenState
       'empresa': _empresaController.text.trim(),
       'cargo': _cargoController.text.trim(),
       'telefono': _telefonoAGuardar(puedeVerContacto: puedeVerContacto),
-      'rut': formatearRut(_rutController.text),
+      'rut': _paisTelefono.iso == 'CL'
+          ? formatearRut(_rutController.text)
+          : _rutController.text.trim(),
       'patente': formatearPatente(_patenteController.text),
       'acreditado': _acreditado,
     };
@@ -184,6 +212,7 @@ class _EditarRegistradoScreenState
       title: 'Eliminar registrado',
       message: '¿Eliminar este registro? Esta acción no se puede deshacer.',
       confirmLabel: 'Eliminar',
+      destructive: true,
     );
     if (!confirmado) return;
     try {
@@ -206,6 +235,13 @@ class _EditarRegistradoScreenState
     final esAdmin = ref.watch(isAdminProvider);
     final hayRed = ref.watch(isOnlineProvider);
     final puedeVerContacto = ref.watch(canViewContactDataProvider);
+    final evento = ref.watch(eventoByIdProvider(widget.eventoId)).valueOrNull;
+    if (evento != null) {
+      _inicializarPaisTelefonoEvento(
+        evento.pais,
+        puedeVerContacto: puedeVerContacto,
+      );
+    }
     final registradosAsync = ref.watch(
       registradosPorEventoProvider(widget.eventoId),
     );
@@ -257,97 +293,117 @@ class _EditarRegistradoScreenState
           return AbsorbPointer(
             absorbing: _guardando,
             child: SingleChildScrollView(
-            padding: AppSpacing.form,
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  PersonaIdentityBanner(
-                    nombre: _nombreController.text,
-                    email: puedeVerContacto
-                        ? registrado.email
-                        : enmascararEmail(registrado.email),
-                    nombreController: _nombreController,
-                    nombreHint: 'Ej. María González',
-                    nombreEnabled: !_guardando && hayRed,
-                    nombreValidator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                    badge: StatusChip(
-                      label: _acreditado ? 'Acreditado' : 'Pendiente',
-                      variant: _acreditado
-                          ? StatusChipVariant.success
-                          : StatusChipVariant.warning,
+              padding: AppSpacing.form,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    PersonaIdentityBanner(
+                      nombre: _nombreController.text,
+                      email: puedeVerContacto
+                          ? registrado.email
+                          : enmascararEmail(registrado.email),
+                      nombreController: _nombreController,
+                      nombreHint: 'Ej. María González',
+                      nombreEnabled: !_guardando && hayRed,
+                      nombreValidator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                      badge: StatusChip(
+                        label: _acreditado ? 'Acreditado' : 'Pendiente',
+                        variant: _acreditado
+                            ? StatusChipVariant.success
+                            : StatusChipVariant.warning,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  NexusFormTextField(
-                    label: 'Empresa',
-                    controller: _empresaController,
-                    hintText: 'Ej. Transworld',
-                    enabled: !_guardando && hayRed,
-                  ),
-                  const SizedBox(height: 14),
-                  NexusFormTextField(
-                    label: 'Cargo',
-                    controller: _cargoController,
-                    hintText: 'Ej. Gerente comercial',
-                    enabled: !_guardando && hayRed,
-                  ),
-                  const SizedBox(height: 14),
-                  NexusFormTextField(
-                    label: 'Teléfono',
-                    controller: _telefonoController,
-                    hintText: '+56 9 1234 5678',
-                    keyboardType: TextInputType.phone,
-                    enabled: !_guardando && hayRed,
-                    readOnly: telefonoProtegido,
-                    helperText: telefonoProtegido
-                        ? 'Solo visible para administradores y organizadores'
-                        : null,
-                    suffixIcon: telefonoProtegido
-                        ? const Icon(
-                            Symbols.lock_rounded,
-                            size: 18,
-                            color: AppColors.textTertiary,
-                          )
-                        : null,
-                  ),
-                  const SizedBox(height: 14),
-                  NexusFormTextField(
-                    label: 'RUT / RUC',
-                    controller: _rutController,
-                    hintText: '12.345.678-5',
-                    enabled: !_guardando && hayRed,
-                    validator: (v) => validarRut(v, requerido: false),
-                  ),
-                  const SizedBox(height: 14),
-                  NexusFormTextField(
-                    label: 'Patente',
-                    controller: _patenteController,
-                    hintText: 'ABCD12',
-                    enabled: !_guardando && hayRed,
-                    validator: (v) => validarPatente(v, requerido: false),
-                  ),
-                  const SizedBox(height: 14),
-                  _ToggleRow(
-                    title: 'Acreditado',
-                    subtitle: 'Estado de ingreso al evento',
-                    value: _acreditado,
-                    onChanged: hayRed
-                        ? (v) => setState(() => _acreditado = v)
-                        : (_) {},
-                  ),
-                  const SizedBox(height: 24),
-                  PrimaryGradientButton(
-                    label: 'Guardar cambios',
-                    loading: _guardando,
-                    onPressed: (_guardando || !hayRed) ? null : _guardar,
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    NexusFormTextField(
+                      label: 'Empresa',
+                      controller: _empresaController,
+                      hintText: 'Ej. Transworld',
+                      enabled: !_guardando && hayRed,
+                    ),
+                    const SizedBox(height: 14),
+                    NexusFormTextField(
+                      label: 'Cargo',
+                      controller: _cargoController,
+                      hintText: 'Ej. Gerente comercial',
+                      enabled: !_guardando && hayRed,
+                    ),
+                    const SizedBox(height: 14),
+                    if (telefonoProtegido)
+                      NexusFormTextField(
+                        label: 'Teléfono',
+                        controller: _telefonoController,
+                        hintText: 'Contacto protegido',
+                        keyboardType: TextInputType.phone,
+                        enabled: !_guardando && hayRed,
+                        readOnly: true,
+                        helperText:
+                            'Solo visible para administradores y organizadores',
+                        suffixIcon: const Icon(
+                          Symbols.lock_rounded,
+                          size: 18,
+                          color: AppColors.textTertiary,
+                        ),
+                      )
+                    else
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const NexusFieldLabel('Teléfono'),
+                          const SizedBox(height: 6),
+                          CampoTelefonoInternacional(
+                            controller: _telefonoController,
+                            pais: _paisTelefono,
+                            onPaisChanged: (pais) =>
+                                setState(() => _paisTelefono = pais),
+                            enabled: !_guardando && hayRed,
+                            labelText: null,
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 14),
+                    NexusFormTextField(
+                      label: _paisTelefono.iso == 'CL' ? 'RUT' : 'RUT / RUC',
+                      controller: _rutController,
+                      hintText: _paisTelefono.iso == 'CL'
+                          ? '12.345.678-5'
+                          : 'Documento tributario',
+                      enabled: !_guardando && hayRed,
+                      validator: (v) => validarRut(
+                        v,
+                        requerido: false,
+                        esChile: _paisTelefono.iso == 'CL',
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    NexusFormTextField(
+                      label: 'Patente',
+                      controller: _patenteController,
+                      hintText: 'ABCD12',
+                      enabled: !_guardando && hayRed,
+                      validator: (v) => validarPatente(v, requerido: false),
+                    ),
+                    const SizedBox(height: 14),
+                    _ToggleRow(
+                      title: 'Acreditado',
+                      subtitle: 'Estado de ingreso al evento',
+                      value: _acreditado,
+                      onChanged: hayRed
+                          ? (v) => setState(() => _acreditado = v)
+                          : (_) {},
+                    ),
+                    const SizedBox(height: 24),
+                    PrimaryGradientButton(
+                      label: 'Guardar cambios',
+                      loading: _guardando,
+                      onPressed: (_guardando || !hayRed) ? null : _guardar,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
           );
         },
       ),

@@ -43,6 +43,8 @@ class _RegistrarConfirmadoScreenState
   final _rutController = TextEditingController();
   final _patenteController = TextEditingController();
   PaisTelefono _pais = kPaisTelefonoChile;
+  PaisTelefono _paisEvento = kPaisTelefonoChile;
+  bool _paisInicializado = false;
   bool _acreditarAhora = false;
   bool _guardando = false;
   bool _autovalidar = false;
@@ -57,6 +59,13 @@ class _RegistrarConfirmadoScreenState
     _rutController.dispose();
     _patenteController.dispose();
     super.dispose();
+  }
+
+  void _inicializarPais(String? paisEvento) {
+    if (_paisInicializado) return;
+    _paisEvento = paisTelefonoPorPaisEvento(paisEvento);
+    _pais = _paisEvento;
+    _paisInicializado = true;
   }
 
   Future<void> _guardar({
@@ -148,7 +157,7 @@ class _RegistrarConfirmadoScreenState
         _patenteController.clear();
         setState(() {
           _acreditarAhora = false;
-          _pais = kPaisTelefonoChile;
+          _pais = _paisEvento;
           _autovalidar = false;
         });
       }
@@ -177,6 +186,7 @@ class _RegistrarConfirmadoScreenState
         error: (e, _) =>
             const ErrorView(message: 'No se pudo cargar el evento.'),
         data: (evento) {
+          _inicializarPais(evento.pais);
           final requiereCertificacion = evento.certificacionCapacitacion;
           return SingleChildScrollView(
             padding: AppSpacing.form,

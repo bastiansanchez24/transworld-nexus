@@ -4,6 +4,8 @@
 /// que llega a Supabase coincida con lo que el usuario ve.
 library;
 
+import '../constants/paises_evento.dart';
+
 /// País para el selector de código telefónico. La validación es por cantidad
 /// de dígitos nacionales (sin el código); Chile además exige prefijo 9 o 2.
 class PaisTelefono {
@@ -46,9 +48,19 @@ const kPaisTelefonoChile = PaisTelefono(
   hint: '9 1234 5678',
 );
 
-/// Chile primero; el resto en español, orden alfabético.
+const kPaisTelefonoPeru = PaisTelefono(
+  iso: 'PE',
+  nombre: 'Perú',
+  dialCode: '51',
+  minDigitos: 9,
+  maxDigitos: 9,
+  hint: '912 345 678',
+);
+
+/// Chile y Perú primero; el resto en español, orden alfabético.
 const kPaisesTelefono = <PaisTelefono>[
   kPaisTelefonoChile,
+  kPaisTelefonoPeru,
   PaisTelefono(
     iso: 'DE',
     nombre: 'Alemania',
@@ -210,14 +222,6 @@ const kPaisesTelefono = <PaisTelefono>[
     hint: '981 123456',
   ),
   PaisTelefono(
-    iso: 'PE',
-    nombre: 'Perú',
-    dialCode: '51',
-    minDigitos: 9,
-    maxDigitos: 9,
-    hint: '912 345 678',
-  ),
-  PaisTelefono(
     iso: 'PT',
     nombre: 'Portugal',
     dialCode: '351',
@@ -264,6 +268,31 @@ PaisTelefono paisTelefonoPorIso(String iso) {
     if (pais.iso == iso) return pais;
   }
   return kPaisTelefonoChile;
+}
+
+PaisTelefono paisTelefonoPorPaisEvento(String? pais) {
+  return normalizarPaisEvento(pais) == kPaisEventoPeru
+      ? kPaisTelefonoPeru
+      : kPaisTelefonoChile;
+}
+
+/// Detecta el prefijo de un teléfono internacional ya persistido.
+///
+/// Los códigos más largos se evalúan primero para no confundir, por ejemplo,
+/// `+591` (Bolivia) con códigos de menor longitud.
+PaisTelefono? detectarPaisTelefono(String? raw) {
+  final value = (raw ?? '').trim();
+  if (!value.startsWith('+') && !value.startsWith('00')) return null;
+  var digits = value.replaceAll(RegExp(r'\D'), '');
+  if (value.startsWith('00') && digits.startsWith('00')) {
+    digits = digits.substring(2);
+  }
+  final paises = List<PaisTelefono>.of(kPaisesTelefono)
+    ..sort((a, b) => b.dialCode.length.compareTo(a.dialCode.length));
+  for (final pais in paises) {
+    if (digits.startsWith(pais.dialCode)) return pais;
+  }
+  return null;
 }
 
 /// Title case Unicode: cada palabra (y cada tramo tras un guion) con inicial
@@ -357,9 +386,9 @@ final _localEmail = RegExp(r'^[a-z0-9](?:[a-z0-9._%+\-]*[a-z0-9])?$');
 final _labelDominio = RegExp(r'^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$');
 final _tld = RegExp(r'^[a-z]{2,}$');
 
-String? validarEmailRegistro(String? value) {
+String? validarEmailRegistro(String? value, {bool requerido = true}) {
   final email = formatearEmail(value ?? '');
-  if (email.isEmpty) return 'Requerido';
+  if (email.isEmpty) return requerido ? 'Requerido' : null;
   if (email.contains(' ')) return 'Email inválido';
   final partes = email.split('@');
   if (partes.length != 2) return 'Email inválido';
@@ -377,9 +406,13 @@ String? validarEmailRegistro(String? value) {
   return null;
 }
 
-String? validarTelefono(String? value, PaisTelefono pais) {
+String? validarTelefono(
+  String? value,
+  PaisTelefono pais, {
+  bool requerido = true,
+}) {
   final digits = extraerDigitosNacionales(value ?? '', pais);
-  if (digits.isEmpty) return 'Requerido';
+  if (digits.isEmpty) return requerido ? 'Requerido' : null;
   if (digits.length < pais.minDigitos || digits.length > pais.maxDigitos) {
     if (pais.minDigitos == pais.maxDigitos) {
       return 'Ingresa ${pais.minDigitos} dígitos';

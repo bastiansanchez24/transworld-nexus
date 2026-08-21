@@ -95,6 +95,7 @@ class _NotificacionesScreenState extends ConsumerState<NotificacionesScreen> {
           ? '¿Deseas eliminar $cantidad notificación(es) seleccionada(s)?'
           : '¿Deseas eliminar todas las notificaciones?',
       confirmLabel: 'Eliminar',
+      destructive: true,
     );
     if (!confirmado || !mounted) return;
 

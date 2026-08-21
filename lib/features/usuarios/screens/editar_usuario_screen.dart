@@ -309,6 +309,7 @@ class _EditarUsuarioBodyState extends ConsumerState<_EditarUsuarioBody> {
           'Todos sus registros quedarán como "Usuario eliminado". '
           'Esta acción no se puede deshacer.',
       confirmLabel: 'Eliminar',
+      destructive: true,
     );
     if (!confirmado || !mounted) return;
 

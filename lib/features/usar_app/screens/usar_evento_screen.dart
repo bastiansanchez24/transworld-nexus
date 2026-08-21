@@ -16,6 +16,7 @@ import '../../../core/widgets/action_lock.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/evento_hero_banner.dart';
+import '../../../core/widgets/ios_back_swipe_committer.dart';
 import '../../../core/widgets/tw_components.dart';
 import '../../../core/widgets/tw_detail_scaffold.dart';
 import '../../../core/widgets/tw_offline_notice_card.dart';
@@ -138,7 +139,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
         .watch(eventoLeadInternoProvider(widget.eventoId))
         .valueOrNull;
 
-    return BrowserThemeColor(
+    final contenido = BrowserThemeColor(
       color: TwColors.bg,
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
@@ -272,6 +273,7 @@ class _UsarEventoScreenState extends ConsumerState<UsarEventoScreen>
         ),
       ),
     );
+    return IosBackSwipeCommitter(child: contenido);
   }
 
   Widget _hero(

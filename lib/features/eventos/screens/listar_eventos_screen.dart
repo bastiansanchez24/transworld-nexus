@@ -134,6 +134,7 @@ class _ListarEventosScreenState extends ConsumerState<ListarEventosScreen>
       message:
           'Esta acción no se puede deshacer. ¿Eliminar el evento y sus registrados?',
       confirmLabel: 'Eliminar',
+      destructive: true,
     );
     if (!confirmado || !mounted) return;
 

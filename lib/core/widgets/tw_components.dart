@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/tw_tokens.dart';
@@ -70,6 +71,7 @@ class TwIconButton extends StatelessWidget {
     this.tooltip,
     this.danger = false,
     this.loading = false,
+    this.badgeCount,
   });
 
   final IconData icon;
@@ -87,6 +89,7 @@ class TwIconButton extends StatelessWidget {
   final bool danger;
 
   final bool loading;
+  final int? badgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +131,39 @@ class TwIconButton extends StatelessWidget {
             : Icon(icon, size: iconSize, color: fg),
       ),
     );
+
+    if ((badgeCount ?? 0) > 0) {
+      final count = badgeCount!;
+      boton = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          boton,
+          Positioned(
+            top: -5,
+            right: -7,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: TwColors.danger,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     if (tooltip != null) {
       boton = Tooltip(message: tooltip!, child: boton);
@@ -466,6 +502,9 @@ class TwTextField extends StatelessWidget {
     this.textInputAction = TextInputAction.next,
     this.onSubmitted,
     this.autofillHints,
+    this.inputFormatters,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
   });
 
   final TextEditingController controller;
@@ -479,6 +518,9 @@ class TwTextField extends StatelessWidget {
   final TextInputAction textInputAction;
   final VoidCallback? onSubmitted;
   final Iterable<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool autocorrect;
+  final bool enableSuggestions;
 
   @override
   Widget build(BuildContext context) {
@@ -506,6 +548,9 @@ class TwTextField extends StatelessWidget {
               textInputAction: textInputAction,
               onSubmitted: (_) => onSubmitted?.call(),
               autofillHints: autofillHints,
+              inputFormatters: inputFormatters,
+              autocorrect: autocorrect,
+              enableSuggestions: enableSuggestions,
               style: TwText.input,
               cursorColor: TwColors.brand700,
               cursorWidth: 1.6,

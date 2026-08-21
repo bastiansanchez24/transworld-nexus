@@ -12,6 +12,7 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/action_lock.dart';
+import '../../../core/widgets/app_modals.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/cuenta_identity_header.dart';
 import '../../../core/widgets/cuenta_settings_sheet.dart';
@@ -174,7 +175,7 @@ class _UsarEventoExternoScreenState
         ref.read(externoEventosAutorizadosProvider).valueOrNull ?? [];
     if (autorizados.length <= 1) return;
 
-    final elegido = await showModalBottomSheet<Evento>(
+    final elegido = await showAppModalBottomSheet<Evento>(
       context: context,
       backgroundColor: TwColors.surface,
       shape: const RoundedRectangleBorder(

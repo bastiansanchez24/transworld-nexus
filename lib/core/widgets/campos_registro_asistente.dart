@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/app_theme.dart';
 import '../utils/registro_asistente.dart';
+import 'app_modals.dart';
 
 /// Aplica [formatear] al texto cuando el campo pierde el foco.
 class FormatoAlSalir extends StatelessWidget {
@@ -113,7 +114,7 @@ class CamposRegistroAsistente extends StatelessWidget {
             textInputAction: TextInputAction.next,
             autocorrect: false,
             enableSuggestions: false,
-            inputFormatters: const [_LowerCaseTextFormatter()],
+            inputFormatters: const [LowerCaseTextFormatter()],
             decoration: const InputDecoration(labelText: 'Email'),
             validator: validarEmailRegistro,
           ),
@@ -197,8 +198,14 @@ class _LimiteDigitosTelefonoFormatter extends TextInputFormatter {
     TextEditingValue newValue,
   ) {
     final nacionales = extraerDigitosNacionales(newValue.text, pais);
-    if (nacionales.length <= pais.maxDigitos) return newValue;
-    final recortado = nacionales.substring(0, pais.maxDigitos);
+    final escritos = newValue.text.replaceAll(RegExp(r'\D'), '');
+    if (nacionales.length <= pais.maxDigitos &&
+        escritos.length <= pais.maxDigitos) {
+      return newValue;
+    }
+    final recortado = nacionales.length <= pais.maxDigitos
+        ? nacionales
+        : nacionales.substring(0, pais.maxDigitos);
     return TextEditingValue(
       text: recortado,
       selection: TextSelection.collapsed(offset: recortado.length),
@@ -206,8 +213,8 @@ class _LimiteDigitosTelefonoFormatter extends TextInputFormatter {
   }
 }
 
-class _LowerCaseTextFormatter extends TextInputFormatter {
-  const _LowerCaseTextFormatter();
+class LowerCaseTextFormatter extends TextInputFormatter {
+  const LowerCaseTextFormatter();
 
   @override
   TextEditingValue formatEditUpdate(
@@ -227,12 +234,16 @@ class CampoTelefonoInternacional extends StatelessWidget {
     required this.pais,
     required this.onPaisChanged,
     this.enabled = true,
+    this.requerido = true,
+    this.labelText = 'Teléfono',
   });
 
   final TextEditingController controller;
   final PaisTelefono pais;
   final ValueChanged<PaisTelefono> onPaisChanged;
   final bool enabled;
+  final bool requerido;
+  final String? labelText;
 
   @override
   Widget build(BuildContext context) {
@@ -245,11 +256,11 @@ class CampoTelefonoInternacional extends StatelessWidget {
         keyboardType: TextInputType.phone,
         textInputAction: TextInputAction.next,
         inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'[0-9 +]')),
+          FilteringTextInputFormatter.digitsOnly,
           _LimiteDigitosTelefonoFormatter(pais),
         ],
         decoration: InputDecoration(
-          labelText: 'Teléfono',
+          labelText: labelText,
           hintText: pais.hint,
           prefixIcon: _PrefijoPais(
             pais: pais,
@@ -261,14 +272,15 @@ class CampoTelefonoInternacional extends StatelessWidget {
             minHeight: 0,
           ),
         ),
-        validator: (value) => validarTelefono(value, pais),
+        validator: (value) =>
+            validarTelefono(value, pais, requerido: requerido),
       ),
     );
   }
 
   Future<void> _elegirPais(BuildContext context) async {
     if (!enabled) return;
-    final elegido = await showModalBottomSheet<PaisTelefono>(
+    final elegido = await showAppModalBottomSheet<PaisTelefono>(
       context: context,
       isScrollControlled: true,
       // Sin arrastre: la hoja es una lista larga con buscador y el gesto de
@@ -284,7 +296,8 @@ class CampoTelefonoInternacional extends StatelessWidget {
       builder: (ctx) => _SelectorPaisSheet(seleccionado: pais),
     );
     if (elegido == null || elegido.iso == pais.iso) return;
-    controller.text = formatearTelefonoNacional(controller.text, elegido);
+    final nacionales = extraerDigitosNacionales(controller.text, pais);
+    controller.text = formatearTelefonoNacional(nacionales, elegido);
     onPaisChanged(elegido);
   }
 }

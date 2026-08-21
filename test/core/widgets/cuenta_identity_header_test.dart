@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transworld_nexus/core/constants/app_role.dart';
 import 'package:transworld_nexus/core/widgets/cuenta_identity_header.dart';
+import 'package:transworld_nexus/core/widgets/ios_native_chrome.dart';
 import 'package:transworld_nexus/core/widgets/nexus_components.dart';
+import 'package:transworld_nexus/core/widgets/notificaciones_header_button.dart';
 import 'package:transworld_nexus/data/models/perfil.dart';
 
 void main() {
@@ -40,6 +42,47 @@ void main() {
           .whereType<BoxDecoration>()
           .firstWhere((d) => d.shape == BoxShape.circle && d.border != null);
       expect(anillo.color, isNull);
+    },
+  );
+
+  testWidgets(
+    'ajustes y notificaciones conservan 40 px y usan Liquid Glass con badge',
+    (tester) async {
+      const ajustesKey = Key('ajustes-home');
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: CuentaIdentityHeader(
+              perfil: Perfil(
+                id: 'user-1',
+                nombreCompleto: 'Bastian Abarca',
+                rol: AppRole.user,
+              ),
+              ajustesKey: ajustesKey,
+              onAjustes: _noop,
+              onMiPerfil: _noop,
+              onNotificaciones: _noop,
+              noLeidas: 12,
+            ),
+          ),
+        ),
+      );
+
+      final ajustes = tester.widget<TwIosGlassIconButton>(
+        find.byKey(ajustesKey),
+      );
+      expect(ajustes.size, 40);
+      expect(ajustes.sfSymbol, 'gearshape');
+
+      final notificaciones = find.descendant(
+        of: find.byType(NotificacionesHeaderButton),
+        matching: find.byType(TwIosGlassIconButton),
+      );
+      final campana = tester.widget<TwIosGlassIconButton>(notificaciones);
+      expect(campana.size, 40);
+      expect(campana.sfSymbol, 'bell');
+      expect(campana.badgeCount, 12);
+      expect(find.text('12'), findsOneWidget);
     },
   );
 }

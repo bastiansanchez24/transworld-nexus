@@ -13,7 +13,11 @@ import 'tw_components.dart';
 bool get usesNativeIosChrome => Platform.isIOS;
 
 /// Botón de cabecera: `CNButton` glass en iOS 26+, chip Flutter en el resto.
-class TwIosGlassIconButton extends StatelessWidget {
+///
+/// Cuando aparece un modal sobre la ruta que contiene el botón, mantiene el
+/// mismo `CNButton` montado y visible. Solo bloquea temporalmente sus toques
+/// para que el `PlatformView` UIKit no atraviese el modal.
+class TwIosGlassIconButton extends StatefulWidget {
   const TwIosGlassIconButton({
     super.key,
     required this.icon,
@@ -25,6 +29,7 @@ class TwIosGlassIconButton extends StatelessWidget {
     this.danger = false,
     this.loading = false,
     this.sfSymbol,
+    this.badgeCount,
   });
 
   final IconData icon;
@@ -38,28 +43,47 @@ class TwIosGlassIconButton extends StatelessWidget {
 
   /// SF Symbol explícito; si falta se infiere de [icon].
   final String? sfSymbol;
+  final int? badgeCount;
+
+  @override
+  State<TwIosGlassIconButton> createState() => _TwIosGlassIconButtonState();
+}
+
+class _TwIosGlassIconButtonState extends State<TwIosGlassIconButton> {
+  late final int _profundidadModalAlMontar;
+
+  @override
+  void initState() {
+    super.initState();
+    _profundidadModalAlMontar = CNTabBarRouteObserver.anyModalDepth.value;
+  }
+
+  Widget _botonFlutter() {
+    return TwIconButton(
+      icon: widget.icon,
+      iconSize: widget.iconSize,
+      size: widget.size,
+      variant: widget.variant,
+      onTap: widget.onTap,
+      tooltip: widget.tooltip,
+      danger: widget.danger,
+      loading: widget.loading,
+      badgeCount: widget.badgeCount,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (!usesNativeIosChrome || loading) {
-      return TwIconButton(
-        icon: icon,
-        iconSize: iconSize,
-        size: size,
-        variant: variant,
-        onTap: onTap,
-        tooltip: tooltip,
-        danger: danger,
-        loading: loading,
-      );
+    if (!usesNativeIosChrome || widget.loading) {
+      return _botonFlutter();
     }
 
-    final symbolName = sfSymbol ?? sfSymbolForHeaderIcon(icon);
-    final isBrand = variant == TwIconButtonStyle.brand;
+    final symbolName = widget.sfSymbol ?? sfSymbolForHeaderIcon(widget.icon);
+    final isBrand = widget.variant == TwIconButtonStyle.brand;
     final Color tint;
     if (isBrand) {
       tint = AppColors.primary;
-    } else if (danger) {
+    } else if (widget.danger) {
       tint = TwColors.danger;
     } else {
       tint = AppColors.primary;
@@ -71,7 +95,7 @@ class TwIosGlassIconButton extends StatelessWidget {
     final Color colorSimbolo;
     if (isBrand) {
       colorSimbolo = Colors.white;
-    } else if (danger) {
+    } else if (widget.danger) {
       colorSimbolo = TwColors.danger;
     } else {
       colorSimbolo = TwColors.inkSoft;
@@ -81,21 +105,36 @@ class TwIosGlassIconButton extends StatelessWidget {
       icon: symbolName == null
           ? null
           : CNSymbol(symbolName, size: 17, color: colorSimbolo),
-      customIcon: symbolName == null ? icon : null,
+      customIcon: symbolName == null ? widget.icon : null,
       tint: tint,
-      enabled: onTap != null,
-      onPressed: onTap == null ? null : () => ActionLock.instance.run(onTap!),
+      enabled: widget.onTap != null,
+      badgeCount: widget.badgeCount,
+      onPressed: widget.onTap == null
+          ? null
+          : () => ActionLock.instance.run(widget.onTap!),
+      // La coordinación de modales se hace sin sustituir ni desmontar este
+      // PlatformView, para preservar Liquid Glass durante toda la transición.
+      autoHideOnModal: false,
       config: CNButtonConfig(
         style: isBrand ? CNButtonStyle.prominentGlass : CNButtonStyle.glass,
-        width: size,
-        minHeight: size,
+        width: widget.size,
+        minHeight: widget.size,
         customIconSize: 17,
       ),
     );
 
-    if (tooltip != null) {
-      boton = Tooltip(message: tooltip!, child: boton);
+    if (widget.tooltip != null) {
+      boton = Tooltip(message: widget.tooltip!, child: boton);
     }
-    return Semantics(button: true, label: tooltip, child: boton);
+    final nativo = Semantics(button: true, label: widget.tooltip, child: boton);
+
+    return ValueListenableBuilder<int>(
+      valueListenable: CNTabBarRouteObserver.anyModalDepth,
+      child: nativo,
+      builder: (context, profundidadActual, child) {
+        final modalEncima = profundidadActual > _profundidadModalAlMontar;
+        return IgnorePointer(ignoring: modalEncima, child: child);
+      },
+    );
   }
 }

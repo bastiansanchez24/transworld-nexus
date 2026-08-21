@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/app_theme.dart';
+import 'app_modals.dart';
 import 'nexus_components.dart';
 import 'pressable.dart';
 
@@ -17,7 +18,7 @@ Future<Uint8List?> mostrarModalRecorteImagen(
   required double recorteProporcion,
   String titulo = 'Recortar imagen',
 }) {
-  return showDialog<Uint8List>(
+  return showAppDialog<Uint8List>(
     context: context,
     barrierDismissible: false,
     builder: (context) => _ModalRecorteImagen(

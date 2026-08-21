@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_modals.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../providers/update_providers.dart';
 import '../services/update_platform.dart';
@@ -269,7 +270,7 @@ Future<void> showAppUpdateDialog(BuildContext context, WidgetRef ref) async {
   if (controller.isDialogVisible) return;
   controller.markDialogVisible(true);
 
-  await showDialog<void>(
+  await showAppDialog<void>(
     context: context,
     barrierDismissible:
         !(ref.read(updateControllerProvider).info?.isForced ?? false),

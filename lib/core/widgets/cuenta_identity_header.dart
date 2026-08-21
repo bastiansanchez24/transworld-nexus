@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../data/models/perfil.dart';
 import '../theme/tw_tokens.dart';
 import 'app_network_image.dart';
+import 'ios_native_chrome.dart';
 import 'nexus_components.dart';
 import 'notificaciones_header_button.dart';
 import 'pressable.dart';
@@ -70,11 +71,14 @@ class CuentaIdentityHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        _IconChip(
+        TwIosGlassIconButton(
           key: ajustesKey,
           icon: Symbols.settings_rounded,
           tooltip: 'Ajustes de la cuenta',
           onTap: onAjustes,
+          size: 40,
+          iconSize: 20,
+          sfSymbol: 'gearshape',
         ),
         if (onNotificaciones != null) ...[
           const SizedBox(width: 12),
@@ -128,42 +132,6 @@ class _CuentaAvatar extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _IconChip extends StatelessWidget {
-  const _IconChip({
-    super.key,
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Pressable(
-        scale: 0.92,
-        onTap: onTap,
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            color: TwColors.surface,
-            borderRadius: TwRadii.iconLg,
-            border: Border.fromBorderSide(BorderSide(color: TwColors.border08)),
-            boxShadow: TwShadows.soft,
-          ),
-          child: Icon(icon, color: TwColors.iconInk, size: 20),
-        ),
       ),
     );
   }

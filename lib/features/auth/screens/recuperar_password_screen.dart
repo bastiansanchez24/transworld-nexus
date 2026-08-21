@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/repositories/auth_repository.dart';
 
@@ -29,12 +31,13 @@ class _RecuperarPasswordScreenState
   }
 
   Future<void> _enviar() async {
+    _emailController.text = formatearEmail(_emailController.text);
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
       await ref
           .read(authRepositoryProvider)
-          .recuperarContrasena(_emailController.text.trim());
+          .recuperarContrasena(_emailController.text);
       if (mounted) setState(() => _enviado = true);
     } catch (e) {
       if (mounted) {
@@ -91,14 +94,14 @@ class _RecuperarPasswordScreenState
                         controller: _emailController,
                         enabled: !_loading,
                         keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        inputFormatters: const [LowerCaseTextFormatter()],
                         decoration: const InputDecoration(
                           labelText: 'Correo electrónico',
                           prefixIcon: Icon(Icons.email_outlined),
                         ),
-                        validator: (value) =>
-                            (value == null || !value.contains('@'))
-                            ? 'Correo inválido'
-                            : null,
+                        validator: validarEmailRegistro,
                       ),
                       const SizedBox(height: 24),
                       PrimaryGradientButton(

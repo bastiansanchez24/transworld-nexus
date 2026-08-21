@@ -10,8 +10,10 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/password_generator.dart';
 import '../../../core/utils/password_policy.dart';
+import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/require_admin.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -70,7 +72,7 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
     final buffer = StringBuffer()
       ..writeln('Acceso Transworld RegisPro')
       ..writeln('Nombre: ${_nombreController.text.trim()}')
-      ..writeln('Email: ${_emailController.text.trim()}')
+      ..writeln('Email: ${formatearEmail(_emailController.text)}')
       ..writeln('Contraseña: ${_passwordController.text}');
     if (eventoNombres.isNotEmpty) {
       buffer.writeln(
@@ -109,7 +111,8 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
     setState(() => _guardando = true);
     try {
       final repo = ref.read(authRepositoryProvider);
-      final email = _emailController.text.trim();
+      final email = formatearEmail(_emailController.text);
+      _emailController.text = email;
       if (await repo.verificarEmailRegistrado(email)) {
         if (mounted) {
           showAppSnackBar(
@@ -195,12 +198,10 @@ class _NuevoUsuarioFormState extends ConsumerState<_NuevoUsuarioForm> {
                   ),
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
-                  validator: (v) {
-                    final value = v?.trim() ?? '';
-                    if (value.isEmpty) return 'Requerido';
-                    if (!value.contains('@')) return 'Email inválido';
-                    return null;
-                  },
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  inputFormatters: const [LowerCaseTextFormatter()],
+                  validator: validarEmailRegistro,
                 ),
                 const SizedBox(height: 14),
                 const _FieldLabel('Contraseña'),

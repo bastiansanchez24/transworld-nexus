@@ -8,9 +8,11 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/network/offline_guard.dart';
 import '../../../core/router/route_paths.dart';
+import '../../../core/constants/paises_evento.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campo_pais_evento.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/require_permission.dart';
 import '../../../core/widgets/selector_imagen.dart';
@@ -52,10 +54,10 @@ class _CrearEditarEventoLeadFormState
     extends ConsumerState<_CrearEditarEventoLeadForm> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
-  final _paisController = TextEditingController();
   final _tematicaController = TextEditingController();
 
   DateTime _fecha = DateTime.now();
+  String _pais = kPaisEventoChile;
   Uint8List? _imagenBytes;
   String? _imagenUrlExistente;
   bool _guardando = false;
@@ -74,7 +76,7 @@ class _CrearEditarEventoLeadFormState
   bool get _hayCambios {
     if (!_esEdicion || !_cargado || _soloLectura) return false;
     return _nombreController.text != _nombre0 ||
-        _paisController.text != _pais0 ||
+        _pais != _pais0 ||
         _tematicaController.text != _tematica0 ||
         _fecha != _fecha0 ||
         _imagenBytes != null ||
@@ -84,7 +86,6 @@ class _CrearEditarEventoLeadFormState
   @override
   void dispose() {
     _nombreController.dispose();
-    _paisController.dispose();
     _tematicaController.dispose();
     super.dispose();
   }
@@ -93,13 +94,13 @@ class _CrearEditarEventoLeadFormState
     if (_cargado) return;
     _cargado = true;
     _nombreController.text = evento.nombre;
-    _paisController.text = evento.pais ?? '';
+    _pais = normalizarPaisEvento(evento.pais);
     _tematicaController.text = evento.tematica ?? '';
     _fecha = evento.fecha;
     _imagenUrlExistente = evento.imagenUrl;
     _heredada = evento.esInterno;
     _nombre0 = _nombreController.text;
-    _pais0 = _paisController.text;
+    _pais0 = _pais;
     _tematica0 = _tematicaController.text;
     _fecha0 = _fecha;
     _imagenUrl0 = _imagenUrlExistente;
@@ -156,9 +157,7 @@ class _CrearEditarEventoLeadFormState
         id: widget.eventoId ?? '',
         nombre: _nombreController.text.trim(),
         fecha: _fecha,
-        pais: _paisController.text.trim().isEmpty
-            ? null
-            : _paisController.text.trim(),
+        pais: _pais,
         tematica: _tematicaController.text.trim().isEmpty
             ? null
             : _tematicaController.text.trim(),
@@ -209,6 +208,7 @@ class _CrearEditarEventoLeadFormState
       message:
           'Esta acción no se puede deshacer. ¿Eliminar la actividad de captura?',
       confirmLabel: 'Eliminar',
+      destructive: true,
     );
     if (!confirmado) return;
 
@@ -319,13 +319,10 @@ class _CrearEditarEventoLeadFormState
                       const SizedBox(height: 14),
                       const _FieldLabel('País'),
                       const SizedBox(height: 6),
-                      TextFormField(
-                        controller: _paisController,
+                      CampoPaisEvento(
+                        value: _pais,
                         enabled: !_guardando && !_soloLectura && hayRed,
-                        decoration: const InputDecoration(hintText: 'Chile'),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Requerido'
-                            : null,
+                        onChanged: (pais) => setState(() => _pais = pais),
                       ),
                       const SizedBox(height: 14),
                       const _FieldLabel('Temática'),

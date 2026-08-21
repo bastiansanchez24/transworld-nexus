@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -13,8 +13,10 @@ import '../../../core/router/refresh_on_visible.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/mascara_contacto.dart';
+import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/pressable.dart';
@@ -475,6 +477,10 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
   final _telefonoController = TextEditingController();
   final _emailController = TextEditingController();
   final _descripcionController = TextEditingController();
+  PaisTelefono _paisTelefono = kPaisTelefonoChile;
+  PaisTelefono _paisTelefonoEvento = kPaisTelefonoChile;
+  bool _paisTelefonoEventoInicializado = false;
+  bool _telefonoTienePaisExplicito = false;
   bool _cargado = false;
   bool _guardando = false;
 
@@ -516,11 +522,16 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     _cargado = true;
     _emailGuardado = _sinVacios(lead.email);
     _telefonoGuardado = _sinVacios(lead.telefono);
+    final paisDetectado = detectarPaisTelefono(_telefonoGuardado);
+    if (paisDetectado != null) {
+      _paisTelefono = paisDetectado;
+      _telefonoTienePaisExplicito = true;
+    }
     _nombreController.text = lead.nombreCompleto;
     _empresaController.text = lead.empresa ?? '';
     _cargoController.text = lead.cargo ?? '';
     _telefonoController.text = puedeVerContacto
-        ? (lead.telefono ?? '')
+        ? formatearTelefonoNacional(lead.telefono ?? '', _paisTelefono)
         : enmascararTelefono(lead.telefono);
     _emailController.text = puedeVerContacto
         ? (lead.email ?? '')
@@ -534,6 +545,24 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     _email0 = _emailController.text;
     _descripcion0 = _descripcionController.text;
     _fotos0 = List<String>.from(_fotos);
+  }
+
+  void _inicializarPaisTelefonoEvento(
+    String? paisEvento, {
+    required bool puedeVerContacto,
+  }) {
+    if (_paisTelefonoEventoInicializado) return;
+    _paisTelefonoEvento = paisTelefonoPorPaisEvento(paisEvento);
+    _paisTelefonoEventoInicializado = true;
+    if (_telefonoTienePaisExplicito) return;
+    _paisTelefono = _paisTelefonoEvento;
+    if (_cargado && puedeVerContacto) {
+      _telefonoController.text = formatearTelefonoNacional(
+        _telefonoGuardado ?? _telefonoController.text,
+        _paisTelefono,
+      );
+      _telefono0 = _telefonoController.text;
+    }
   }
 
   bool get _hayCambios {
@@ -581,20 +610,6 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     return const [];
   }
 
-  String? _validarEmail(String? raw) {
-    final value = raw?.trim() ?? '';
-    if (value.isEmpty) return 'Requerido';
-    final partes = value.split('@');
-    if (partes.length != 2 ||
-        partes.first.isEmpty ||
-        !partes.last.contains('.') ||
-        partes.last.startsWith('.') ||
-        partes.last.endsWith('.')) {
-      return 'Ingresa un email válido';
-    }
-    return null;
-  }
-
   /// Borra del disco las fotos pendientes que la edición dejó fuera, para no
   /// acumular archivos que ya nadie referencia.
   Future<void> _borrarFotosLocalesHuerfanas(List<String> finales) async {
@@ -613,10 +628,14 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
 
     final puedeVerContacto = ref.read(canViewContactDataProvider);
     final email = puedeVerContacto
-        ? valorOpcional(_emailController)
+        ? valorOpcional(_emailController) == null
+              ? null
+              : formatearEmail(_emailController.text)
         : _emailGuardado;
     final telefono = puedeVerContacto
-        ? valorOpcional(_telefonoController)
+        ? valorOpcional(_telefonoController) == null
+              ? null
+              : telefonoInternacional(_telefonoController.text, _paisTelefono)
         : _telefonoGuardado;
     final isOnline = ref.read(isOnlineProvider);
     var fotosPreparadas = const <String>[];
@@ -792,6 +811,7 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
       title: 'Eliminar lead',
       message: '¿Eliminar este lead de forma permanente?',
       confirmLabel: 'Eliminar',
+      destructive: true,
     );
     if (!ok) return;
 
@@ -823,6 +843,15 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
     final perfilId = ref.watch(currentPerfilProvider).valueOrNull?.id;
     final puedeEditarCualquiera = ref.watch(canEditAnyLeadProvider);
     final puedeVerContacto = ref.watch(canViewContactDataProvider);
+    final eventoCaptura = ref
+        .watch(eventoLeadByIdProvider(widget.eventoId))
+        .valueOrNull;
+    if (eventoCaptura != null) {
+      _inicializarPaisTelefonoEvento(
+        eventoCaptura.pais,
+        puedeVerContacto: puedeVerContacto,
+      );
+    }
     final esPendiente = esIdSoloLocal(widget.leadId);
 
     // El lead se resuelve antes del scaffold porque el título y el modo del
@@ -955,25 +984,36 @@ class _DetalleLeadScreenState extends ConsumerState<DetalleLeadScreen> {
                     decoration: const InputDecoration(labelText: 'Cargo'),
                   ),
                   AppSpacing.field,
-                  TextFormField(
-                    controller: _telefonoController,
-                    enabled: editable,
-                    readOnly: !puedeVerContacto,
-                    keyboardType: TextInputType.phone,
-                    decoration: puedeVerContacto
-                        ? const InputDecoration(labelText: 'Teléfono')
-                        : _decoracionProtegida('Teléfono'),
-                  ),
+                  if (puedeVerContacto)
+                    CampoTelefonoInternacional(
+                      controller: _telefonoController,
+                      pais: _paisTelefono,
+                      onPaisChanged: (pais) =>
+                          setState(() => _paisTelefono = pais),
+                      enabled: editable,
+                      requerido: false,
+                    )
+                  else
+                    TextFormField(
+                      controller: _telefonoController,
+                      enabled: editable,
+                      readOnly: true,
+                      keyboardType: TextInputType.phone,
+                      decoration: _decoracionProtegida('Teléfono'),
+                    ),
                   AppSpacing.field,
                   TextFormField(
                     controller: _emailController,
                     enabled: editable,
                     readOnly: !puedeVerContacto,
                     keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    inputFormatters: const [LowerCaseTextFormatter()],
                     decoration: puedeVerContacto
                         ? const InputDecoration(labelText: 'Email')
                         : _decoracionProtegida('Email'),
-                    validator: puedeVerContacto ? _validarEmail : null,
+                    validator: puedeVerContacto ? validarEmailRegistro : null,
                   ),
                   AppSpacing.field,
                   TextFormField(

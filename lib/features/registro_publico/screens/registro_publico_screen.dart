@@ -40,6 +40,7 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
   final _cargoController = TextEditingController();
   final _telefonoController = TextEditingController();
   PaisTelefono _pais = kPaisTelefonoChile;
+  bool _paisInicializado = false;
   bool _guardando = false;
   bool _enviado = false;
   bool _autovalidar = false;
@@ -52,6 +53,12 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
     _cargoController.dispose();
     _telefonoController.dispose();
     super.dispose();
+  }
+
+  void _inicializarPais(String? paisEvento) {
+    if (_paisInicializado) return;
+    _pais = paisTelefonoPorPaisEvento(paisEvento);
+    _paisInicializado = true;
   }
 
   Future<void> _enviar() async {
@@ -150,6 +157,7 @@ class _RegistroPublicoScreenState extends ConsumerState<RegistroPublicoScreen> {
                             'Este evento no existe o ya no acepta registros.',
                       ),
                       data: (evento) {
+                        _inicializarPais(evento.pais);
                         if (_enviado) {
                           return Column(
                             mainAxisSize: MainAxisSize.min,

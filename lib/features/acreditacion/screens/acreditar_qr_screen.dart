@@ -20,7 +20,6 @@ import '../../capturador/providers/capturador_providers.dart';
 import '../../capturador/services/evento_lead_interno_service.dart';
 import '../../eventos/providers/eventos_providers.dart';
 import '../../registrados/providers/registrados_providers.dart';
-import '../acreditacion_sesion_lock.dart';
 import '../scanner/qr_scanner_service.dart';
 import '../scanner/scanner_controller.dart';
 import '../scanner/widgets/scanner_view.dart';
@@ -29,6 +28,8 @@ import '../scanner/widgets/scanner_view.dart';
 ///
 /// La UI de cámara vive en [ScannerView]; esta pantalla solo orquesta
 /// reglas de negocio sobre el resultado del [ScannerController].
+/// Cada detección consulta al servidor (acreditación y lead), aunque el
+/// mismo QR se lea varias veces con el escáner todavía abierto.
 class AcreditarQrScreen extends ConsumerStatefulWidget {
   const AcreditarQrScreen({super.key, required this.eventoId});
 
@@ -41,7 +42,6 @@ class AcreditarQrScreen extends ConsumerStatefulWidget {
 class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     with WidgetsBindingObserver {
   late final ScannerController _scanner;
-  final AcreditacionSesionLock _sesion = AcreditacionSesionLock();
 
   @override
   void initState() {
@@ -120,10 +120,6 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     );
   }
 
-  bool _yaEstaAcreditado(Registrado registrado) {
-    return _sesion.yaEstaAcreditado(registrado);
-  }
-
   Future<void> _acreditar(Registrado registrado) async {
     final userId = ref.read(currentPerfilProvider).valueOrNull?.id.trim();
     if (userId == null || userId.isEmpty) {
@@ -132,24 +128,16 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
       );
     }
 
-    // Evita repetir el UPDATE si el mismo QR sigue en cuadro antes de que el
-    // provider invalidado alcance a devolver la acreditación actualizada.
-    _sesion.marcarEnVuelo(registrado.id);
-    try {
-      await persistirAcreditacion(
-        ref,
-        registrado: registrado,
-        acreditado: true,
-        acreditadoPorId: userId,
-      );
-    } catch (_) {
-      _sesion.sincronizarConLista([registrado]);
-      rethrow;
-    }
+    await persistirAcreditacion(
+      ref,
+      registrado: registrado,
+      acreditado: true,
+      acreditadoPorId: userId,
+    );
   }
 
   Future<void> _acreditarSiEsNecesarioParaLead(Registrado registrado) async {
-    if (_yaEstaAcreditado(registrado)) return;
+    if (registrado.acreditado) return;
     await _acreditar(registrado);
   }
 
@@ -177,26 +165,28 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
     String? email,
   ) async {
     final perfilId = ref.read(currentPerfilProvider).valueOrNull?.id;
-    try {
-      final enCache = await ref.read(
-        leadsPorEventoProvider(eventoLeadId).future,
-      );
-      final local = leadExistenteEnLista(enCache, email, perfilId: perfilId);
-      if (local != null) return local;
-    } catch (_) {
-      // Sin caché ni red se sigue al RPC o al formulario.
-    }
-
-    if (!ref.read(isOnlineProvider)) return null;
     final texto = email?.trim() ?? '';
-    if (texto.isEmpty) return null;
-    return ref
-        .read(leadsRepositoryProvider)
-        .buscarPorEmail(eventoId: eventoLeadId, email: texto);
+    return resolverLeadExistenteParaCaptura(
+      hayRed: ref.read(isOnlineProvider),
+      email: email,
+      buscarEnServidor: () => ref
+          .read(leadsRepositoryProvider)
+          .buscarPorEmail(eventoId: eventoLeadId, email: texto),
+      buscarEnCache: () async {
+        try {
+          final enCache = await ref.read(
+            leadsPorEventoProvider(eventoLeadId).future,
+          );
+          return leadExistenteEnLista(enCache, email, perfilId: perfilId);
+        } catch (_) {
+          return null;
+        }
+      },
+    );
   }
 
   Future<void> _procesarAcreditar(Registrado registrado) async {
-    if (_yaEstaAcreditado(registrado)) {
+    if (registrado.acreditado) {
       _scanner.showFeedback(
         '${registrado.nombreCompleto} ya había ingresado.',
         isError: false,
@@ -328,11 +318,6 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(registradosPorEventoProvider(widget.eventoId), (_, next) {
-      final lista = next.valueOrNull;
-      if (lista == null) return;
-      _sesion.sincronizarConLista(lista);
-    });
     // Precarga asistentes sin reconstruir el preview de cámara.
     ref.watch(registradosPorEventoProvider(widget.eventoId));
 
@@ -354,6 +339,8 @@ class _AcreditarQrScreenState extends ConsumerState<AcreditarQrScreen>
 
 /// Con red pide esa fila al servidor; sin red (o si el GET falla) usa el padrón
 /// local. Así el flag `acreditado` no se decide con una copia stale.
+///
+/// Cada lectura del mismo QR debe invocar esto de nuevo: no hay memoización.
 @visibleForTesting
 Future<Registrado?> resolverRegistradoParaAcreditacion({
   required bool hayRed,
@@ -369,5 +356,23 @@ Future<Registrado?> resolverRegistradoParaAcreditacion({
     return fresco;
   } catch (_) {
     return enCache;
+  }
+}
+
+/// Con red pregunta al RPC si ya hay un lead; la caché solo cubre offline o
+/// un fallo de red. Un hit local no evita la consulta.
+@visibleForTesting
+Future<LeadExistente?> resolverLeadExistenteParaCaptura({
+  required bool hayRed,
+  required String? email,
+  required Future<LeadExistente?> Function() buscarEnServidor,
+  required Future<LeadExistente?> Function() buscarEnCache,
+}) async {
+  if (emailLeadNormalizado(email) == null) return null;
+  if (!hayRed) return buscarEnCache();
+  try {
+    return await buscarEnServidor();
+  } catch (_) {
+    return buscarEnCache();
   }
 }

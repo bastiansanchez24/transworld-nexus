@@ -108,9 +108,10 @@ void main() {
     required List<LeadComentario> iniciales,
     bool online = true,
     Perfil? perfilOverride,
+    Size size = const Size(390, 844),
   }) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = size;
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
@@ -172,6 +173,26 @@ void main() {
 
     expect(find.text('Interesado en capacitación'), findsOneWidget);
     expect(find.text('Sé el primero en comentar'), findsNothing);
+  });
+
+  testWidgets('el compositor flota redondeado y centrado en web fullscreen', (
+    tester,
+  ) async {
+    await montar(tester, iniciales: [propio], size: const Size(1440, 900));
+
+    final composer = find.byKey(
+      const Key('comentarios_lead_composer_floating'),
+    );
+    expect(composer, findsOneWidget);
+    final rect = tester.getRect(composer);
+    expect(rect.width, lessThanOrEqualTo(680));
+    expect(rect.left, greaterThan(0));
+    expect(rect.right, lessThan(1440));
+    expect(rect.bottom, lessThan(900));
+
+    final material = tester.widget<Material>(composer);
+    final shape = material.shape! as RoundedRectangleBorder;
+    expect(shape.borderRadius, BorderRadius.circular(26));
   });
 
   testWidgets('el autor puede borrar el suyo y no el ajeno', (tester) async {
@@ -270,9 +291,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          connectivityStreamProvider.overrideWith(
-            (ref) => Stream.value(false),
-          ),
+          connectivityStreamProvider.overrideWith((ref) => Stream.value(false)),
           isOnlineProvider.overrideWith((ref) => false),
         ],
         child: MaterialApp(

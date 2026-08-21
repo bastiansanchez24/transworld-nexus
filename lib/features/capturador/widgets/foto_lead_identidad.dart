@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_network_image.dart';
+import '../../../core/widgets/app_modals.dart';
 import '../../../core/widgets/pressable.dart';
 
 enum _AccionFoto { ver, cambiar, eliminar }
@@ -148,7 +149,7 @@ Future<_AccionFoto?> _preguntarAccion(
   BuildContext context, {
   required bool puedeEliminar,
 }) {
-  return showModalBottomSheet<_AccionFoto>(
+  return showAppModalBottomSheet<_AccionFoto>(
     context: context,
     showDragHandle: true,
     backgroundColor: AppColors.surface,
@@ -205,7 +206,7 @@ Future<void> mostrarVisorFotoLead(
   Uint8List? bytes,
   String? urlExistente,
 }) {
-  return showDialog<void>(
+  return showAppDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.88),
     builder: (ctx) => _VisorFoto(bytes: bytes, urlExistente: urlExistente),

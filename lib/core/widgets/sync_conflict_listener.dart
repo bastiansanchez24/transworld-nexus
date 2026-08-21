@@ -6,6 +6,7 @@ import '../../data/offline/pending_photo_store.dart';
 import '../../data/offline/sync_queue_item.dart';
 import '../../data/offline/sync_queue_service.dart';
 import '../theme/app_theme.dart';
+import 'app_modals.dart';
 import 'tw_components.dart';
 import 'tw_toast.dart';
 
@@ -148,7 +149,7 @@ class _SyncConflictListenerState extends ConsumerState<SyncConflictListener> {
 }
 
 Future<void> showSyncConflictsSheet(BuildContext context, WidgetRef ref) {
-  return showModalBottomSheet<void>(
+  return showAppModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,

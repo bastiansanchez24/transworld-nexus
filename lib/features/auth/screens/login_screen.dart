@@ -9,7 +9,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/browser_theme_color.dart';
 import '../../../core/theme/tw_tokens.dart';
+import '../../../core/utils/registro_asistente.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/campos_registro_asistente.dart';
 import '../../../core/widgets/tw_components.dart';
 import '../../../core/widgets/tw_toast.dart';
 import '../../../data/offline/sync_queue_service.dart';
@@ -80,8 +82,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     if (_loading) return;
 
-    final email = _email.text.trim();
-    if (!RegExp(r'.+@.+\..+').hasMatch(email)) {
+    final email = formatearEmail(_email.text);
+    _email.text = email;
+    if (validarEmailRegistro(email) != null) {
       setState(() => _error = 'Ingresa un correo electrónico válido');
       return;
     }
@@ -208,6 +211,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               enabled: !_loading,
               keyboardType: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],
+              autocorrect: false,
+              enableSuggestions: false,
+              inputFormatters: const [LowerCaseTextFormatter()],
               onChanged: (_) => _limpiarError(),
             ),
             const TwFieldLabel('Contraseña', top: 16),

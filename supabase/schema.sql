@@ -96,7 +96,8 @@ CREATE INDEX IF NOT EXISTS idx_perfiles_evento_asignado
 CREATE TABLE IF NOT EXISTS public.eventos (
   id                          uuid NOT NULL DEFAULT gen_random_uuid(),
   nombre                      text NOT NULL,
-  pais                        text,
+  pais                        text NOT NULL DEFAULT 'Chile'
+                                CHECK (pais IN ('Chile', 'Perú')),
   fecha                       date NOT NULL,
   tematica                    text,
   creado_por                  uuid,
@@ -309,7 +310,8 @@ ON CONFLICT (usuario_id, evento_id) DO NOTHING;
 CREATE TABLE IF NOT EXISTS public.eventos_leads (
   id                          uuid NOT NULL DEFAULT gen_random_uuid(),
   nombre                      text NOT NULL,
-  pais                        text,
+  pais                        text NOT NULL DEFAULT 'Chile'
+                                CHECK (pais IN ('Chile', 'Perú')),
   fecha                       date NOT NULL,
   tematica                    text,
   certificacion_capacitacion  boolean DEFAULT false,

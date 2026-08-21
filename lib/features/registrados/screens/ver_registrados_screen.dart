@@ -13,6 +13,7 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/mascara_contacto.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/app_modals.dart';
 import '../../../core/widgets/collapsing_nav.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/pressable.dart';
@@ -518,10 +519,16 @@ class _RegistradoTile extends ConsumerWidget {
   }
 
   void _mostrarQr(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet<void>(
+    showAppModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
       backgroundColor: AppColors.surface,
+      constraints: BoxConstraints(
+        maxWidth: 520,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.92,
+      ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(AppRadius.header),
@@ -598,81 +605,86 @@ class _QrSheetState extends ConsumerState<_QrSheet> {
     final soloEnLaCola = esIdSoloLocal(r.id);
     final puedeEnviar = isOnline && !soloEnLaCola;
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenH,
-          0,
-          AppSpacing.screenH,
-          AppSpacing.xxl,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              r.nombreCompleto,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            Text(
-              _correoVisible(puedeVerContacto: puedeVerContacto),
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-            if (soloEnLaCola)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.warningTint,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Text(
-                  'Este registro aún no se sincroniza con el servidor; '
-                  'su QR estará disponible cuando vuelva la conexión.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.warning,
-                    fontWeight: FontWeight.w600,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final qrSize = (constraints.maxWidth - AppSpacing.screenH * 2 - 24)
+            .clamp(128.0, 200.0);
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenH,
+            0,
+            AppSpacing.screenH,
+            AppSpacing.xxl,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                r.nombreCompleto,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              Text(
+                _correoVisible(puedeVerContacto: puedeVerContacto),
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              if (soloEnLaCola)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.warningTint,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: const Text(
+                    'Este registro aún no se sincroniza con el servidor; '
+                    'su QR estará disponible cuando vuelva la conexión.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.warning,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: QrImageView(
+                    data: r.id,
+                    size: qrSize,
+                    backgroundColor: Colors.white,
                   ),
                 ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: QrImageView(
-                  data: r.id,
-                  size: 200,
-                  backgroundColor: Colors.white,
-                ),
+              const SizedBox(height: 20),
+              PrimaryGradientButton(
+                label: r.emailConfirmacionEnviado
+                    ? 'Reenviar por email'
+                    : 'Enviar por email',
+                loading: _enviando,
+                onPressed: (_enviando || !puedeEnviar) ? null : _enviarPorEmail,
               ),
-            const SizedBox(height: 20),
-            PrimaryGradientButton(
-              label: r.emailConfirmacionEnviado
-                  ? 'Reenviar por email'
-                  : 'Enviar por email',
-              loading: _enviando,
-              onPressed: (_enviando || !puedeEnviar) ? null : _enviarPorEmail,
-            ),
-            if (!isOnline)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  kMensajeSinConexion,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+              if (!isOnline)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    kMensajeSinConexion,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
-              ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

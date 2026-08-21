@@ -46,6 +46,7 @@ void main() {
 
     test('es obligatorio', () {
       expect(validarEmailRegistro(''), 'Requerido');
+      expect(validarEmailRegistro('', requerido: false), isNull);
     });
   });
 
@@ -92,6 +93,28 @@ void main() {
       expect(validarTelefono('5512345678', mexico), isNull);
       expect(validarTelefono('551234567', mexico), 'Ingresa 10 dígitos');
     });
+
+    test('Chile y Perú aparecen primero y derivan del país del evento', () {
+      expect(kPaisesTelefono.take(2).map((pais) => pais.iso), ['CL', 'PE']);
+      expect(paisTelefonoPorPaisEvento('Chile').iso, 'CL');
+      expect(paisTelefonoPorPaisEvento('Perú').iso, 'PE');
+      expect(detectarPaisTelefono('+51 912345678')?.iso, 'PE');
+      expect(detectarPaisTelefono('+56 9 1234 5678')?.iso, 'CL');
+    });
+
+    test(
+      'un teléfono opcional vacío no falla pero uno escrito sí se valida',
+      () {
+        expect(
+          validarTelefono('', kPaisTelefonoChile, requerido: false),
+          isNull,
+        );
+        expect(
+          validarTelefono('123', kPaisTelefonoChile, requerido: false),
+          'Ingresa 9 dígitos',
+        );
+      },
+    );
   });
 
   group('campos obligatorios', () {

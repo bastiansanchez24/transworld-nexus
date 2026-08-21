@@ -8,6 +8,7 @@ import '../../../core/network/offline_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tw_tokens.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_modals.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../data/models/lead_comentario.dart';
@@ -103,12 +104,14 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
     final puedeModerar = ref.read(canCreateContentProvider);
     if (!propio && !puedeModerar) return;
 
-    final accion = await showModalBottomSheet<_AccionComentario>(
+    final accion = await showAppModalBottomSheet<_AccionComentario>(
       context: context,
       showDragHandle: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.header)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.header),
+        ),
       ),
       builder: (ctx) => SafeArea(
         child: Column(
@@ -116,12 +119,18 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
           children: [
             if (propio)
               ListTile(
-                leading: const Icon(Symbols.edit_rounded, color: AppColors.primary),
+                leading: const Icon(
+                  Symbols.edit_rounded,
+                  color: AppColors.primary,
+                ),
                 title: const Text('Editar'),
                 onTap: () => Navigator.pop(ctx, _AccionComentario.editar),
               ),
             ListTile(
-              leading: const Icon(Symbols.delete_rounded, color: AppColors.danger),
+              leading: const Icon(
+                Symbols.delete_rounded,
+                color: AppColors.danger,
+              ),
               title: const Text(
                 'Borrar',
                 style: TextStyle(color: AppColors.danger),
@@ -143,7 +152,7 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
 
   Future<void> _editar(LeadComentario comentario) async {
     if (!requireOnline(context, ref)) return;
-    final texto = await showModalBottomSheet<String>(
+    final texto = await showAppModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       // Hay texto en curso: ni el arrastre ni el toque fuera pueden tirarlo.
@@ -152,7 +161,9 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
       isDismissible: false,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.header)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.header),
+        ),
       ),
       builder: (ctx) => _EditarComentarioSheet(cuerpo: comentario.cuerpo),
     );
@@ -206,9 +217,9 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
 
     return AppScaffold(
       title: 'Comentarios',
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
+          Positioned.fill(
             child: comentariosAsync.when(
               loading: () => const LoadingView(),
               error: (_, _) => ErrorView(
@@ -226,8 +237,11 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
                               children: [
                                 SizedBox(
                                   height: constraints.maxHeight,
-                                  child: const EmptyStateView(
-                                    message: 'Sé el primero en comentar',
+                                  child: const Padding(
+                                    padding: EdgeInsets.only(bottom: 92),
+                                    child: EmptyStateView(
+                                      message: 'Sé el primero en comentar',
+                                    ),
                                   ),
                                 ),
                               ],
@@ -237,7 +251,7 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
                       : ListView.builder(
                           controller: _scroll,
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 104),
                           itemCount: comentarios.length,
                           itemBuilder: (context, index) {
                             final comentario = comentarios[index];
@@ -256,10 +270,13 @@ class _ComentariosLeadScreenState extends ConsumerState<ComentariosLeadScreen> {
               },
             ),
           ),
-          _ComposerComentario(
-            controller: _composer,
-            enviando: _enviando,
-            onEnviar: _enviar,
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _ComposerComentario(
+              controller: _composer,
+              enviando: _enviando,
+              onEnviar: _enviar,
+            ),
           ),
         ],
       ),
@@ -328,7 +345,8 @@ class _EditarComentarioSheetState extends State<_EditarComentarioSheet> {
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => Navigator.pop(context, _controller.text.trim()),
+                  onPressed: () =>
+                      Navigator.pop(context, _controller.text.trim()),
                   child: const Text('Guardar'),
                 ),
               ),
@@ -353,43 +371,80 @@ class _ComposerComentario extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    return Material(
-      color: TwColors.surface,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(12, 8, 8, 8 + bottom),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: TextField(
-                key: const Key('comentarios_lead_composer'),
-                controller: controller,
-                minLines: 1,
-                maxLines: 5,
-                maxLength: kLeadComentarioMaxCaracteres,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => onEnviar(),
-                decoration: const InputDecoration(
-                  hintText: 'Escribe un comentario',
-                  counterText: '',
-                ),
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        child: Material(
+          key: const Key('comentarios_lead_composer_floating'),
+          color: TwColors.surface,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(26),
+            side: const BorderSide(color: TwColors.border07),
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: TwShadows.soft,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 5, 7, 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const Key('comentarios_lead_composer'),
+                      controller: controller,
+                      minLines: 1,
+                      maxLines: 5,
+                      maxLength: kLeadComentarioMaxCaracteres,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => onEnviar(),
+                      decoration: const InputDecoration(
+                        hintText: 'Escribe un comentario',
+                        counterText: '',
+                        filled: false,
+                        fillColor: Colors.transparent,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    key: const Key('comentarios_lead_enviar'),
+                    tooltip: 'Publicar',
+                    onPressed: enviando ? null : onEnviar,
+                    style: IconButton.styleFrom(
+                      fixedSize: const Size.square(42),
+                      minimumSize: const Size.square(42),
+                      backgroundColor: TwColors.brand700,
+                      disabledBackgroundColor: TwColors.brand700,
+                      foregroundColor: Colors.white,
+                      disabledForegroundColor: Colors.white,
+                    ),
+                    icon: enviando
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Symbols.send_rounded, size: 20),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            IconButton(
-              key: const Key('comentarios_lead_enviar'),
-              tooltip: 'Publicar',
-              onPressed: enviando ? null : onEnviar,
-              icon: enviando
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Symbols.send_rounded),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -411,7 +466,9 @@ class _BurbujaComentario extends StatelessWidget {
   Widget build(BuildContext context) {
     final fecha = comentario.createdAt == null
         ? ''
-        : DateFormat('dd/MM/yyyy HH:mm').format(comentario.createdAt!.toLocal());
+        : DateFormat(
+            'dd/MM/yyyy HH:mm',
+          ).format(comentario.createdAt!.toLocal());
     final autor = (comentario.autorNombre ?? '').trim();
     final rol = comentario.rolEtiqueta;
     final alineacion = propio ? Alignment.centerRight : Alignment.centerLeft;
@@ -466,7 +523,8 @@ class _BurbujaComentario extends StatelessWidget {
                             : StatusChipVariant.neutral,
                       ),
                     ],
-                    if (autor.isNotEmpty || rol != null) const SizedBox(height: 4),
+                    if (autor.isNotEmpty || rol != null)
+                      const SizedBox(height: 4),
                     Text(
                       comentario.cuerpo,
                       style: TwText.tileTitle.copyWith(
