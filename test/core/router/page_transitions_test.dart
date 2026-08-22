@@ -6,27 +6,6 @@ import 'package:transworld_nexus/core/router/page_transitions.dart';
 import 'package:transworld_nexus/core/theme/app_theme.dart';
 
 void main() {
-  test('Safari en iPhone se queda con el gesto de atrás', () {
-    expect(
-      browserOwnsBackSwipe(isWeb: true, platform: TargetPlatform.iOS),
-      isTrue,
-    );
-  });
-
-  test(
-    'solo Safari iOS delega específicamente el gesto de borde al navegador',
-    () {
-      expect(
-        browserOwnsBackSwipe(isWeb: true, platform: TargetPlatform.android),
-        isFalse,
-      );
-      expect(
-        browserOwnsBackSwipe(isWeb: false, platform: TargetPlatform.iOS),
-        isFalse,
-      );
-    },
-  );
-
   test('iOS nativo usa Cupertino para el gesto de deslizar atrás', () {
     expect(
       cupertinoOwnsBackSwipe(isWeb: false, platform: TargetPlatform.iOS),

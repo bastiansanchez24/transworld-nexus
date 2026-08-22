@@ -653,9 +653,20 @@ class _DatosUsuarioForm extends StatelessWidget {
                   'Déjalo en blanco para mantener la actual. $kPasswordHelperText',
               helperMaxLines: 3,
               // El mismo ojo que el login, no un IconButton con ripple.
-              suffixIcon: TwPasswordEye(
-                visible: mostrarPassword,
-                onTap: guardando ? null : onToggleMostrarPassword,
+              //
+              // `suffixIcon` no respeta el `contentPadding` del tema, así que
+              // sin este relleno el icono queda pegado al borde del campo. Los
+              // 14 px son los mismos que separan el texto del borde.
+              suffixIcon: Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: TwPasswordEye(
+                  visible: mostrarPassword,
+                  onTap: guardando ? null : onToggleMostrarPassword,
+                ),
+              ),
+              suffixIconConstraints: const BoxConstraints(
+                minWidth: 44,
+                minHeight: 52,
               ),
             ),
             // Vacío = no se cambia la contraseña; con contenido, debe ser fuerte.

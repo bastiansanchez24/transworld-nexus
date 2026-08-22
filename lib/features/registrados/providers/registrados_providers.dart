@@ -128,25 +128,6 @@ final registradosPorEventoProvider = FutureProvider.autoDispose
       );
     });
 
-/// true si ese correo ya está registrado en el evento, considerando también
-/// los registros que aún no confirma el servidor (evita duplicados visibles
-/// para el usuario incluso mientras está offline).
-bool existeEmailPendienteODuplicado(
-  List<SyncQueueItem> cola,
-  String eventoId,
-  String email,
-) {
-  final emailNormalizado = email.trim().toLowerCase();
-  return cola.any(
-    (item) =>
-        item.table == SupabaseTables.registrados &&
-        item.operation == SyncOperation.insert &&
-        item.payload['evento_id'] == eventoId &&
-        (item.payload['email'] as String?)?.trim().toLowerCase() ==
-            emailNormalizado,
-  );
-}
-
 /// Acredita o quita la acreditación: servidor o cola, y write-through a caché.
 Future<void> persistirAcreditacion(
   WidgetRef ref, {

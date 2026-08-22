@@ -86,15 +86,15 @@ class StorageRepository {
   /// Resuelve un path canónico privado justo antes de renderizar. El modelo,
   /// la caché y la base conservan siempre `leads/<uuid>.jpg`, nunca el token
   /// temporal de esta URL.
-  Future<String> resolverFotoLead(
-    String value, {
-    int expiresInSeconds = 60 * 60,
-  }) {
+  Future<String> resolverFotoLead(String value) {
     if (!value.startsWith('leads/')) return Future.value(value);
     return _client.storage
         .from(Env.bucketFotosLeads)
-        .createSignedUrl(value, expiresInSeconds);
+        .createSignedUrl(value, _duracionUrlFirmada);
   }
+
+  /// La URL solo tiene que sobrevivir a la sesión que está mirando la foto.
+  static const _duracionUrlFirmada = 60 * 60;
 
   /// Sin esto la UI muestra el volcado crudo de `StorageException`, que no le
   /// dice a nadie qué hay que arreglar.

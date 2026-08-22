@@ -427,11 +427,6 @@ String? validarTelefono(
   return null;
 }
 
-String? validarCampoRequerido(String? value) {
-  if ((value ?? '').trim().isEmpty) return 'Requerido';
-  return null;
-}
-
 /// Cuerpo + dígito verificador, sin puntos ni guion. Acepta `k`/`K`.
 String compactarRut(String raw) {
   return raw.replaceAll(RegExp(r'[^0-9kK]'), '').toUpperCase();

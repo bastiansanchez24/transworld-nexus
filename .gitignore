@@ -77,7 +77,8 @@ windows/flutter/ephemeral/
 # Copias locales de assets OTA (alias android-nexus / windows-nexus).
 /dist/
 
-# Firebase CLI / hosting: el package.json solo trae el CLI, no es parte de la app.
+# El proyecto no tiene lado JS propio: `firebase deploy` usa firebase-tools
+# (global o por npx), no un paquete del repositorio.
 /node_modules/
 /package-lock.json
 

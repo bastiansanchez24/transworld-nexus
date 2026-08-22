@@ -23,9 +23,6 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const email = (body.email ?? "").trim().toLowerCase();
-    const versionApp = typeof body.app_version === "string"
-      ? body.app_version
-      : null;
     if (!email || !email.includes("@")) {
       return json({ error: "Correo inválido" }, 400);
     }
@@ -78,7 +75,6 @@ Deno.serve(async (req) => {
         password,
         rol: perfil?.rol as string | undefined,
         motivo: "password_restablecida",
-        versionApp,
       });
     } catch (mailErr) {
       console.error("reset-password email", mailErr);

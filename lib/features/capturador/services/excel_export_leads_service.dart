@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/utils/excel_sheet_styler.dart';
 import '../../../data/models/lead.dart';
-import '../../../data/offline/pending_photo_store.dart';
+import '../../../data/models/lead_comentario.dart';
 
 /// Genera el `.xlsx` de leads capturados en un evento.
 class ExcelExportLeadsService {
@@ -19,22 +19,33 @@ class ExcelExportLeadsService {
     'Email',
     'Descripción',
     'Capturado por',
-    'Fotos (URLs)',
+    'Comentarios',
     'Fecha de captura',
   ];
 
-  /// Una foto capturada sin conexión todavía no tiene URL pública: en la
-  /// celda iría una ruta del dispositivo que no le sirve a nadie.
-  String _celdaFotos(Lead lead) {
-    final subidas = lead.fotosUrls.where((u) => !esFotoLocal(u));
-    final pendientes = lead.fotosUrls.where(esFotoLocal).length;
-    return [
-      ...subidas,
-      if (pendientes > 0) '($pendientes pendiente(s) de subir)',
-    ].join(' | ');
+  /// Hilo de comentarios en una celda: autor y cuerpo, en orden de publicación.
+  ///
+  /// El autor va delante porque el hilo suele ser una conversación entre el
+  /// capturador y quien hace seguimiento, y sin el nombre las respuestas no se
+  /// distinguen.
+  static String celdaComentarios(List<LeadComentario> comentarios) {
+    return comentarios
+        .map((c) {
+          final autor = c.autorNombre?.trim();
+          final cuerpo = c.cuerpo.trim();
+          return autor == null || autor.isEmpty ? cuerpo : '$autor: $cuerpo';
+        })
+        .where((linea) => linea.isNotEmpty)
+        .join('\n');
   }
 
-  Uint8List generar(List<Lead> leads, {String tituloHoja = 'Leads'}) {
+  /// [comentariosPorLead] va indexado por `Lead.id`; un lead sin entrada deja
+  /// la celda vacía.
+  Uint8List generar(
+    List<Lead> leads, {
+    String tituloHoja = 'Leads',
+    Map<String, List<LeadComentario>> comentariosPorLead = const {},
+  }) {
     final excel = xls.Excel.createExcel();
     final nombreHojaOriginal = excel.getDefaultSheet()!;
     excel.rename(nombreHojaOriginal, tituloHoja);
@@ -52,7 +63,9 @@ class ExcelExportLeadsService {
         xls.TextCellValue(lead.email ?? ''),
         xls.TextCellValue(lead.descripcion ?? ''),
         xls.TextCellValue(lead.vendedorNombre ?? ''),
-        xls.TextCellValue(_celdaFotos(lead)),
+        xls.TextCellValue(
+          celdaComentarios(comentariosPorLead[lead.id] ?? const []),
+        ),
         xls.TextCellValue(
           lead.createdAt != null ? formatoFecha.format(lead.createdAt!) : '',
         ),

@@ -7,7 +7,8 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/nexus_components.dart';
 import '../../../core/widgets/require_permission.dart';
-import '../../../data/repositories/storage_repository.dart';
+import '../../../data/models/lead_comentario.dart';
+import '../../../data/repositories/lead_comentarios_repository.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../exportacion/services/export_file_delivery.dart';
 import '../providers/capturador_providers.dart';
@@ -57,23 +58,22 @@ class _ExportarLeadsScreenState extends ConsumerState<ExportarLeadsScreen> {
         return;
       }
 
-      // Un XLSX puede abrirse días después. Las fotos privadas se entregan
-      // mediante enlaces firmados por 7 días y nunca se persisten en la DB.
-      final storage = ref.read(storageRepositoryProvider);
-      final leadsExportables = await Future.wait(
-        leads.map((lead) async {
-          final fotos = await Future.wait(
-            lead.fotosUrls.map(
-              (foto) => storage.resolverFotoLead(
-                foto,
-                expiresInSeconds: 7 * 24 * 60 * 60,
-              ),
-            ),
-          );
-          return lead.copyWith(fotosUrls: fotos);
-        }),
+      // Los comentarios viven en su propia tabla: se traen en una consulta
+      // para las filas que se van a exportar y se indexan por lead.
+      final comentarios = await ref
+          .read(leadComentariosRepositoryProvider)
+          .listarPorLeads([for (final lead in leads) lead.id]);
+      final comentariosPorLead = <String, List<LeadComentario>>{};
+      for (final comentario in comentarios) {
+        comentariosPorLead
+            .putIfAbsent(comentario.leadId, () => [])
+            .add(comentario);
+      }
+
+      final bytes = _service.generar(
+        leads,
+        comentariosPorLead: comentariosPorLead,
       );
-      final bytes = _service.generar(leadsExportables);
       final nombreArchivo =
           '${evento.nombre.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}_leads.xlsx';
 

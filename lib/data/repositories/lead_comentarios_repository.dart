@@ -22,6 +22,23 @@ class LeadComentariosRepository {
     ];
   }
 
+  /// Comentarios de varios leads en una sola consulta, para la exportación.
+  ///
+  /// Pedirlos lead por lead haría una petición por fila del Excel.
+  Future<List<LeadComentario>> listarPorLeads(List<String> leadIds) async {
+    final ids = leadIds.where((id) => id.isNotEmpty).toSet().toList();
+    if (ids.isEmpty) return const [];
+    final rows = await _client
+        .from(SupabaseTables.leadComentarios)
+        .select()
+        .inFilter('lead_id', ids)
+        .order('created_at', ascending: true);
+    return [
+      for (final row in rows)
+        LeadComentario.fromMap(Map<String, dynamic>.from(row as Map)),
+    ];
+  }
+
   Future<LeadComentario> crear({
     required String leadId,
     required String cuerpo,

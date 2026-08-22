@@ -1,3 +1,4 @@
+import { urlReleaseMasReciente } from "./apk_android.ts";
 import { LARGO_MINIMO_PASSWORD } from "./password.ts";
 
 /**
@@ -19,34 +20,23 @@ export interface DatosCredenciales {
   /** Rol tal como se guarda en `perfiles.rol`. Omitido = no se muestra. */
   rol?: string | null;
   motivo?: MotivoCredenciales;
-  /**
-   * SemVer de la app del emisor (`1.6.8`). El APK del correo apunta a esa
-   * Release. Omitido = `/releases/latest`.
-   */
-  versionApp?: string | null;
+  /** `.apk` directo de la última Release; ver [urlDescargaAndroid]. */
+  urlApkAndroid?: string | null;
 }
 
 /** Panel web de administración (ver comentario en `lib/core/config/env.dart`). */
 const URL_PANEL = "https://regispro.transworld.cl/";
 
-const GITHUB_OWNER = "bsanchezTW";
-const GITHUB_REPO = "transworld-nexus";
-
-/** `v1.6.8` / `1.6.8+27` → `1.6.8`. */
-export function normalizarVersionApp(
-  raw: string | null | undefined,
-): string | null {
-  const match = String(raw ?? "").trim().match(/^v?(\d+\.\d+\.\d+)/i);
-  return match ? match[1] : null;
-}
-
-/** APK de la misma versión que el emisor, o la última Release si no hay. */
-export function urlDescargaAndroid(versionRaw?: string | null): string {
-  const version = normalizarVersionApp(versionRaw);
-  if (!version) {
-    return `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
-  }
-  return `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/v${version}/android-regispro-v${version}.apk`;
+/**
+ * Enlace del botón de Android.
+ *
+ * [urlApkAndroid] es el `.apk` directo que resolvió `resolverUrlApkAndroid`
+ * contra la API de GitHub. Si esa consulta falló, se cae a la página de la
+ * Release más reciente: peor experiencia, pero nunca un botón roto.
+ */
+export function urlDescargaAndroid(urlApkAndroid?: string | null): string {
+  const directa = (urlApkAndroid ?? "").trim();
+  return directa.length > 0 ? directa : urlReleaseMasReciente();
 }
 
 /** Mismo buzón que muestra la pantalla de login (`login_screen.dart`). */
@@ -62,7 +52,7 @@ const ETIQUETAS_ROL: Record<string, string> = {
 
 const COPY = {
   cuenta_nueva: {
-    asunto: "Credenciales de acceso — RegisPro",
+    asunto: "Bienvenido a Transworld RegisPro",
     preheader:
       "Su usuario y contraseña temporal para ingresar a RegisPro. Cámbiela en el primer acceso.",
     epigrafe: "Credenciales de acceso",
@@ -125,7 +115,7 @@ export function htmlCredenciales(datos: DatosCredenciales): string {
   const email = escapeHtml(datos.email);
   const password = escapeHtml(datos.password);
   const rol = etiquetaRol(datos.rol);
-  const urlAndroid = urlDescargaAndroid(datos.versionApp);
+  const urlAndroid = urlDescargaAndroid(datos.urlApkAndroid);
 
   const filaRol = rol
     ? `
@@ -260,20 +250,45 @@ export function htmlCredenciales(datos: DatosCredenciales): string {
       <td width="600" style="width:600px; padding:28px 32px 0 32px;" class="pad">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
           <tr>
-            <td align="center" style="background-color:#f7f8fa; border:1px solid #e3e7ed; border-radius:12px; padding:16px 26px 15px 26px;">
-              <a href="${urlAndroid}" style="display:block; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:18px; mso-line-height-rule:exactly; letter-spacing:0.4px; font-weight:bold; color:#12203a; text-decoration:none; text-transform:uppercase; border-radius:12px;">Descargar para Android</a>
-            </td>
-          </tr>
-        </table>
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-          <tr><td height="12" style="height:12px; line-height:12px; font-size:12px;">&nbsp;</td></tr>
-          <tr>
             <td bgcolor="#01386d" style="background-color:#01386d; border-radius:12px; padding:16px 26px 15px 26px; text-align:center;">
               <a href="${URL_PANEL}" style="display:block; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:18px; mso-line-height-rule:exactly; letter-spacing:0.4px; font-weight:bold; color:#ffffff; text-decoration:none; text-transform:uppercase; border-radius:12px;">Iniciar sesión en el panel web</a>
             </td>
           </tr>
         </table>
-        <p style="margin:16px 0 0 0; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; mso-line-height-rule:exactly; color:#7c8794;">Si usa un iPhone o iPad, el instructivo de instalación va adjunto a este correo.</p>
+      </td>
+    </tr>
+
+    <!-- Descargar la aplicación -->
+    <tr>
+      <td width="600" style="width:600px; padding:32px 32px 0 32px;" class="pad">
+        <p style="margin:0 0 16px 0; font-family:Arial, Helvetica, sans-serif; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1.6px; font-weight:bold; color:#8a95a3; text-transform:uppercase;">Descargar la aplicación</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f7f8fa; border:1px solid #e3e7ed; border-radius:12px;">
+          <tr>
+            <td style="padding:20px 20px 18px 20px;">
+              <p style="margin:0 0 6px 0; font-family:Arial, Helvetica, sans-serif; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1.2px; font-weight:bold; color:#8a95a3; text-transform:uppercase;">Android</p>
+              <p style="margin:0 0 14px 0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:#475463;">Descargue el archivo <strong style="color:#12203a;">.apk</strong> de la última versión publicada y ábralo en el teléfono para instalarlo.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td bgcolor="#12203a" style="background-color:#12203a; border-radius:12px; padding:13px 22px 12px 22px;">
+                  <a href="${urlAndroid}" style="display:block; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:17px; mso-line-height-rule:exactly; letter-spacing:0.4px; font-weight:bold; color:#ffffff; text-decoration:none; text-transform:uppercase; white-space:nowrap;">Descargar para Android</a>
+                </td>
+              </tr></table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+                <td height="1" style="height:1px; line-height:1px; font-size:1px; background-color:#e3e7ed;">&nbsp;</td>
+              </tr></table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 20px 20px 20px;">
+              <p style="margin:0 0 6px 0; font-family:Arial, Helvetica, sans-serif; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1.2px; font-weight:bold; color:#8a95a3; text-transform:uppercase;">iPhone y iPad</p>
+              <p style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:#475463;">La instalación en iOS se hace paso a paso desde el dispositivo. Encontrará el <strong style="color:#12203a;">instructivo en PDF adjunto a este correo</strong>; siga sus indicaciones y podrá ingresar con las mismas credenciales.</p>
+            </td>
+          </tr>
+        </table>
       </td>
     </tr>
 
@@ -352,7 +367,7 @@ ${requisitos}
 export function textoCredenciales(datos: DatosCredenciales): string {
   const copy = COPY[datos.motivo ?? "cuenta_nueva"];
   const rol = etiquetaRol(datos.rol);
-  const urlAndroid = urlDescargaAndroid(datos.versionApp);
+  const urlAndroid = urlDescargaAndroid(datos.urlApkAndroid);
 
   const lineas = [
     copy.titulo.toUpperCase(),
@@ -369,11 +384,13 @@ export function textoCredenciales(datos: DatosCredenciales): string {
 
   lineas.push(
     "",
-    `Descargar para Android: ${urlAndroid}`,
     `Panel web: ${URL_PANEL}`,
-    "Si usa un iPhone o iPad, el instructivo de instalación va adjunto a este correo.",
-    "También puede ingresar con los mismos datos desde la aplicación RegisPro",
-    "instalada en su equipo o teléfono.",
+    "",
+    "DESCARGAR LA APLICACIÓN",
+    `Android: descargue el .apk de la última versión publicada y ábralo en el`,
+    `teléfono para instalarlo. ${urlAndroid}`,
+    "iPhone y iPad: la instalación se hace paso a paso desde el dispositivo.",
+    "El instructivo en PDF va adjunto a este correo.",
     "",
     copy.pasosTitulo.toUpperCase(),
     ...PASOS.map((paso, i) => `${i + 1}. ${sinEtiquetas(paso)}`),

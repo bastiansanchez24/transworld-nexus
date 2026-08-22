@@ -49,9 +49,6 @@ Deno.serve(async (req) => {
     const password = body.password ?? "";
     const rol = (body.rol ?? "").trim();
     const eventoIds = [...new Set(parseEventoIds(body))];
-    const versionApp = typeof body.app_version === "string"
-      ? body.app_version
-      : null;
 
     if (!nombreCompleto || !email || !password || !rol) {
       return json({ error: "Faltan campos obligatorios" }, 400);
@@ -181,7 +178,6 @@ Deno.serve(async (req) => {
         password,
         rol,
         motivo: "cuenta_nueva",
-        versionApp,
       });
     } catch (mailErr) {
       await adminClient.auth.admin.deleteUser(userId);

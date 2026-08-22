@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:transworld_nexus/core/constants/app_role.dart';
 import 'package:transworld_nexus/core/network/connectivity_service.dart';
+import 'package:transworld_nexus/core/widgets/tw_components.dart';
 import 'package:transworld_nexus/data/models/perfil.dart';
 import 'package:transworld_nexus/data/offline/sync_queue_service.dart';
 import 'package:transworld_nexus/data/repositories/auth_repository.dart';
@@ -167,6 +168,28 @@ void main() {
     expect(
       tester.widget<TextFormField>(_campoPassword).controller?.text,
       isEmpty,
+    );
+  });
+
+  testWidgets('el ojo de la contraseña no queda pegado al borde del campo', (
+    tester,
+  ) async {
+    await _montar(tester, FakeAuthRepository());
+
+    final ojo = find.descendant(
+      of: _campoPassword,
+      matching: find.byType(TwPasswordEye),
+    );
+    expect(ojo, findsOneWidget);
+
+    final margen =
+        tester.getTopRight(_campoPassword).dx - tester.getTopRight(ojo).dx;
+    expect(
+      margen,
+      closeTo(14, 0.5),
+      reason:
+          'el `suffixIcon` ignora el contentPadding del tema; sin relleno '
+          'propio el icono toca el borde',
     );
   });
 }

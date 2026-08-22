@@ -28,21 +28,6 @@ interface AdminClientAuth extends AdminClientRpc {
   };
 }
 
-/** Comprueba email vía RPC (evita auth.admin.listUsers, que falla con "Database error finding users"). */
-export async function emailYaRegistrado(
-  adminClient: AdminClientRpc,
-  email: string,
-): Promise<boolean> {
-  const { data, error } = await adminClient.rpc(
-    "verificar_usuario_registrado",
-    {
-      email_check: email.trim().toLowerCase(),
-    },
-  );
-  if (error) throw error;
-  return data === true;
-}
-
 /**
  * Resuelve usuario Auth por email sin listUsers:
  * RPC → id, luego admin.getUserById.

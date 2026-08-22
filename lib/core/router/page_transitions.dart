@@ -6,15 +6,6 @@ import 'package:go_router/go_router.dart';
 
 import '../theme/app_theme.dart';
 
-/// Safari (PWA de iPhone/iPad) anima el pop con el gesto de atrás del
-/// historial. Si Flutter aplica SharedAxis encima, el menú de debajo
-/// (evento / evento de leads) parpadea: el snapshot del gesto no coincide con la
-/// página desplazada por [secondaryAnimation].
-bool browserOwnsBackSwipe({bool? isWeb, TargetPlatform? platform}) {
-  return (isWeb ?? kIsWeb) &&
-      (platform ?? defaultTargetPlatform) == TargetPlatform.iOS;
-}
-
 /// En iOS/macOS nativo el pop interactivo (deslizar desde el borde) solo lo
 /// instala [CupertinoPage]. [CustomTransitionPage] sustituye la transición
 /// del tema y se queda sin el detector del borde.
@@ -132,19 +123,5 @@ CustomTransitionPage<T> _webPage<T>({
         ),
       );
     },
-  );
-}
-
-Widget fadeThroughSwitcher({required Widget child, required int index}) {
-  return PageTransitionSwitcher(
-    duration: AppMotion.screenIn,
-    transitionBuilder: (child, animation, secondaryAnimation) {
-      return FadeThroughTransition(
-        animation: animation,
-        secondaryAnimation: secondaryAnimation,
-        child: child,
-      );
-    },
-    child: KeyedSubtree(key: ValueKey(index), child: child),
   );
 }
